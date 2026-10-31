@@ -1,0 +1,24 @@
+Planet textures and the Moon: Solar System Scope — https://www.solarsystemscope.com/textures/
+License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+         https://creativecommons.org/licenses/by/4.0/
+
+Changes: resized to 1K / 2K / 4K and re-encoded as JPEG/PNG; Earth's specular
+map converted to a roughness map; a Mars relief (bump) map derived from the
+color map's luminance. See scripts/build-textures.mjs.
+
+Io, Europa, Ganymede, Callisto, Titan and Pluto: global mosaics by the USGS
+Astrogeology Science Center from NASA mission data (Voyager, Galileo, Cassini,
+New Horizons) —
+https://astrogeology.usgs.gov, files from https://planetarymaps.usgs.gov/mosaic/
+Public domain: "USGS-authored or produced data and information are considered to
+be in the U.S. Public Domain." Credit: U.S. Geological Survey; NASA/JPL; NASA/JHUAPL/SwRI (New Horizons).
+
+Changes: resized to 1K / 2K / 4K, re-centered on 0° longitude, polar gaps (no
+data) filled from the nearest imaged latitude, Titan's contrast reduced (its
+near-infrared surface map is seen through haze). See scripts/build-textures.mjs.
+
+The sky (sky.jpg): NASA/Goddard Space Flight Center Scientific Visualization
+Studio, "Deep Star Maps 2020", https://svs.gsfc.nasa.gov/4851 — public domain
+("All of our content is in the public domain (unless otherwise noted)").
+Star data: ESA/Gaia/DPAC. Changes: converted from the 4K OpenEXR map to sRGB
+JPEG (and resized to 2K), rows flipped to top-first. See scripts/build-textures.mjs.

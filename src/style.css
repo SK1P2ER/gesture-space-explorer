@@ -1,0 +1,836 @@
+:root {
+  --bg: #02030a;
+  --fg: #e8ecf5;
+  --muted: #9aa4b8;
+  --panel: rgba(12, 16, 30, 0.72);
+  --border: rgba(255, 255, 255, 0.12);
+  --accent: #ffc845;
+  --ok: #4fd1c5;
+  --warn: #f6ad55;
+  /* System fonts only: the kiosk build must work offline. */
+  font-family: system-ui, 'Myanmar Text', 'Noto Sans Myanmar', Padauk, 'Hiragino Sans', 'Yu Gothic UI', Meiryo, 'Noto Sans JP', sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+#scene {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  cursor: grab;
+}
+#scene:active { cursor: grabbing; }
+
+.hud {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  pointer-events: none;
+  text-shadow: 0 1px 3px #000;
+}
+.hud a, .hud button { pointer-events: auto; }
+
+.top { top: 12px; }
+.top h1 { margin: 0; font-size: 1.1rem; font-weight: 600; }
+
+#status {
+  display: inline-block;
+  margin: 6px 0 0;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+}
+#status[data-kind='tracking'] { color: var(--ok); }
+#hand-control {
+  margin: 6px 0 0 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--accent);
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  cursor: pointer;
+}
+#hand-control[hidden] { display: none; }
+body.immersive #hand-control { display: none; }
+
+#loading {
+  display: inline-block;
+  margin: 6px 0 0 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--border);
+}
+#loading[hidden] { display: none; }
+#status[data-kind='keyboard'] { color: var(--warn); }
+
+#gesture {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  margin: 8px 0 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+}
+#gesture[hidden] { display: none; }
+#gesture .hold {
+  --p: 0;
+  display: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: conic-gradient(var(--accent) calc(var(--p) * 360deg), rgba(255, 255, 255, 0.15) 0);
+}
+#gesture.busy .hold { display: inline-block; }
+
+#version {
+  position: fixed;
+  top: 12px;
+  right: 16px;
+  margin: 0;
+  font-size: 0.7rem;
+  color: var(--muted);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* "✌️ detected → switching to Mars" — short confirmation of a gesture event. */
+.hud-flash {
+  position: fixed;
+  top: 18%;
+  left: 50%;
+  margin: 0;
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-size: 1.05rem;
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  color: var(--fg);
+  pointer-events: none;
+  transform: translateX(-50%);
+  z-index: 6;
+}
+.hud-flash[hidden] { display: none; }
+.hud-flash.show { animation: flash-in 1.2s ease-out forwards; }
+@keyframes flash-in {
+  0% { opacity: 0; transform: translate(-50%, 6px); }
+  12% { opacity: 1; transform: translate(-50%, 0); }
+  75% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Planet name labels, positioned above the planet from JS. */
+#labels { position: fixed; inset: 0; pointer-events: none; z-index: 2; }
+.planet-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--fg);
+  background: rgba(12, 16, 30, 0.6);
+  border: 1px solid var(--accent);
+  will-change: transform;
+}
+.planet-label.hover { border-color: rgba(255, 255, 255, 0.45); font-weight: 500; }
+.planet-label[hidden] { display: none; }
+
+/* Pointing cursor with dwell ring. Positioned by transform from JS. */
+#pointer {
+  position: fixed;
+  top: -20px;
+  left: -20px;
+  pointer-events: none;
+  z-index: 5;
+}
+#pointer[hidden] { display: none; }
+#pointer circle { fill: none; stroke-width: 3; }
+#pointer .track { stroke: rgba(255, 255, 255, 0.35); }
+#pointer .progress {
+  stroke: var(--accent);
+  stroke-dasharray: 100.53; /* 2π × 16 */
+  stroke-dashoffset: 100.53;
+  transform: rotate(-90deg);
+  transform-origin: center;
+  stroke-linecap: round;
+}
+#pointer .dot { fill: #fff; stroke: none; }
+#pointer.hover .track { stroke: var(--accent); }
+
+.bottom { bottom: 12px; }
+.focus-row { display: flex; align-items: baseline; gap: 12px; }
+#focus { font-size: 1.6rem; color: var(--accent); }
+
+/* Time bar: date, Now, pause, speed slider. Bottom center; above the footer on narrow screens. */
+#timebar {
+  position: fixed;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  width: min(430px, calc(100% - 32px));
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  z-index: 3;
+}
+#timebar .row { display: flex; align-items: center; gap: 10px; }
+#timebar .row + .row { margin-top: 4px; }
+#timebar .date { flex: 1; font-variant-numeric: tabular-nums; font-size: 0.95rem; }
+#timebar .rate { min-width: 7.5em; text-align: right; color: var(--accent); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+#timebar button {
+  padding: 2px 10px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--fg);
+  background: transparent;
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+#timebar button:hover, #timebar button:focus-visible { border-color: var(--accent); }
+#timebar .speed {
+  flex: 1;
+  accent-color: var(--accent);
+  /* A mark at the center: stopped. */
+  background: linear-gradient(to right, transparent calc(50% - 1px), var(--muted) calc(50% - 1px), var(--muted) calc(50% + 1px), transparent calc(50% + 1px));
+}
+
+/* The 🤙 dial, while it's live. */
+#time-dial {
+  position: fixed;
+  top: 88px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s;
+  z-index: 6;
+}
+#time-dial[hidden] { display: none; }
+#time-dial.on { opacity: 1; }
+#time-dial .arc { fill: none; stroke: rgba(255, 255, 255, 0.35); stroke-width: 4; stroke-linecap: round; }
+#time-dial .tick { stroke: var(--muted); stroke-width: 2; }
+#time-dial .end { fill: var(--muted); font-size: 9px; text-anchor: middle; }
+#time-dial .needle { stroke: var(--accent); stroke-width: 4; stroke-linecap: round; transform-origin: 0 0; transition: transform 0.08s linear; }
+#time-dial .hub { fill: var(--accent); }
+#time-dial .label {
+  margin-top: -4px;
+  font-size: 1.6rem;
+  font-weight: 600;
+  color: var(--fg);
+  text-shadow: 0 1px 4px #000;
+  font-variant-numeric: tabular-nums;
+}
+/* Wraps before it reaches the centered time bar (430px wide). */
+#help { margin: 4px 0 0; color: var(--muted); font-size: 0.8rem; max-width: calc(50% - 247px); }
+#credits-link { color: var(--muted); font-size: 0.75rem; }
+.footer-links { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 2px; }
+.footer-links button {
+  padding: 2px 10px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+.footer-links button:hover, .footer-links button:focus-visible { color: var(--fg); border-color: var(--accent); }
+.footer-links button[aria-pressed='false'] { opacity: 0.6; }
+
+/* Photo mode: the HUD steps aside for the shutter moment (the photo itself is the canvas only). */
+body.photo-mode .hud,
+body.photo-mode #labels,
+body.photo-mode #preview,
+body.photo-mode #pointer,
+body.photo-mode #gesture-flash,
+body.photo-mode #version,
+body.photo-mode #loading,
+body.photo-mode #timebar,
+body.photo-mode #time-dial { visibility: hidden; }
+
+#photo-flash {
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 20;
+}
+#photo-flash.flash { animation: shutter 0.35s ease-out; }
+@keyframes shutter {
+  0% { opacity: 0.85; }
+  100% { opacity: 0; }
+}
+
+.toast {
+  position: fixed;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 8px 16px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  z-index: 15;
+}
+.toast[hidden] { display: none; }
+.toast button {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font: inherit;
+  color: var(--bg);
+  background: var(--accent);
+  border: 0;
+  cursor: pointer;
+}
+.toast button.save { color: var(--fg); background: transparent; border: 1px solid var(--border); }
+
+.panel {
+  top: 80px;
+  left: auto;
+  width: min(320px, calc(100% - 32px));
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(6px);
+  text-shadow: none;
+}
+.panel h2 { margin: 0 0 6px; color: var(--accent); }
+.panel p { margin: 0 0 12px; line-height: 1.6; }
+.panel dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+.panel dt { color: var(--muted); }
+.panel dd { margin: 0; }
+/* The info card covers name labels, not the other way round (it can be over the planet on phones). */
+#info { z-index: 3; }
+.panel .kind { margin: -4px 0 8px; color: var(--muted); font-size: 0.85rem; }
+.panel dd .chip { margin: 0 6px 4px 0; }
+.panel .close {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font: inherit;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--fg);
+  background: transparent;
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+.panel .close:hover, .panel .close:focus-visible { border-color: var(--accent); }
+
+/* The base you're at (BaseView): top right on wide screens, at the bottom on phones. */
+#base-panel { right: 16px; pointer-events: auto; position: fixed; }
+#base-panel[hidden] { display: none; }
+#base-panel > .close { position: absolute; top: 16px; right: 16px; }
+#base-panel h2 { padding-right: 36px; }
+#base-panel .destinations { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+#base-panel .chip[aria-pressed='true'] { background: var(--accent); color: var(--bg); }
+#base-panel .launch { font-size: 1rem; padding: 4px 16px; }
+#base-panel .launch:disabled { opacity: 0.4; cursor: default; }
+#base-panel .hint { margin: 8px 0 0; color: var(--muted); font-size: 0.8rem; }
+
+/* Experimental camera controls live in the reading sheet, never the mobile footer. */
+#cinematic-panel { position: static; inset: auto; width: auto; max-width: 100%; margin: 8px 0; pointer-events: auto; }
+#cinematic-panel[hidden] { display: none; }
+#cinematic-panel summary { cursor: pointer; color: var(--accent); padding: 6px 0; }
+#cinematic-panel select { width: 100%; min-width: 0; padding: 6px; color: var(--fg); background: var(--panel); border: 1px solid var(--border); font: inherit; }
+#cinematic-panel .cinematic-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+#cinematic-panel button { font: inherit; color: var(--fg); background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; cursor: pointer; }
+#cinematic-panel :is(button, select, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#cinematic-panel button:disabled { opacity: 0.5; cursor: default; }
+#cinematic-panel p { font-size: 0.8rem; margin: 8px 0; }
+#cinematic-panel.cinematic-floating { position: fixed; top: calc(80px + var(--sat)); right: calc(12px + var(--sar)); left: auto; z-index: 8; width: min(300px, calc(100vw - 48px)); max-height: calc(100dvh - 180px); overflow-y: auto; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel); }
+/* The countdown and the trip, mid-screen. */
+#mission-overlay { position: fixed; top: 16%; left: 50%; transform: translateX(-50%); text-align: center; z-index: 6; text-shadow: 0 2px 8px #000; }
+#mission-overlay[hidden] { display: none; }
+#mission-overlay .count { font-size: 7rem; font-weight: 700; color: var(--accent); line-height: 1; }
+#mission-overlay .hint, #mission-overlay .flying { margin: 6px 0; font-size: 1.05rem; }
+#mission-overlay button { pointer-events: auto; }
+#mission-overlay .buttons { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+#mission-overlay .altitude { width: min(260px, 70vw); height: 8px; margin: 0 auto 6px; border-radius: 4px; background: #ffffff22; overflow: hidden; }
+#mission-overlay .altitude .fill { display: block; height: 100%; background: var(--accent); }
+
+/* The info card: title (with ✕), details, then its planet's moons. On phones, a bottom sheet (below). */
+#info { display: flex; flex-direction: column; }
+#info[hidden] { display: none; }
+#info .card-head { position: relative; padding-right: 36px; }
+#info .card-head .close { position: absolute; top: 0; right: 0; }
+#info .sheet-handle { display: none; }
+#info .details { order: 2; }
+#info .moons { order: 3; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
+#info .moons .label { color: var(--muted); margin-right: 4px; }
+.panel .chip {
+  padding: 1px 10px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--fg);
+  background: transparent;
+  border: 1px solid var(--accent);
+  cursor: pointer;
+}
+
+/* Weight on other worlds: top left, under the status and gesture pills. */
+#weight-panel {
+  top: 132px;
+  left: 16px;
+  right: auto;
+  max-height: calc(100% - 132px - var(--footer-h, 72px) - 112px); /* clear of the footer and the time bar */
+  overflow-y: auto;
+  pointer-events: auto;
+  z-index: 4;
+}
+#weight-panel .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+#weight-panel h2 { font-size: 1.05rem; }
+#weight-panel .field { display: flex; align-items: center; gap: 8px; margin: 6px 0 2px; font-size: 0.9rem; }
+#weight-panel .field .label { flex: 1; color: var(--muted); }
+#weight-panel input {
+  width: 5em;
+  padding: 4px 8px;
+  font: inherit;
+  text-align: right;
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+#weight-panel input:focus { outline: none; border-color: var(--accent); }
+#weight-panel input[aria-invalid='true'] { border-color: var(--warn); }
+#weight-panel .error { margin: 2px 0 0; color: var(--warn); font-size: 0.8rem; }
+#weight-panel .error[hidden] { display: none; }
+#weight-panel .worlds { margin: 10px 0 0; padding: 0; list-style: none; }
+#weight-panel .worlds li {
+  display: grid;
+  grid-template-columns: 1fr auto 3.6em;
+  gap: 10px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-variant-numeric: tabular-nums;
+}
+#weight-panel .worlds li.current { background: rgba(255, 255, 255, 0.08); color: var(--accent); }
+#weight-panel .worlds li.moon .name { padding-left: 0.4em; font-size: 0.9em; }
+#weight-panel .worlds li.moon .name::before { content: '↳ '; color: var(--muted); }
+#weight-panel .worlds .value { text-align: right; }
+#weight-panel .worlds .ratio { text-align: right; color: var(--muted); font-size: 0.8rem; align-self: center; }
+#weight-panel .hint { margin: 10px 0 0; color: var(--muted); font-size: 0.75rem; line-height: 1.5; }
+
+/* ?debug: CPU and GPU frame times, under the stats.js FPS counter (top: 40px, 48px tall). */
+#frame-times {
+  position: fixed;
+  top: 92px;
+  right: 16px;
+  margin: 0;
+  padding: 3px 6px;
+  font: 11px/1.4 ui-monospace, Consolas, monospace;
+  color: #8f8;
+  background: rgba(0, 0, 20, 0.85);
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Camera preview: small and always visible while tracking. */
+#preview {
+  --aspect: 4 / 3; /* camera width / height, set from JS */
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  width: min(168px, calc(126px * var(--aspect))); /* height ≤ 126px */
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: #000;
+}
+#preview .mirror { position: relative; transform: scaleX(-1); aspect-ratio: var(--aspect); }
+#preview video, #preview canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* The container takes the camera's real aspect ratio (set from JS), so the
+   video is never cropped and the skeleton lines up with the hand. */
+#preview video { object-fit: fill; opacity: 0.55; }
+#debug-stats { display: none; }
+
+#preview.debug { width: max(240px, min(320px, calc(240px * var(--aspect)))); }
+/* ?debug without a camera: the stats, without an empty mirror. */
+#preview.stats-only .mirror { display: none; }
+#preview .debug-copy {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 0.75rem;
+  color: var(--fg);
+  background: rgba(0, 0, 0, 0.8);
+  border: 0;
+  border-top: 1px solid var(--border);
+  cursor: pointer;
+}
+#preview .debug-copy[hidden], #preview.tucked .debug-copy { display: none; }
+#preview.debug #debug-stats {
+  display: block;
+  margin: 0;
+  padding: 8px 10px;
+  font: 11px/1.5 ui-monospace, Consolas, monospace;
+  color: var(--fg);
+  background: rgba(0, 0, 0, 0.8);
+  white-space: pre;
+}
+
+dialog {
+  max-width: min(420px, calc(100% - 32px));
+  color: var(--fg);
+  background: #0c1020;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+dialog a { color: var(--ok); }
+dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
+
+@media (max-width: 1100px) {
+  #timebar { bottom: calc(var(--footer-h, 72px) + 20px); } /* footer: 12px from the bottom, then an 8px gap */
+  #help { max-width: calc(100% - 200px); }
+}
+
+@media (max-width: 640px) {
+  #base-panel.panel { top: auto; bottom: calc(var(--footer-h, 72px) + 20px + var(--sab)); left: 0; right: 0; width: auto; max-height: 45vh; overflow-y: auto; border-radius: 16px 16px 0 0; z-index: 8; }
+  /* The info card as a bottom sheet: never over the focused body (the camera re-centers it above),
+     collapsible to its title and moon buttons, swiped down to collapse and again to close (ui/sheet.ts). */
+  #info.panel {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: auto;
+    max-height: 62vh;
+    padding: 0 16px calc(14px + env(safe-area-inset-bottom));
+    border-radius: 16px 16px 0 0;
+    border-bottom: 0;
+    pointer-events: auto;
+    z-index: 8;
+    transition: transform 0.2s ease-out;
+  }
+  #info.dragging { transition: none; }
+  #info .sheet-handle {
+    display: block;
+    align-self: center;
+    width: 64px;
+    height: 24px;
+    padding: 0;
+    background: none;
+    border: 0;
+    cursor: grab;
+    touch-action: none;
+  }
+  #info .sheet-handle::before { content: ''; display: block; width: 36px; height: 4px; margin: 0 auto; border-radius: 2px; background: var(--muted); }
+  #info .card-head { touch-action: none; }
+  #info .moons { order: 1; margin: 0 0 10px; }
+  #info .details { order: 2; overflow-y: auto; min-height: 0; }
+  #info.collapsed .details { display: none; }
+  body.sheet-collapsed #timebar { bottom: calc(var(--sheet-h, 120px) + 8px); }
+  body.sheet-collapsed footer.hud,
+  body.sheet-expanded footer.hud,
+  body.sheet-expanded #timebar { visibility: hidden; }
+  #preview { width: min(112px, calc(84px * var(--aspect))); }
+  #preview.debug { width: calc(100% - 32px); }
+  #help { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #photo-flash.flash { animation: none; }
+  #time-dial, #time-dial .needle { transition: none; }
+  .panel { backdrop-filter: none; }
+  .hud-flash.show { animation: none; }
+}
+
+/* Mission HUD (bases, trips, landings): fuel, readout, mini-map. Top left, under the title. */
+#mission-hud { position: fixed; top: 84px; left: 16px; width: 168px; padding: 10px 12px; font-size: 0.85rem; }
+#mission-hud[hidden] { display: none; }
+#mission-hud .fuel { height: 6px; border-radius: 3px; background: #ffffff22; overflow: hidden; margin-bottom: 6px; }
+#mission-hud .fuel .fill { display: block; height: 100%; background: #5fd38d; transition: width 0.3s; }
+#mission-hud .fuel .fill.low { background: #ff6b4a; }
+#mission-hud dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; margin: 0 0 8px; }
+#mission-hud dt { color: var(--muted); }
+#mission-hud dd { margin: 0; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#mission-hud canvas { display: block; width: 100%; aspect-ratio: 1; border-radius: 50%; background: #ffffff08; }
+@media (max-width: 640px) {
+  #mission-hud { top: 72px; width: 128px; padding: 8px; font-size: 0.75rem; }
+}
+
+/* The passport (J). */
+#passport-panel { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(360px, calc(100vw - 32px)); pointer-events: auto; z-index: 8; }
+#passport-panel[hidden] { display: none; }
+#passport-panel .head { display: flex; justify-content: space-between; align-items: center; }
+#passport-panel .stamps { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 6px; }
+#passport-panel .stamp { display: grid; grid-template-columns: 1fr auto; gap: 0 8px; padding: 6px 10px; border: 1px dashed var(--accent); border-radius: 8px; }
+#passport-panel .stamp.empty { border-color: #ffffff33; opacity: 0.6; }
+#passport-panel .stamp span:not(.when) { color: var(--muted); font-size: 0.85em; grid-row: 2; }
+#passport-panel .stamp .when { grid-row: 1 / 3; grid-column: 2; align-self: center; font-size: 0.85em; }
+
+/* ------------------------------------------------------------------------------------------
+   v2.0.2 layout: safe areas (notch, home bar), compact screens (phones in either orientation),
+   the time pill, the ☰ menu, the ? shortcuts, the preview's tuck, immersive mode.
+   "Compact" here must match COMPACT_QUERY in src/ui/layout.ts.
+   ------------------------------------------------------------------------------------------ */
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+}
+.hud { left: calc(16px + var(--sal)); right: calc(16px + var(--sar)); }
+.panel { left: auto; right: calc(16px + var(--sar)); }
+.top { top: calc(12px + var(--sat)); }
+.bottom { bottom: calc(12px + var(--sab)); }
+#version { top: calc(12px + var(--sat)); right: calc(16px + var(--sar)); }
+#preview { right: calc(16px + var(--sar)); bottom: calc(16px + var(--sab)); }
+#mission-hud { left: calc(16px + var(--sal)); }
+
+.title-short { display: none; }
+#timebar .pill-row { display: none; }
+#menu { display: none; }
+#footer-menu { display: contents; }
+#help[hidden] { display: none; }
+#help-toggle { min-width: 1.9em; font-weight: 600; }
+/* Wide screens: the footer's buttons wrap before the centered time bar, like the help line. */
+@media (min-width: 1101px) and (min-height: 501px) {
+  .footer-links { max-width: calc(50% - 247px); }
+}
+/* Touch screens have no keyboard to take shortcuts from. */
+@media (pointer: coarse) {
+  #help, #help-toggle { display: none !important; }
+}
+
+/* The camera preview's show / tuck button (C, or tap). */
+#preview .preview-toggle {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 1;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1;
+  color: var(--fg);
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+#preview.tucked { width: 40px; height: 40px; border-radius: 50%; }
+#preview.tucked .mirror, #preview.tucked #debug-stats { display: none; }
+#preview.tucked .preview-toggle { inset: 0; width: 100%; height: 100%; font-size: 1.1rem; background: var(--panel); border: 0; }
+
+@media (max-width: 640px), (max-height: 500px) {
+  .top h1 { font-size: 0.95rem; }
+  .title-full { display: none; }
+  .title-short { display: inline; }
+  #status { font-size: 0.72rem; padding: 2px 8px; margin-top: 4px; }
+  #version { display: none; }
+  #focus { font-size: 1.2rem; }
+
+  /* The time bar folds into a pill in the top-right corner: date · speed, and pause. */
+  #timebar.collapsed {
+    top: calc(10px + var(--sat));
+    right: calc(12px + var(--sar));
+    bottom: auto;
+    left: auto;
+    transform: none;
+    width: auto;
+    padding: 0;
+    background: none;
+    border: 0;
+  }
+  #timebar.collapsed .row { display: none; }
+  /* The pill lives in its corner whatever the bottom sheet is doing. */
+  body #timebar.collapsed { top: calc(10px + var(--sat)); bottom: auto; visibility: visible; }
+  /* Opened from the pill while the sheet is up: just above the sheet. */
+  body.sheet-expanded #timebar:not(.collapsed) { visibility: visible; bottom: calc(var(--sheet-h, 120px) + 8px); }
+  #timebar.collapsed .pill-row { display: flex; gap: 6px; }
+  #timebar .pill, #timebar .pill-pause {
+    padding: 4px 12px;
+    border-radius: 999px;
+    font: inherit;
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--fg);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    cursor: pointer;
+  }
+  #timebar .pill-pause { padding: 4px 10px; }
+  /* Long dates and speeds ("+1× (real time)") truncate rather than run into the title. */
+  #timebar .pill { max-width: calc(100vw - 250px - var(--sal) - var(--sar)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Footer: the focused body, 📷 and ☰; the rest of the buttons in the menu. */
+  body.menu-open footer.hud { z-index: 9; } /* Raise the open menu, without covering Builder tools when closed. */
+  .footer-links { position: relative; flex-wrap: nowrap; }
+  #menu { display: inline-block; min-width: 44px; min-height: 44px; }
+  #footer-menu { display: none; }
+  body.menu-open #footer-menu {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    min-width: 210px;
+    max-height: calc(100vh - 120px - var(--sat) - var(--sab));
+    overflow-y: auto;
+    padding: 10px;
+    border-radius: 12px;
+    background: #0c1020f0;
+    border: 1px solid var(--border);
+    pointer-events: auto;
+  }
+  body.menu-open #footer-menu button { text-align: left; font-size: 0.85rem; padding: 6px 12px; }
+  body.menu-open #footer-menu a { padding: 4px 12px; font-size: 0.85rem; }
+
+  #preview { width: min(84px, calc(63px * var(--aspect))); bottom: calc(12px + var(--sab)); right: calc(12px + var(--sar)); }
+  #preview.tucked { width: 36px; height: 36px; }
+}
+
+/* Phones in landscape: little height, so panels sit at the side, top to bottom, and scroll. */
+@media (max-height: 500px) {
+  .panel {
+    top: calc(8px + var(--sat));
+    right: calc(8px + var(--sar));
+    width: min(300px, 42vw);
+    max-height: calc(100% - 16px - var(--sat) - var(--sab));
+    overflow-y: auto;
+    padding: 12px 14px;
+  }
+  #info.panel .details { font-size: 0.85rem; }
+  #mission-hud { top: calc(74px + var(--sat)); width: 120px; padding: 6px 8px; font-size: 0.72rem; }
+  #mission-hud dl { margin-bottom: 4px; }
+  #timebar:not(.collapsed) { bottom: calc(12px + var(--sab)); }
+  /* Panels take the right side here, so the pill sits top center. */
+  body #timebar.collapsed { left: 50%; right: auto; transform: translateX(-50%); }
+  /* Between the title and the side panels. */
+  #timebar .pill { max-width: calc(100vw - 2 * (min(300px, 42vw) + 24px) - 52px); }
+}
+
+/* Immersive mode: after a few seconds without input, only the sky and the hand-status dot remain. */
+.top h1, #loading, footer.hud, #timebar, #info, #base-panel, #version, #labels, #preview, #mission-hud {
+  transition: opacity 0.25s ease-out;
+}
+body.immersive :is(.top h1, #loading, footer.hud, #timebar, #info, #base-panel, #version, #labels, #preview, #mission-hud) {
+  opacity: 0;
+  pointer-events: none !important;
+  transition: opacity 0.8s ease-in;
+}
+body.immersive :is(footer.hud, #timebar, #info, #base-panel, #preview, #mission-hud) * { pointer-events: none !important; }
+#status { transition: font-size 0.25s, padding 0.25s; }
+body.immersive #status {
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  font-size: 0;
+  border-radius: 50%;
+  background: var(--muted);
+}
+body.immersive #status[data-kind='tracking'] { background: var(--ok); border-color: var(--ok); }
+@media (prefers-reduced-motion: reduce) {
+  .top h1, #loading, footer.hud, #timebar, #info, #base-panel, #version, #labels, #preview, #mission-hud, #status,
+  body.immersive :is(.top h1, #loading, footer.hud, #timebar, #info, #base-panel, #version, #labels, #preview, #mission-hud) { transition: none; }
+}
+
+/* The horizon view's small panel: local time and sky, at the top so the ground and sky stay clear. */
+#mission-overlay.horizon { top: calc(64px + var(--sat)); padding: 10px 14px; border-radius: 12px; background: var(--panel); border: 1px solid var(--border); width: min(420px, calc(100vw - 32px)); box-sizing: border-box; }
+#mission-overlay.horizon .sky { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 0; text-align: left; font-size: 0.9rem; }
+#mission-overlay.horizon .sky dt { color: var(--muted); }
+#mission-overlay.horizon .sky dd { margin: 0; }
+#mission-overlay.horizon .hint { font-size: 0.8rem; color: var(--muted); }
+/* Standing on the ground: no floating planet names. */
+body.horizon #labels { display: none; }
+@media (max-width: 640px), (max-height: 500px) {
+  #mission-overlay.horizon { top: calc(44px + var(--sat)); padding: 6px 10px; }
+  #mission-overlay.horizon .sky { font-size: 0.78rem; }
+  #mission-overlay.horizon .hint { display: none; } /* phones: drag to look round is the obvious thing; the button says the rest */
+  #mission-overlay.horizon button { margin-top: 4px; }
+}
+
+/* Names in the horizon view's sky. */
+#sky-labels span { position: fixed; transform: translate(-50%, 10px); font-size: 0.75rem; color: var(--fg); opacity: 0.8; text-shadow: 0 1px 3px #000; pointer-events: none; white-space: nowrap; z-index: 2; }
+#sky-labels span[hidden] { display: none; }
+body.immersive #sky-labels { opacity: 0; transition: opacity 0.8s ease-in; }
+
+/* Build mode (?flags=build): the palette, balance, chart and tools. A side panel; a bottom sheet on phones. */
+#build-panel { right: calc(16px + var(--sar)); pointer-events: auto; position: fixed; width: min(340px, calc(100% - 32px)); max-height: calc(100% - 100px); overflow-y: auto; }
+#build-panel[hidden] { display: none; }
+#build-panel h2 { margin: 0 0 8px; font-size: 1.05rem; }
+#build-panel .palette, #build-panel .tools { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+#build-panel .chip[aria-pressed='true'] { background: var(--accent); color: var(--bg); }
+#build-panel .chip:disabled { opacity: 0.4; cursor: default; }
+#build-panel .done { margin-left: auto; }
+#build-panel dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 6px 0; font-size: 0.85rem; }
+#build-panel dt { color: var(--muted); }
+#build-panel dd { margin: 0; }
+#build-panel .ok { color: var(--ok); }
+#build-panel .warn { color: #ffb347; }
+#build-panel .preview { margin: 6px 0; font-size: 0.85rem; min-height: 2.4em; }
+#build-panel .chart { display: flex; align-items: flex-end; gap: 2px; height: 34px; margin: 4px 0 6px; padding: 2px; border-radius: 6px; background: #ffffff10; }
+#build-panel .chart span { flex: 1; background: #5fd38d; border-radius: 1px; }
+#build-panel .chart span.short { background: #ff6b4a; height: 100% !important; opacity: 0.8; }
+#build-panel .hint { margin: 6px 0 0; color: var(--muted); font-size: 0.75rem; }
+@media (max-width: 640px) {
+  #build-panel.panel { top: auto; bottom: 0; left: 0; right: 0; width: auto; max-height: 42vh; border-radius: 16px 16px 0 0; z-index: 8; padding: 10px 12px calc(10px + var(--sab)); }
+  #build-panel .hint { display: none; }
+  #build-panel h2 { font-size: 0.95rem; margin-bottom: 4px; }
+  #build-panel dl, #build-panel .preview { font-size: 0.78rem; }
+}
+/* Build panel in landscape on phones: the side-panel width, compact text, tools first in view. */
+@media (max-height: 500px) {
+  #build-panel { width: min(300px, 42vw); top: calc(8px + var(--sat)); max-height: calc(100% - 16px - var(--sat) - var(--sab)); padding: 8px 10px; }
+  #build-panel .hint { display: none; }
+  #build-panel h2 { font-size: 0.9rem; margin-bottom: 2px; }
+  #build-panel .palette .chip, #build-panel .tools .chip { font-size: 0.78rem; padding: 1px 8px; }
+  #build-panel dl, #build-panel .preview { font-size: 0.74rem; margin: 3px 0; }
+  #build-panel .chart { height: 22px; }
+}
+
+#build-panel .touch-hint { display: flex; align-items: center; gap: 8px; margin: 4px 0 8px; padding: 6px 10px; border-radius: 8px; background: #ffd34d22; border: 1px solid var(--accent); font-size: 0.85rem; }
+#build-panel .touch-hint span { flex: 1; }
+#build-panel .model { margin: 6px 0 0; font-size: 0.75rem; color: var(--muted); }
+#build-panel .model summary { cursor: pointer; }
+#build-panel .model p { margin: 4px 0 0; }
+/* Portrait phones: the countdown, "Flying to…" and the landing controls sit low, above the footer,
+   clear of the mission HUD's mini-map at the top left (and of the rocket in the middle). */
+@media (max-width: 640px) {
+  #mission-overlay:not(.horizon) { top: auto; bottom: calc(78px + var(--sab)); width: calc(100vw - 32px); }
+  #mission-overlay:not(.horizon) .count { font-size: 5rem; }
+  #mission-overlay:not(.horizon) .hint { font-size: 0.85rem; }
+}

@@ -1,0 +1,895 @@
+diff --git a/node_modules/three/build/three.module.js b/node_modules/three/build/three.module.js
+index c52087a..932e4ce 100644
+--- a/node_modules/three/build/three.module.js
++++ b/node_modules/three/build/three.module.js
+@@ -1,3 +1,94 @@
++// EXPERIMENTAL_RECOVERY_DISPOSAL_SCOPE_V1
++/**
++ * Experimental engine-only disposal subscriptions for one WebGL context epoch.
++ * The enumerable registry must never retain either resource owners or callbacks:
++ * callbacks such as the morph/depth listeners can themselves capture the owner.
++ * A live owner retains its wrapper through EventDispatcher, as before.
++ */
++function createDisposalScope(epoch = 0) {
++  let active = true;
++  let owners = new WeakMap();
++  const entries = new Set();
++  let registrations = 0;
++  let removals = 0;
++  const collected = new FinalizationRegistry((entry) => entries.delete(entry));
++
++  function forget(entry) {
++    entries.delete(entry);
++    collected.unregister(entry);
++  }
++
++  function subscribe(owner, listener) {
++    if (!active) return;
++    let listeners = owners.get(owner);
++    if (listeners === undefined) {
++      listeners = new WeakMap();
++      owners.set(owner, listeners);
++    }
++    if (listeners.has(listener)) return;
++
++    // Do not capture owner here. Preserve EventDispatcher's this/arguments and
++    // exception behavior; the entry-point guard prevents nested public dispose.
++    const wrapped = function (...args) {
++      if (active) return listener.apply(this, args);
++    };
++    const entry = {
++      owner: new WeakRef(owner),
++      listener: new WeakRef(listener),
++      wrapped: new WeakRef(wrapped),
++    };
++    owner.addEventListener('dispose', wrapped);
++    listeners.set(listener, entry);
++    entries.add(entry);
++    collected.register(owner, entry, entry);
++    registrations++;
++  }
++
++  function unsubscribe(owner, listener) {
++    const listeners = owners.get(owner);
++    const entry = listeners?.get(listener);
++    if (entry === undefined) return;
++    const wrapped = entry.wrapped.deref();
++    if (wrapped !== undefined) owner.removeEventListener('dispose', wrapped);
++    listeners.delete(listener);
++    forget(entry);
++    removals++;
++  }
++
++  function has(owner, listener) {
++    return active && owners.get(owner)?.has(listener) === true;
++  }
++
++  function abandon() {
++    if (!active) return 0;
++    // Invalidate first: even a wrapper already copied into a dispatch snapshot
++    // cannot enter an obsolete manager while subscriptions are being detached.
++    active = false;
++    const count = entries.size;
++    for (const entry of entries) {
++      const owner = entry.owner.deref();
++      const wrapped = entry.wrapped.deref();
++      if (owner !== undefined && wrapped !== undefined) {
++        owner.removeEventListener('dispose', wrapped);
++      }
++      collected.unregister(entry);
++    }
++    entries.clear();
++    owners = new WeakMap();
++    return count;
++  }
++
++  return {
++    subscribe,
++    unsubscribe,
++    has,
++    abandon,
++    get active() { return active; },
++    stats: () => ({ epoch, active, subscriptions: entries.size, registrations, removals }),
++  };
++}
++
++
+ /**
+  * @license
+  * Copyright 2010-2026 Three.js Authors
+@@ -3847,7 +3938,7 @@ class WebGLCubeRenderTarget extends WebGLRenderTarget {
+ 
+ }
+ 
+-function WebGLEnvironments( renderer ) {
++function WebGLEnvironments( renderer, disposalScope ) {
+ 
+ 	let cubeMaps = new WeakMap();
+ 	let pmremMaps = new WeakMap();
+@@ -3891,7 +3982,7 @@ function WebGLEnvironments( renderer ) {
+ 						renderTarget.fromEquirectangularTexture( renderer, texture );
+ 						cubeMaps.set( texture, renderTarget );
+ 
+-						texture.addEventListener( 'dispose', onCubemapDispose );
++						disposalScope.subscribe( texture, onCubemapDispose );
+ 
+ 						return mapTextureMapping( renderTarget.texture, texture.mapping );
+ 
+@@ -3960,7 +4051,7 @@ function WebGLEnvironments( renderer ) {
+ 
+ 							pmremMaps.set( texture, renderTarget );
+ 
+-							texture.addEventListener( 'dispose', onPMREMDispose );
++							disposalScope.subscribe( texture, onPMREMDispose );
+ 
+ 							return renderTarget.texture;
+ 
+@@ -4019,7 +4110,7 @@ function WebGLEnvironments( renderer ) {
+ 
+ 		const texture = event.target;
+ 
+-		texture.removeEventListener( 'dispose', onCubemapDispose );
++		disposalScope.unsubscribe( texture, onCubemapDispose );
+ 
+ 		const cubemap = cubeMaps.get( texture );
+ 
+@@ -4036,7 +4127,7 @@ function WebGLEnvironments( renderer ) {
+ 
+ 		const texture = event.target;
+ 
+-		texture.removeEventListener( 'dispose', onPMREMDispose );
++		disposalScope.unsubscribe( texture, onPMREMDispose );
+ 
+ 		const pmrem = pmremMaps.get( texture );
+ 
+@@ -4127,7 +4218,7 @@ function WebGLExtensions( gl ) {
+ 
+ }
+ 
+-function WebGLGeometries( gl, attributes, info, bindingStates ) {
++function WebGLGeometries( gl, attributes, info, bindingStates, disposalScope ) {
+ 
+ 	const geometries = {};
+ 	const wireframeAttributes = new WeakMap();
+@@ -4148,7 +4239,7 @@ function WebGLGeometries( gl, attributes, info, bindingStates ) {
+ 
+ 		}
+ 
+-		geometry.removeEventListener( 'dispose', onGeometryDispose );
++		disposalScope.unsubscribe( geometry, onGeometryDispose );
+ 
+ 		delete geometries[ geometry.id ];
+ 
+@@ -4179,7 +4270,7 @@ function WebGLGeometries( gl, attributes, info, bindingStates ) {
+ 
+ 		if ( geometries[ geometry.id ] === true ) return geometry;
+ 
+-		geometry.addEventListener( 'dispose', onGeometryDispose );
++		disposalScope.subscribe( geometry, onGeometryDispose );
+ 
+ 		geometries[ geometry.id ] = true;
+ 
+@@ -4444,7 +4535,7 @@ function WebGLInfo( gl ) {
+ 
+ }
+ 
+-function WebGLMorphtargets( gl, capabilities, textures ) {
++function WebGLMorphtargets( gl, capabilities, textures, disposalScope ) {
+ 
+ 	const morphTextures = new WeakMap();
+ 	const morph = new Vector4();
+@@ -4561,11 +4652,11 @@ function WebGLMorphtargets( gl, capabilities, textures ) {
+ 
+ 				morphTextures.delete( geometry );
+ 
+-				geometry.removeEventListener( 'dispose', disposeTexture );
++				disposalScope.unsubscribe( geometry, disposeTexture );
+ 
+ 			}
+ 
+-			geometry.addEventListener( 'dispose', disposeTexture );
++			disposalScope.subscribe( geometry, disposeTexture );
+ 
+ 		}
+ 
+@@ -4605,7 +4696,7 @@ function WebGLMorphtargets( gl, capabilities, textures ) {
+ 
+ }
+ 
+-function WebGLObjects( gl, geometries, attributes, bindingStates, info ) {
++function WebGLObjects( gl, geometries, attributes, bindingStates, info, disposalScope ) {
+ 
+ 	let updateMap = new WeakMap();
+ 
+@@ -4628,9 +4719,9 @@ function WebGLObjects( gl, geometries, attributes, bindingStates, info ) {
+ 
+ 		if ( object.isInstancedMesh ) {
+ 
+-			if ( object.hasEventListener( 'dispose', onInstancedMeshDispose ) === false ) {
++			if ( disposalScope.has( object, onInstancedMeshDispose ) === false ) {
+ 
+-				object.addEventListener( 'dispose', onInstancedMeshDispose );
++				disposalScope.subscribe( object, onInstancedMeshDispose );
+ 
+ 			}
+ 
+@@ -4678,7 +4769,7 @@ function WebGLObjects( gl, geometries, attributes, bindingStates, info ) {
+ 
+ 		const instancedMesh = event.target;
+ 
+-		instancedMesh.removeEventListener( 'dispose', onInstancedMeshDispose );
++		disposalScope.unsubscribe( instancedMesh, onInstancedMeshDispose );
+ 
+ 		bindingStates.releaseStatesOfObject( instancedMesh );
+ 
+@@ -9083,7 +9174,7 @@ const _projScreenMatrix = /*@__PURE__*/ new Matrix4();
+ const _lightPositionWorld = /*@__PURE__*/ new Vector3();
+ const _lookTarget = /*@__PURE__*/ new Vector3();
+ 
+-function WebGLShadowMap( renderer, objects, capabilities ) {
++function WebGLShadowMap( renderer, objects, capabilities, disposalScope ) {
+ 
+ 	let _frustum = new Frustum();
+ 
+@@ -9517,7 +9608,7 @@ function WebGLShadowMap( renderer, objects, capabilities ) {
+ 
+ 					cachedMaterial = result.clone();
+ 					materialsForVariant[ keyB ] = cachedMaterial;
+-					material.addEventListener( 'dispose', onMaterialDispose );
++					disposalScope.subscribe( material, onMaterialDispose );
+ 
+ 				}
+ 
+@@ -9634,7 +9725,7 @@ function WebGLShadowMap( renderer, objects, capabilities ) {
+ 
+ 		const material = event.target;
+ 
+-		material.removeEventListener( 'dispose', onMaterialDispose );
++		disposalScope.unsubscribe( material, onMaterialDispose );
+ 
+ 		// make sure to remove the unique distance/depth materials used for shadow map rendering
+ 
+@@ -11022,7 +11113,7 @@ function WebGLState( gl, extensions ) {
+ 
+ }
+ 
+-function WebGLTextures( _gl, extensions, state, properties, capabilities, utils, info ) {
++function WebGLTextures( _gl, extensions, state, properties, capabilities, utils, info, disposalScope ) {
+ 
+ 	const multisampledRTTExt = extensions.has( 'WEBGL_multisampled_render_to_texture' ) ? extensions.get( 'WEBGL_multisampled_render_to_texture' ) : null;
+ 	const supportsInvalidateFramebuffer = typeof navigator === 'undefined' ? false : /OculusBrowser/g.test( navigator.userAgent );
+@@ -11343,7 +11434,7 @@ function WebGLTextures( _gl, extensions, state, properties, capabilities, utils,
+ 
+ 		const texture = event.target;
+ 
+-		texture.removeEventListener( 'dispose', onTextureDispose );
++		disposalScope.unsubscribe( texture, onTextureDispose );
+ 
+ 		deallocateTexture( texture );
+ 
+@@ -11365,7 +11456,7 @@ function WebGLTextures( _gl, extensions, state, properties, capabilities, utils,
+ 
+ 		const renderTarget = event.target;
+ 
+-		renderTarget.removeEventListener( 'dispose', onRenderTargetDispose );
++		disposalScope.unsubscribe( renderTarget, onRenderTargetDispose );
+ 
+ 		deallocateRenderTarget( renderTarget );
+ 
+@@ -11734,7 +11825,7 @@ function WebGLTextures( _gl, extensions, state, properties, capabilities, utils,
+ 
+ 			textureProperties.__webglInit = true;
+ 
+-			texture.addEventListener( 'dispose', onTextureDispose );
++			disposalScope.subscribe( texture, onTextureDispose );
+ 
+ 		}
+ 
+@@ -12802,7 +12893,7 @@ function WebGLTextures( _gl, extensions, state, properties, capabilities, utils,
+ 			if ( textureProperties.__webglInit === undefined ) {
+ 
+ 				textureProperties.__webglInit = true;
+-				renderTarget.depthTexture.addEventListener( 'dispose', onTextureDispose );
++				disposalScope.subscribe( renderTarget.depthTexture, onTextureDispose );
+ 
+ 			}
+ 
+@@ -12906,11 +12997,11 @@ function WebGLTextures( _gl, extensions, state, properties, capabilities, utils,
+ 
+ 					delete renderTargetProperties.__boundDepthTexture;
+ 					delete renderTargetProperties.__depthDisposeCallback;
+-					depthTexture.removeEventListener( 'dispose', disposeEvent );
++					disposalScope.unsubscribe( depthTexture, disposeEvent );
+ 
+ 				};
+ 
+-				depthTexture.addEventListener( 'dispose', disposeEvent );
++				disposalScope.subscribe( depthTexture, disposeEvent );
+ 				renderTargetProperties.__depthDisposeCallback = disposeEvent;
+ 
+ 			}
+@@ -13037,7 +13128,7 @@ function WebGLTextures( _gl, extensions, state, properties, capabilities, utils,
+ 		const renderTargetProperties = properties.get( renderTarget );
+ 		const textureProperties = properties.get( texture );
+ 
+-		renderTarget.addEventListener( 'dispose', onRenderTargetDispose );
++		disposalScope.subscribe( renderTarget, onRenderTargetDispose );
+ 
+ 		const textures = renderTarget.textures;
+ 
+@@ -15606,7 +15697,7 @@ function WebGLMaterials( renderer, properties ) {
+ 
+ }
+ 
+-function WebGLUniformsGroups( gl, info, capabilities, state ) {
++function WebGLUniformsGroups( gl, info, capabilities, state, disposalScope ) {
+ 
+ 	let buffers = {};
+ 	let updateList = {};
+@@ -15632,7 +15723,7 @@ function WebGLUniformsGroups( gl, info, capabilities, state ) {
+ 			buffer = createBuffer( uniformsGroup );
+ 			buffers[ uniformsGroup.id ] = buffer;
+ 
+-			uniformsGroup.addEventListener( 'dispose', onUniformsGroupsDispose );
++			disposalScope.subscribe( uniformsGroup, onUniformsGroupsDispose );
+ 
+ 		}
+ 
+@@ -16006,7 +16097,7 @@ function WebGLUniformsGroups( gl, info, capabilities, state ) {
+ 
+ 		const uniformsGroup = event.target;
+ 
+-		uniformsGroup.removeEventListener( 'dispose', onUniformsGroupsDispose );
++		disposalScope.unsubscribe( uniformsGroup, onUniformsGroupsDispose );
+ 
+ 		const index = allocatedBindingPoints.indexOf( uniformsGroup.__bindingPointIndex );
+ 		allocatedBindingPoints.splice( index, 1 );
+@@ -16405,6 +16496,16 @@ class WebGLRenderer {
+ 		// initialize
+ 
+ 		let _gl = context;
++		let disposalScope;
++		let disposalEpoch = 0;
++		let disposalAbandonedEpochs = 0;
++		let disposalAbandonedSubscriptions = 0;
++		// EXPERIMENTAL_RECOVERY_DISPOSAL_SCOPE_V1: diagnostic numbers only; retain no former scope.
++		this.__experimentalDisposalScopeStats = () => ( {
++			...disposalScope?.stats(),
++			abandonedEpochs: disposalAbandonedEpochs,
++			abandonedSubscriptions: disposalAbandonedSubscriptions
++		} );
+ 
+ 		function getContext( contextName, contextAttributes ) {
+ 
+@@ -16478,6 +16579,8 @@ class WebGLRenderer {
+ 
+ 		function initGLContext() {
+ 
++			disposalScope = createDisposalScope( ++disposalEpoch );
++
+ 			extensions = new WebGLExtensions( _gl );
+ 			extensions.init();
+ 
+@@ -16499,21 +16602,21 @@ class WebGLRenderer {
+ 
+ 			info = new WebGLInfo( _gl );
+ 			properties = new WebGLProperties();
+-			textures = new WebGLTextures( _gl, extensions, state, properties, capabilities, utils, info );
+-			environments = new WebGLEnvironments( _this );
++			textures = new WebGLTextures( _gl, extensions, state, properties, capabilities, utils, info, disposalScope );
++			environments = new WebGLEnvironments( _this, disposalScope );
+ 			attributes = new WebGLAttributes( _gl );
+ 			bindingStates = new WebGLBindingStates( _gl, attributes );
+-			geometries = new WebGLGeometries( _gl, attributes, info, bindingStates );
+-			objects = new WebGLObjects( _gl, geometries, attributes, bindingStates, info );
+-			morphtargets = new WebGLMorphtargets( _gl, capabilities, textures );
++			geometries = new WebGLGeometries( _gl, attributes, info, bindingStates, disposalScope );
++			objects = new WebGLObjects( _gl, geometries, attributes, bindingStates, info, disposalScope );
++			morphtargets = new WebGLMorphtargets( _gl, capabilities, textures, disposalScope );
+ 			clipping = new WebGLClipping( properties );
+ 			programCache = new WebGLPrograms( _this, environments, extensions, capabilities, bindingStates, clipping );
+ 			materials = new WebGLMaterials( _this, properties );
+ 			renderLists = new WebGLRenderLists();
+ 			renderStates = new WebGLRenderStates( extensions );
+ 			background = new WebGLBackground( _this, environments, state, objects, _alpha, premultipliedAlpha );
+-			shadowMap = new WebGLShadowMap( _this, objects, capabilities );
+-			uniformsGroups = new WebGLUniformsGroups( _gl, info, capabilities, state );
++			shadowMap = new WebGLShadowMap( _this, objects, capabilities, disposalScope );
++			uniformsGroups = new WebGLUniformsGroups( _gl, info, capabilities, state, disposalScope );
+ 
+ 			bufferRenderer = new WebGLBufferRenderer( _gl, extensions, info );
+ 			indexedBufferRenderer = new WebGLIndexedBufferRenderer( _gl, extensions, info );
+@@ -17154,6 +17257,12 @@ class WebGLRenderer {
+ 			log( 'WebGLRenderer: Context Lost.' );
+ 
+ 			_isContextLost = true;
++			if ( disposalScope !== undefined && disposalScope.active ) {
++
++				disposalAbandonedSubscriptions += disposalScope.abandon();
++				disposalAbandonedEpochs ++;
++
++			}
+ 
+ 		}
+ 
+@@ -17189,7 +17298,7 @@ class WebGLRenderer {
+ 
+ 			const material = event.target;
+ 
+-			material.removeEventListener( 'dispose', onMaterialDispose );
++			disposalScope.unsubscribe( material, onMaterialDispose );
+ 
+ 			deallocateMaterial( material );
+ 
+@@ -18250,7 +18359,7 @@ class WebGLRenderer {
+ 
+ 				// new material
+ 
+-				material.addEventListener( 'dispose', onMaterialDispose );
++				disposalScope.subscribe( material, onMaterialDispose );
+ 
+ 				programs = new Map();
+ 				materialProperties.programs = programs;
+diff --git a/node_modules/three/src/renderers/WebGLRenderer.js b/node_modules/three/src/renderers/WebGLRenderer.js
+index bb101cf..1c0e07e 100644
+--- a/node_modules/three/src/renderers/WebGLRenderer.js
++++ b/node_modules/three/src/renderers/WebGLRenderer.js
+@@ -1,3 +1,4 @@
++import { createDisposalScope } from './webgl/WebGLDisposalScope.js';
+ import {
+ 	REVISION,
+ 	BackSide,
+@@ -368,6 +369,16 @@ class WebGLRenderer {
+ 		// initialize
+ 
+ 		let _gl = context;
++		let disposalScope;
++		let disposalEpoch = 0;
++		let disposalAbandonedEpochs = 0;
++		let disposalAbandonedSubscriptions = 0;
++		// EXPERIMENTAL_RECOVERY_DISPOSAL_SCOPE_V1: diagnostic numbers only; retain no former scope.
++		this.__experimentalDisposalScopeStats = () => ( {
++			...disposalScope?.stats(),
++			abandonedEpochs: disposalAbandonedEpochs,
++			abandonedSubscriptions: disposalAbandonedSubscriptions
++		} );
+ 
+ 		function getContext( contextName, contextAttributes ) {
+ 
+@@ -441,6 +452,8 @@ class WebGLRenderer {
+ 
+ 		function initGLContext() {
+ 
++			disposalScope = createDisposalScope( ++disposalEpoch );
++
+ 			extensions = new WebGLExtensions( _gl );
+ 			extensions.init();
+ 
+@@ -462,21 +475,21 @@ class WebGLRenderer {
+ 
+ 			info = new WebGLInfo( _gl );
+ 			properties = new WebGLProperties();
+-			textures = new WebGLTextures( _gl, extensions, state, properties, capabilities, utils, info );
+-			environments = new WebGLEnvironments( _this );
++			textures = new WebGLTextures( _gl, extensions, state, properties, capabilities, utils, info, disposalScope );
++			environments = new WebGLEnvironments( _this, disposalScope );
+ 			attributes = new WebGLAttributes( _gl );
+ 			bindingStates = new WebGLBindingStates( _gl, attributes );
+-			geometries = new WebGLGeometries( _gl, attributes, info, bindingStates );
+-			objects = new WebGLObjects( _gl, geometries, attributes, bindingStates, info );
+-			morphtargets = new WebGLMorphtargets( _gl, capabilities, textures );
++			geometries = new WebGLGeometries( _gl, attributes, info, bindingStates, disposalScope );
++			objects = new WebGLObjects( _gl, geometries, attributes, bindingStates, info, disposalScope );
++			morphtargets = new WebGLMorphtargets( _gl, capabilities, textures, disposalScope );
+ 			clipping = new WebGLClipping( properties );
+ 			programCache = new WebGLPrograms( _this, environments, extensions, capabilities, bindingStates, clipping );
+ 			materials = new WebGLMaterials( _this, properties );
+ 			renderLists = new WebGLRenderLists();
+ 			renderStates = new WebGLRenderStates( extensions );
+ 			background = new WebGLBackground( _this, environments, state, objects, _alpha, premultipliedAlpha );
+-			shadowMap = new WebGLShadowMap( _this, objects, capabilities );
+-			uniformsGroups = new WebGLUniformsGroups( _gl, info, capabilities, state );
++			shadowMap = new WebGLShadowMap( _this, objects, capabilities, disposalScope );
++			uniformsGroups = new WebGLUniformsGroups( _gl, info, capabilities, state, disposalScope );
+ 
+ 			bufferRenderer = new WebGLBufferRenderer( _gl, extensions, info );
+ 			indexedBufferRenderer = new WebGLIndexedBufferRenderer( _gl, extensions, info );
+@@ -1117,6 +1130,12 @@ class WebGLRenderer {
+ 			log( 'WebGLRenderer: Context Lost.' );
+ 
+ 			_isContextLost = true;
++			if ( disposalScope !== undefined && disposalScope.active ) {
++
++				disposalAbandonedSubscriptions += disposalScope.abandon();
++				disposalAbandonedEpochs ++;
++
++			}
+ 
+ 		}
+ 
+@@ -1152,7 +1171,7 @@ class WebGLRenderer {
+ 
+ 			const material = event.target;
+ 
+-			material.removeEventListener( 'dispose', onMaterialDispose );
++			disposalScope.unsubscribe( material, onMaterialDispose );
+ 
+ 			deallocateMaterial( material );
+ 
+@@ -2213,7 +2232,7 @@ class WebGLRenderer {
+ 
+ 				// new material
+ 
+-				material.addEventListener( 'dispose', onMaterialDispose );
++				disposalScope.subscribe( material, onMaterialDispose );
+ 
+ 				programs = new Map();
+ 				materialProperties.programs = programs;
+diff --git a/node_modules/three/src/renderers/webgl/WebGLDisposalScope.js b/node_modules/three/src/renderers/webgl/WebGLDisposalScope.js
+new file mode 100644
+index 0000000..e6c12fa
+--- /dev/null
++++ b/node_modules/three/src/renderers/webgl/WebGLDisposalScope.js
+@@ -0,0 +1,92 @@
++// EXPERIMENTAL_RECOVERY_DISPOSAL_SCOPE_V1
++/**
++ * Experimental engine-only disposal subscriptions for one WebGL context epoch.
++ * The enumerable registry must never retain either resource owners or callbacks:
++ * callbacks such as the morph/depth listeners can themselves capture the owner.
++ * A live owner retains its wrapper through EventDispatcher, as before.
++ */
++function createDisposalScope(epoch = 0) {
++  let active = true;
++  let owners = new WeakMap();
++  const entries = new Set();
++  let registrations = 0;
++  let removals = 0;
++  const collected = new FinalizationRegistry((entry) => entries.delete(entry));
++
++  function forget(entry) {
++    entries.delete(entry);
++    collected.unregister(entry);
++  }
++
++  function subscribe(owner, listener) {
++    if (!active) return;
++    let listeners = owners.get(owner);
++    if (listeners === undefined) {
++      listeners = new WeakMap();
++      owners.set(owner, listeners);
++    }
++    if (listeners.has(listener)) return;
++
++    // Do not capture owner here. Preserve EventDispatcher's this/arguments and
++    // exception behavior; the entry-point guard prevents nested public dispose.
++    const wrapped = function (...args) {
++      if (active) return listener.apply(this, args);
++    };
++    const entry = {
++      owner: new WeakRef(owner),
++      listener: new WeakRef(listener),
++      wrapped: new WeakRef(wrapped),
++    };
++    owner.addEventListener('dispose', wrapped);
++    listeners.set(listener, entry);
++    entries.add(entry);
++    collected.register(owner, entry, entry);
++    registrations++;
++  }
++
++  function unsubscribe(owner, listener) {
++    const listeners = owners.get(owner);
++    const entry = listeners?.get(listener);
++    if (entry === undefined) return;
++    const wrapped = entry.wrapped.deref();
++    if (wrapped !== undefined) owner.removeEventListener('dispose', wrapped);
++    listeners.delete(listener);
++    forget(entry);
++    removals++;
++  }
++
++  function has(owner, listener) {
++    return active && owners.get(owner)?.has(listener) === true;
++  }
++
++  function abandon() {
++    if (!active) return 0;
++    // Invalidate first: even a wrapper already copied into a dispatch snapshot
++    // cannot enter an obsolete manager while subscriptions are being detached.
++    active = false;
++    const count = entries.size;
++    for (const entry of entries) {
++      const owner = entry.owner.deref();
++      const wrapped = entry.wrapped.deref();
++      if (owner !== undefined && wrapped !== undefined) {
++        owner.removeEventListener('dispose', wrapped);
++      }
++      collected.unregister(entry);
++    }
++    entries.clear();
++    owners = new WeakMap();
++    return count;
++  }
++
++  return {
++    subscribe,
++    unsubscribe,
++    has,
++    abandon,
++    get active() { return active; },
++    stats: () => ({ epoch, active, subscriptions: entries.size, registrations, removals }),
++  };
++}
++
++
++export { createDisposalScope };
+diff --git a/node_modules/three/src/renderers/webgl/WebGLEnvironments.js b/node_modules/three/src/renderers/webgl/WebGLEnvironments.js
+index 390b048..a49f583 100644
+--- a/node_modules/three/src/renderers/webgl/WebGLEnvironments.js
++++ b/node_modules/three/src/renderers/webgl/WebGLEnvironments.js
+@@ -2,7 +2,7 @@ import { CubeReflectionMapping, CubeRefractionMapping, EquirectangularReflection
+ import { PMREMGenerator } from '../../extras/PMREMGenerator.js';
+ import { WebGLCubeRenderTarget } from '../WebGLCubeRenderTarget.js';
+ 
+-function WebGLEnvironments( renderer ) {
++function WebGLEnvironments( renderer, disposalScope ) {
+ 
+ 	let cubeMaps = new WeakMap();
+ 	let pmremMaps = new WeakMap();
+@@ -46,7 +46,7 @@ function WebGLEnvironments( renderer ) {
+ 						renderTarget.fromEquirectangularTexture( renderer, texture );
+ 						cubeMaps.set( texture, renderTarget );
+ 
+-						texture.addEventListener( 'dispose', onCubemapDispose );
++						disposalScope.subscribe( texture, onCubemapDispose );
+ 
+ 						return mapTextureMapping( renderTarget.texture, texture.mapping );
+ 
+@@ -115,7 +115,7 @@ function WebGLEnvironments( renderer ) {
+ 
+ 							pmremMaps.set( texture, renderTarget );
+ 
+-							texture.addEventListener( 'dispose', onPMREMDispose );
++							disposalScope.subscribe( texture, onPMREMDispose );
+ 
+ 							return renderTarget.texture;
+ 
+@@ -174,7 +174,7 @@ function WebGLEnvironments( renderer ) {
+ 
+ 		const texture = event.target;
+ 
+-		texture.removeEventListener( 'dispose', onCubemapDispose );
++		disposalScope.unsubscribe( texture, onCubemapDispose );
+ 
+ 		const cubemap = cubeMaps.get( texture );
+ 
+@@ -191,7 +191,7 @@ function WebGLEnvironments( renderer ) {
+ 
+ 		const texture = event.target;
+ 
+-		texture.removeEventListener( 'dispose', onPMREMDispose );
++		disposalScope.unsubscribe( texture, onPMREMDispose );
+ 
+ 		const pmrem = pmremMaps.get( texture );
+ 
+diff --git a/node_modules/three/src/renderers/webgl/WebGLGeometries.js b/node_modules/three/src/renderers/webgl/WebGLGeometries.js
+index d89b220..15b905f 100644
+--- a/node_modules/three/src/renderers/webgl/WebGLGeometries.js
++++ b/node_modules/three/src/renderers/webgl/WebGLGeometries.js
+@@ -1,6 +1,6 @@
+ import { Uint16BufferAttribute, Uint32BufferAttribute } from '../../core/BufferAttribute.js';
+ 
+-function WebGLGeometries( gl, attributes, info, bindingStates ) {
++function WebGLGeometries( gl, attributes, info, bindingStates, disposalScope ) {
+ 
+ 	const geometries = {};
+ 	const wireframeAttributes = new WeakMap();
+@@ -21,7 +21,7 @@ function WebGLGeometries( gl, attributes, info, bindingStates ) {
+ 
+ 		}
+ 
+-		geometry.removeEventListener( 'dispose', onGeometryDispose );
++		disposalScope.unsubscribe( geometry, onGeometryDispose );
+ 
+ 		delete geometries[ geometry.id ];
+ 
+@@ -52,7 +52,7 @@ function WebGLGeometries( gl, attributes, info, bindingStates ) {
+ 
+ 		if ( geometries[ geometry.id ] === true ) return geometry;
+ 
+-		geometry.addEventListener( 'dispose', onGeometryDispose );
++		disposalScope.subscribe( geometry, onGeometryDispose );
+ 
+ 		geometries[ geometry.id ] = true;
+ 
+diff --git a/node_modules/three/src/renderers/webgl/WebGLMorphtargets.js b/node_modules/three/src/renderers/webgl/WebGLMorphtargets.js
+index 934aa5e..df5fc2b 100644
+--- a/node_modules/three/src/renderers/webgl/WebGLMorphtargets.js
++++ b/node_modules/three/src/renderers/webgl/WebGLMorphtargets.js
+@@ -3,7 +3,7 @@ import { DataArrayTexture } from '../../textures/DataArrayTexture.js';
+ import { Vector4 } from '../../math/Vector4.js';
+ import { Vector2 } from '../../math/Vector2.js';
+ 
+-function WebGLMorphtargets( gl, capabilities, textures ) {
++function WebGLMorphtargets( gl, capabilities, textures, disposalScope ) {
+ 
+ 	const morphTextures = new WeakMap();
+ 	const morph = new Vector4();
+@@ -120,11 +120,11 @@ function WebGLMorphtargets( gl, capabilities, textures ) {
+ 
+ 				morphTextures.delete( geometry );
+ 
+-				geometry.removeEventListener( 'dispose', disposeTexture );
++				disposalScope.unsubscribe( geometry, disposeTexture );
+ 
+ 			}
+ 
+-			geometry.addEventListener( 'dispose', disposeTexture );
++			disposalScope.subscribe( geometry, disposeTexture );
+ 
+ 		}
+ 
+diff --git a/node_modules/three/src/renderers/webgl/WebGLObjects.js b/node_modules/three/src/renderers/webgl/WebGLObjects.js
+index d35eda6..1693572 100644
+--- a/node_modules/three/src/renderers/webgl/WebGLObjects.js
++++ b/node_modules/three/src/renderers/webgl/WebGLObjects.js
+@@ -1,4 +1,4 @@
+-function WebGLObjects( gl, geometries, attributes, bindingStates, info ) {
++function WebGLObjects( gl, geometries, attributes, bindingStates, info, disposalScope ) {
+ 
+ 	let updateMap = new WeakMap();
+ 
+@@ -21,9 +21,9 @@ function WebGLObjects( gl, geometries, attributes, bindingStates, info ) {
+ 
+ 		if ( object.isInstancedMesh ) {
+ 
+-			if ( object.hasEventListener( 'dispose', onInstancedMeshDispose ) === false ) {
++			if ( disposalScope.has( object, onInstancedMeshDispose ) === false ) {
+ 
+-				object.addEventListener( 'dispose', onInstancedMeshDispose );
++				disposalScope.subscribe( object, onInstancedMeshDispose );
+ 
+ 			}
+ 
+@@ -71,7 +71,7 @@ function WebGLObjects( gl, geometries, attributes, bindingStates, info ) {
+ 
+ 		const instancedMesh = event.target;
+ 
+-		instancedMesh.removeEventListener( 'dispose', onInstancedMeshDispose );
++		disposalScope.unsubscribe( instancedMesh, onInstancedMeshDispose );
+ 
+ 		bindingStates.releaseStatesOfObject( instancedMesh );
+ 
+diff --git a/node_modules/three/src/renderers/webgl/WebGLShadowMap.js b/node_modules/three/src/renderers/webgl/WebGLShadowMap.js
+index a94ac76..313ebf8 100644
+--- a/node_modules/three/src/renderers/webgl/WebGLShadowMap.js
++++ b/node_modules/three/src/renderers/webgl/WebGLShadowMap.js
+@@ -32,7 +32,7 @@ const _projScreenMatrix = /*@__PURE__*/ new Matrix4();
+ const _lightPositionWorld = /*@__PURE__*/ new Vector3();
+ const _lookTarget = /*@__PURE__*/ new Vector3();
+ 
+-function WebGLShadowMap( renderer, objects, capabilities ) {
++function WebGLShadowMap( renderer, objects, capabilities, disposalScope ) {
+ 
+ 	let _frustum = new Frustum();
+ 
+@@ -466,7 +466,7 @@ function WebGLShadowMap( renderer, objects, capabilities ) {
+ 
+ 					cachedMaterial = result.clone();
+ 					materialsForVariant[ keyB ] = cachedMaterial;
+-					material.addEventListener( 'dispose', onMaterialDispose );
++					disposalScope.subscribe( material, onMaterialDispose );
+ 
+ 				}
+ 
+@@ -583,7 +583,7 @@ function WebGLShadowMap( renderer, objects, capabilities ) {
+ 
+ 		const material = event.target;
+ 
+-		material.removeEventListener( 'dispose', onMaterialDispose );
++		disposalScope.unsubscribe( material, onMaterialDispose );
+ 
+ 		// make sure to remove the unique distance/depth materials used for shadow map rendering
+ 
+diff --git a/node_modules/three/src/renderers/webgl/WebGLTextures.js b/node_modules/three/src/renderers/webgl/WebGLTextures.js
+index fc6383c..772d819 100644
+--- a/node_modules/three/src/renderers/webgl/WebGLTextures.js
++++ b/node_modules/three/src/renderers/webgl/WebGLTextures.js
+@@ -4,7 +4,7 @@ import { ColorManagement } from '../../math/ColorManagement.js';
+ import { Vector2 } from '../../math/Vector2.js';
+ import { getByteLength } from '../../extras/TextureUtils.js';
+ 
+-function WebGLTextures( _gl, extensions, state, properties, capabilities, utils, info ) {
++function WebGLTextures( _gl, extensions, state, properties, capabilities, utils, info, disposalScope ) {
+ 
+ 	const multisampledRTTExt = extensions.has( 'WEBGL_multisampled_render_to_texture' ) ? extensions.get( 'WEBGL_multisampled_render_to_texture' ) : null;
+ 	const supportsInvalidateFramebuffer = typeof navigator === 'undefined' ? false : /OculusBrowser/g.test( navigator.userAgent );
+@@ -325,7 +325,7 @@ function WebGLTextures( _gl, extensions, state, properties, capabilities, utils,
+ 
+ 		const texture = event.target;
+ 
+-		texture.removeEventListener( 'dispose', onTextureDispose );
++		disposalScope.unsubscribe( texture, onTextureDispose );
+ 
+ 		deallocateTexture( texture );
+ 
+@@ -347,7 +347,7 @@ function WebGLTextures( _gl, extensions, state, properties, capabilities, utils,
+ 
+ 		const renderTarget = event.target;
+ 
+-		renderTarget.removeEventListener( 'dispose', onRenderTargetDispose );
++		disposalScope.unsubscribe( renderTarget, onRenderTargetDispose );
+ 
+ 		deallocateRenderTarget( renderTarget );
+ 
+@@ -716,7 +716,7 @@ function WebGLTextures( _gl, extensions, state, properties, capabilities, utils,
+ 
+ 			textureProperties.__webglInit = true;
+ 
+-			texture.addEventListener( 'dispose', onTextureDispose );
++			disposalScope.subscribe( texture, onTextureDispose );
+ 
+ 		}
+ 
+@@ -1784,7 +1784,7 @@ function WebGLTextures( _gl, extensions, state, properties, capabilities, utils,
+ 			if ( textureProperties.__webglInit === undefined ) {
+ 
+ 				textureProperties.__webglInit = true;
+-				renderTarget.depthTexture.addEventListener( 'dispose', onTextureDispose );
++				disposalScope.subscribe( renderTarget.depthTexture, onTextureDispose );
+ 
+ 			}
+ 
+@@ -1888,11 +1888,11 @@ function WebGLTextures( _gl, extensions, state, properties, capabilities, utils,
+ 
+ 					delete renderTargetProperties.__boundDepthTexture;
+ 					delete renderTargetProperties.__depthDisposeCallback;
+-					depthTexture.removeEventListener( 'dispose', disposeEvent );
++					disposalScope.unsubscribe( depthTexture, disposeEvent );
+ 
+ 				};
+ 
+-				depthTexture.addEventListener( 'dispose', disposeEvent );
++				disposalScope.subscribe( depthTexture, disposeEvent );
+ 				renderTargetProperties.__depthDisposeCallback = disposeEvent;
+ 
+ 			}
+@@ -2019,7 +2019,7 @@ function WebGLTextures( _gl, extensions, state, properties, capabilities, utils,
+ 		const renderTargetProperties = properties.get( renderTarget );
+ 		const textureProperties = properties.get( texture );
+ 
+-		renderTarget.addEventListener( 'dispose', onRenderTargetDispose );
++		disposalScope.subscribe( renderTarget, onRenderTargetDispose );
+ 
+ 		const textures = renderTarget.textures;
+ 
+diff --git a/node_modules/three/src/renderers/webgl/WebGLUniformsGroups.js b/node_modules/three/src/renderers/webgl/WebGLUniformsGroups.js
+index b0ecbb5..f3417db 100644
+--- a/node_modules/three/src/renderers/webgl/WebGLUniformsGroups.js
++++ b/node_modules/three/src/renderers/webgl/WebGLUniformsGroups.js
+@@ -1,6 +1,6 @@
+ import { error, warn } from '../../utils.js';
+ 
+-function WebGLUniformsGroups( gl, info, capabilities, state ) {
++function WebGLUniformsGroups( gl, info, capabilities, state, disposalScope ) {
+ 
+ 	let buffers = {};
+ 	let updateList = {};
+@@ -26,7 +26,7 @@ function WebGLUniformsGroups( gl, info, capabilities, state ) {
+ 			buffer = createBuffer( uniformsGroup );
+ 			buffers[ uniformsGroup.id ] = buffer;
+ 
+-			uniformsGroup.addEventListener( 'dispose', onUniformsGroupsDispose );
++			disposalScope.subscribe( uniformsGroup, onUniformsGroupsDispose );
+ 
+ 		}
+ 
+@@ -400,7 +400,7 @@ function WebGLUniformsGroups( gl, info, capabilities, state ) {
+ 
+ 		const uniformsGroup = event.target;
+ 
+-		uniformsGroup.removeEventListener( 'dispose', onUniformsGroupsDispose );
++		disposalScope.unsubscribe( uniformsGroup, onUniformsGroupsDispose );
+ 
+ 		const index = allocatedBindingPoints.indexOf( uniformsGroup.__bindingPointIndex );
+ 		allocatedBindingPoints.splice( index, 1 );

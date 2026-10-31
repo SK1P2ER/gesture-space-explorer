@@ -1,0 +1,14 @@
+# What `vercel deploy` leaves out: Vercel builds from the sources (npm run build).
+# Raw texture sources (hundreds of MB; public/textures/ has the built ones)
+.texture-sources
+# Local secrets and settings
+.env*.local
+.env
+# Built and installed on Vercel
+node_modules
+dist
+# Not needed for the build
+.git
+.github
+tests
+docs

@@ -1,0 +1,55 @@
+name: CI
+
+# The release gate: every PR (and every push to main or a hotfix branch) must pass both jobs.
+# Branch protection makes them required: see docs/ci.md.
+on:
+  push:
+    branches: [main, 'hotfix/**']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: check (typecheck, unit tests, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  smoke:
+    name: smoke (browser, production build)
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      # Chromium for the pinned playwright-core, with the system libraries it needs.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - run: npx playwright-core install --with-deps chromium
+      # The built app, as it ships (no dev-only hooks).
+      - run: npm run test:smoke
+        env:
+          SMOKE_PREVIEW: '1'

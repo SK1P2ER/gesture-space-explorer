@@ -1,0 +1,335 @@
+/* The AstroLife 2126 shell (?flags=astrolife). Loaded with the shell, so the explorer's own CSS is
+   unchanged without the flag. Cyan is the shell's accent; amber stays the explorer's (decision 21). */
+
+#shell {
+  --al-accent: #5cd6ff;
+  --al-accent-ink: #03141f;
+  --al-surface: rgba(5, 10, 24, 0.88);
+  --al-card: rgba(255, 255, 255, 0.04);
+  --al-line: rgba(140, 205, 255, 0.16);
+  --al-muted: #97a6bf;
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  color: var(--fg);
+  /* The scene shows beside the panel, but only as a picture: it takes no clicks while the shell is open. */
+  cursor: default;
+}
+#shell[hidden] { display: none; }
+
+/* While the shell is open the explorer's own UI is out of sight (and out of the tab order). */
+body.shell-open > :not(#scene, #shell, script, dialog) { visibility: hidden !important; }
+
+.shell-panel {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: min(460px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: calc(20px + var(--sat)) 28px calc(18px + var(--sab)) calc(28px + var(--sal));
+  overflow-y: auto;
+  background: linear-gradient(180deg, rgba(92, 214, 255, 0.06), transparent 40%), var(--al-surface);
+  border-right: 1px solid var(--al-line);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .shell-panel { animation: al-in 0.35s ease-out; }
+  @keyframes al-in { from { opacity: 0; transform: translateX(-12px); } }
+}
+
+.shell-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.shell-brand { margin: 0; font-size: 0.95rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.shell-brand b { color: var(--al-accent); font-weight: 600; }
+
+.shell-screen { flex: 1; }
+.shell-foot { margin-top: auto; }
+.shell-notice { margin: 0; font-size: 0.78rem; line-height: 1.5; color: var(--al-muted); }
+
+#shell h2 { margin: 0 0 12px; font-size: clamp(1.6rem, 4vw, 2.1rem); font-weight: 600; line-height: 1.2; outline: none; }
+.al-kicker { margin: 0 0 8px; font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--al-accent); }
+.al-lead { margin: 0 0 20px; font-size: 1rem; line-height: 1.6; color: var(--al-muted); }
+.al-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+.al-btn {
+  min-height: 44px;
+  padding: 10px 20px;
+  border-radius: 999px;
+  border: 1px solid var(--al-line);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+.al-btn:hover { border-color: var(--al-accent); }
+.al-btn.primary { background: var(--al-accent); border-color: transparent; color: var(--al-accent-ink); font-weight: 600; }
+.al-btn.primary:hover { filter: brightness(1.08); }
+.al-btn.small { min-height: 36px; padding: 6px 14px; font-size: 0.85rem; }
+.al-btn.link { border-color: transparent; padding-inline: 8px; color: var(--al-accent); }
+.al-btn.link:hover { text-decoration: underline; }
+
+/* Home · Destinations */
+.shell-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: -8px; border-bottom: 1px solid var(--al-line); }
+.al-btn.tab {
+  min-height: 44px; /* a touch target (WCAG 2.5.5) */
+  padding: 8px 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--al-muted);
+}
+.al-btn.tab[aria-current='page'] { color: var(--fg); border-bottom-color: var(--al-accent); }
+.al-btn.tab:hover { color: var(--fg); }
+
+.al-list { display: grid; gap: 12px; }
+.al-card {
+  margin: 0 0 16px;
+  padding: 16px 18px;
+  border: 1px solid var(--al-line);
+  border-radius: 14px;
+  background: var(--al-card);
+}
+.al-list .al-card { margin: 0; }
+.al-card.featured { background: linear-gradient(135deg, rgba(92, 214, 255, 0.12), rgba(92, 214, 255, 0.02)); border-color: rgba(92, 214, 255, 0.35); }
+.al-card h3 { margin: 0 0 6px; font-size: 1.15rem; font-weight: 600; }
+.al-card p { margin: 0 0 10px; line-height: 1.5; color: var(--al-muted); }
+.al-card .al-kicker { margin-bottom: 4px; }
+.al-card .al-actions { margin-top: 12px; }
+.al-space { margin-top: 16px; }
+
+/* Numbers that are made up say so; numbers that are real say so too. */
+.al-meta { font-size: 0.9rem; color: var(--fg); }
+.al-tag {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  vertical-align: 1px;
+  color: var(--al-muted);
+  border: 1px solid var(--al-line);
+}
+.al-tag.real { color: #7fe3b0; border-color: rgba(127, 227, 176, 0.35); }
+.al-badge { margin: 10px 0 0; font-size: 0.8rem; color: var(--al-muted); }
+.al-badge::before { content: '○ '; }
+.al-badge.open { color: var(--al-accent); }
+.al-badge.open::before { content: '● '; }
+
+.al-facts { display: grid; grid-template-columns: auto 1fr; gap: 10px 16px; margin: 18px 0; padding: 14px 16px; border: 1px solid var(--al-line); border-radius: 14px; }
+.al-facts dt { color: var(--al-muted); font-size: 0.85rem; }
+.al-facts dd { margin: 0; }
+#shell p { overflow-wrap: anywhere; }
+
+/* Booking forms. Radios stay native (keyboard, screen readers); their cards show the choice. */
+#shell form { margin-top: 8px; }
+.al-label { display: block; margin: 18px 0 8px; font-size: 0.85rem; letter-spacing: 0.04em; color: var(--al-muted); }
+#al-name {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 14px;
+  border: 1px solid var(--al-line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--fg);
+  font: inherit;
+  font-size: 1.05rem;
+}
+#al-name:focus { border-color: var(--al-accent); outline: none; }
+#al-name[aria-invalid='true'] { border-color: #ff8f8f; }
+.al-hint { margin: 8px 0 0; font-size: 0.82rem; line-height: 1.5; color: var(--al-muted); }
+.al-error { margin: 10px 0 0; font-size: 0.88rem; line-height: 1.5; color: #ffb0b0; }
+.al-error[hidden] { display: none; }
+.al-fieldset { margin: 22px 0 0; padding: 0; border: 0; min-width: 0; }
+.al-fieldset > .al-label { margin: 0 0 8px; padding: 0; }
+.al-window { margin: -2px 0 10px; }
+#shell form .al-actions { margin-top: 24px; }
+
+.al-avatars { display: grid; grid-template-columns: repeat(6, minmax(44px, 1fr)); gap: 8px; }
+.al-avatar, .al-option { position: relative; cursor: pointer; }
+.al-avatar input, .al-option input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+.al-avatar span {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  border: 1px solid var(--al-line);
+  border-radius: 12px;
+  font-size: 1.6rem;
+  background: var(--al-card);
+}
+.al-avatar:has(input:checked) span { border-color: var(--al-accent); background: rgba(92, 214, 255, 0.14); }
+.al-avatar:has(input:focus-visible) span, .al-option:has(input:focus-visible) .al-option-body { outline: 2px solid var(--al-accent); outline-offset: 2px; }
+
+.al-options { display: grid; gap: 8px; }
+.al-option-body {
+  display: grid;
+  gap: 2px;
+  padding: 12px 14px 12px 40px;
+  border: 1px solid var(--al-line);
+  border-radius: 12px;
+  background: var(--al-card);
+  line-height: 1.45;
+}
+.al-option-body::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 15px;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--al-muted);
+  border-radius: 50%;
+}
+.al-option:has(input:checked) .al-option-body { border-color: var(--al-accent); background: rgba(92, 214, 255, 0.1); }
+.al-option:has(input:checked) .al-option-body::before { border-color: var(--al-accent); background: radial-gradient(var(--al-accent) 45%, transparent 50%); }
+.al-option-body span { color: var(--al-muted); font-size: 0.88rem; }
+.al-option-body .al-meta { color: var(--fg); }
+
+/* A booking */
+.al-success { margin: 0; padding: 10px 14px; border-radius: 12px; background: rgba(127, 227, 176, 0.12); color: #9ff0c5; }
+.al-ref { margin: 0 0 6px; font: 600 1.6rem/1.2 ui-monospace, 'Cascadia Mono', Menlo, Consolas, monospace; letter-spacing: 0.08em; color: var(--al-accent); }
+.al-status { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 0.82rem; border: 1px solid var(--al-line); }
+.al-status.confirmed, .al-status.checkedIn { color: var(--al-accent); border-color: rgba(92, 214, 255, 0.4); }
+.al-status.inJourney { color: #ffd479; border-color: rgba(255, 212, 121, 0.4); }
+.al-status.completed { color: #9ff0c5; border-color: rgba(127, 227, 176, 0.4); }
+.al-status.cancelled { color: var(--al-muted); }
+.al-btn.danger { border-color: rgba(255, 143, 143, 0.6); color: #ffb0b0; }
+.al-btn.danger:hover { background: rgba(255, 143, 143, 0.1); }
+.al-btn:disabled { opacity: 0.5; cursor: default; }
+.al-cancel { margin-top: 20px; }
+
+/* The boarding pass (and a souvenir of it). The QR code sits on white: scanners need the contrast. */
+.al-pass {
+  margin: 18px 0;
+  border: 1px solid rgba(92, 214, 255, 0.35);
+  border-radius: 16px;
+  overflow: hidden;
+  background: linear-gradient(160deg, rgba(92, 214, 255, 0.1), rgba(255, 255, 255, 0.02) 55%);
+}
+.al-pass-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--al-accent-ink);
+  background: var(--al-accent);
+}
+.al-pass-route { margin: 14px 16px 4px; font-size: 1.15rem; font-weight: 600; }
+.al-pass-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; padding: 10px 16px 14px; border-bottom: 1px dashed var(--al-line); }
+.al-pass-field { display: grid; gap: 2px; min-width: 0; }
+.al-pass-field.wide { grid-column: 1 / -1; }
+.al-pass-field span { font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--al-muted); }
+.al-pass-field strong { font-weight: 600; overflow-wrap: anywhere; }
+.al-pass-qr { display: grid; grid-template-columns: 128px 1fr; gap: 14px; align-items: center; margin: 0; padding: 14px 16px; }
+.al-qr { width: 128px; height: 128px; border-radius: 8px; }
+.al-pass-qr figcaption { font-size: 0.8rem; line-height: 1.5; color: var(--al-muted); }
+.al-pass .al-actions { padding: 0 16px 14px; margin: 0; }
+.al-link { width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid var(--al-line); border-radius: 10px; background: rgba(255, 255, 255, 0.05); color: var(--fg); font: 0.8rem ui-monospace, Consolas, monospace; }
+
+/* The passport's journey stamps, and the postcard. */
+.al-stamps { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; margin: 0 0 8px; padding: 0; list-style: none; }
+.al-stamp-card {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 16px 12px;
+  border: 1px solid var(--al-line);
+  border-radius: 14px;
+  background: var(--al-card);
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--al-muted);
+}
+.al-stamp-mark {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 4px;
+  border: 3px double #e0784f;
+  border-radius: 50%;
+  color: #e0784f;
+  font-size: 1.6rem;
+  transform: rotate(-8deg);
+}
+.al-stamp-card .al-btn.link { min-height: 32px; padding: 2px 4px; font-weight: 600; color: var(--fg); }
+.al-empty { color: var(--al-muted); }
+.al-stamp { margin-top: 12px; }
+.al-postcard img { display: block; width: 100%; height: auto; margin-top: 16px; border-radius: 10px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45); }
+
+#shell :focus-visible { outline: 2px solid var(--al-accent); outline-offset: 2px; }
+/* A screen's heading takes focus for screen readers when the screen opens; it isn't a control. */
+#shell [tabindex='-1']:focus-visible { outline: none; }
+
+/* In the explorer's header: back to the shell. */
+#to-hub {
+  margin: 6px 0 0;
+  padding: 3px 12px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  color: #5cd6ff;
+  background: var(--panel);
+  border: 1px solid rgba(92, 214, 255, 0.5);
+  cursor: pointer;
+}
+#to-hub[hidden] { display: none; }
+
+/* In the explorer's header during a journey. */
+#journey-banner {
+  display: block;
+  max-width: min(520px, 100%);
+  margin: 6px 0 0;
+  padding: 5px 12px;
+  border-radius: 12px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--fg);
+  background: var(--panel);
+  border: 1px solid rgba(92, 214, 255, 0.5);
+}
+#journey-banner[hidden] { display: none; }
+.al-sim {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #03141f;
+  background: #5cd6ff;
+}
+
+/* Compact screens (ui/layout.ts). Landscape phones: a narrower side panel, the world beside it. */
+@media (max-height: 500px) and (min-width: 641px) {
+  .shell-panel { width: min(420px, 58%); gap: 14px; padding-top: calc(12px + var(--sat)); }
+}
+/* Portrait phones: a bottom sheet, the world above it. */
+@media (max-width: 640px) {
+  .shell-panel {
+    top: 34%;
+    width: 100%;
+    gap: 18px;
+    padding: 20px calc(20px + var(--sar)) calc(16px + var(--sab)) calc(20px + var(--sal));
+    border-right: 0;
+    border-top: 1px solid var(--al-line);
+    border-radius: 20px 20px 0 0;
+  }
+  .al-pass-qr { grid-template-columns: 1fr; justify-items: center; text-align: center; }
+  .al-qr { width: min(200px, 60vw); height: auto; }
+  .al-btn.tab { padding-inline: 10px; }
+  .al-facts { grid-template-columns: 1fr; gap: 2px; }
+  .al-facts dd { margin-bottom: 10px; }
+  .al-facts dd:last-child { margin-bottom: 0; }
+  @media (prefers-reduced-motion: no-preference) {
+    .shell-panel { animation-name: al-up; }
+    @keyframes al-up { from { opacity: 0; transform: translateY(16px); } }
+  }
+}

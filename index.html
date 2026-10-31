@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#05070f" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Space Explorer" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="description" content="Control a 3D Solar System with hand gestures. Runs fully on-device." />
+    <title>Gesture Space Explorer</title>
+    <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <canvas id="scene" aria-label="3D Solar System"></canvas>
+
+    <header class="hud top">
+      <h1><span aria-hidden="true">🪐</span> <span class="title-full">Gesture Space Explorer</span><span class="title-short" aria-hidden="true">Space Explorer</span></h1>
+      <p id="status" role="status" aria-live="polite"></p>
+      <button id="hand-control" type="button" hidden></button>
+      <p id="loading" hidden></p>
+      <p id="gesture" hidden><span class="hold"></span><span class="label"></span></p>
+    </header>
+
+    <p id="gesture-flash" class="hud-flash" hidden role="status" aria-live="polite"></p>
+
+    <p id="version"></p>
+
+    <div id="timebar" class="hud-panel">
+      <div class="pill-row">
+        <button class="pill" type="button" aria-expanded="false" aria-controls="timebar"><span class="pill-text"></span></button>
+        <button class="pill-pause" type="button"></button>
+      </div>
+      <div class="row">
+        <span class="date"></span>
+        <button class="now" type="button"></button>
+      </div>
+      <div class="row">
+        <button class="pause" type="button"></button>
+        <input class="speed" type="range" min="-1000" max="1000" step="1" value="0" />
+        <span class="rate"></span>
+      </div>
+    </div>
+
+    <div id="time-dial" hidden aria-hidden="true">
+      <svg viewBox="-60 -60 120 70" width="180" height="105">
+        <path class="arc" d="M -50 0 A 50 50 0 0 1 50 0" />
+        <line class="tick" x1="0" y1="-44" x2="0" y2="-56" />
+        <text class="end" x="-56" y="8">◀◀</text>
+        <text class="end" x="56" y="8">▶▶</text>
+        <line class="needle" x1="0" y1="0" x2="0" y2="-46" />
+        <circle class="hub" r="4" />
+      </svg>
+      <div class="label"></div>
+    </div>
+
+    <div id="photo-flash" aria-hidden="true"></div>
+    <div id="photo-toast" class="toast" hidden role="status" aria-live="polite">
+      <span class="msg"></span>
+      <button class="share" type="button" hidden></button>
+      <button class="save" type="button" hidden></button>
+    </div>
+
+    <div id="labels" aria-hidden="true">
+      <span class="planet-label" data-slot="active" hidden></span>
+      <span class="planet-label hover" data-slot="hover" hidden></span>
+    </div>
+
+    <div id="pointer" hidden aria-hidden="true">
+      <svg viewBox="0 0 40 40" width="40" height="40">
+        <circle class="track" cx="20" cy="20" r="16" />
+        <circle class="progress" cx="20" cy="20" r="16" />
+        <circle class="dot" cx="20" cy="20" r="3" />
+      </svg>
+    </div>
+
+    <aside id="info" class="hud panel" hidden aria-live="polite"></aside>
+    <aside id="base-panel" class="hud panel" hidden aria-live="polite"></aside>
+    <aside id="build-panel" class="hud panel" hidden></aside>
+    <div id="mission-overlay" hidden aria-live="assertive"></div>
+    <aside id="mission-hud" class="hud panel" hidden>
+      <div class="fuel" aria-hidden="true"><span class="fill"></span></div>
+      <dl></dl>
+      <canvas role="img"></canvas>
+    </aside>
+    <aside id="passport-panel" class="hud panel" hidden aria-labelledby="passport-title">
+      <div class="head">
+        <h2 id="passport-title"></h2>
+        <button class="close" type="button">×</button>
+      </div>
+      <ol class="stamps"></ol>
+      <p class="hint"></p>
+    </aside>
+
+    <aside id="weight-panel" class="hud panel" hidden aria-labelledby="weight-title">
+      <div class="head">
+        <h2 id="weight-title"></h2>
+        <button class="close" type="button">×</button>
+      </div>
+      <label class="field">
+        <span class="label"></span>
+        <input type="text" inputmode="decimal" autocomplete="off" maxlength="6" aria-describedby="weight-error" />
+        <span>kg</span>
+      </label>
+      <p id="weight-error" class="error" hidden></p>
+      <ol class="worlds"></ol>
+      <p class="hint"></p>
+    </aside>
+
+    <footer class="hud bottom">
+      <div class="focus-row">
+        <strong id="focus"></strong>
+      </div>
+      <p id="help" hidden></p>
+      <div class="footer-links">
+        <button id="photo" type="button"></button>
+        <button id="menu" type="button" aria-expanded="false" aria-controls="footer-menu">☰</button>
+        <div id="footer-menu">
+          <button id="watermark" type="button" aria-pressed="true"></button>
+          <button id="true-scale" type="button" aria-pressed="false"></button>
+          <button id="weight" type="button" aria-expanded="false" aria-controls="weight-panel"></button>
+          <button id="passport" type="button" aria-expanded="false" aria-controls="passport-panel"></button>
+          <button id="quality" type="button" aria-pressed="true"></button>
+          <button id="language" type="button"></button>
+          <a id="credits-link" href="#credits"></a>
+        </div>
+        <button id="help-toggle" type="button" aria-expanded="false" aria-controls="help">?</button>
+      </div>
+    </footer>
+
+    <div id="preview" hidden>
+      <button class="preview-toggle" type="button" aria-pressed="true"></button>
+      <div class="mirror">
+        <video autoplay muted playsinline></video>
+        <canvas></canvas>
+      </div>
+      <pre id="debug-stats"></pre>
+      <button class="debug-copy" type="button" hidden>📋 Copy report</button>
+    </div>
+
+    <!-- Filled in the current language by ui/credits.ts -->
+    <dialog id="credits">
+      <h2></h2>
+      <ul></ul>
+      <p class="privacy"></p>
+      <form method="dialog"><button></button></form>
+    </dialog>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
