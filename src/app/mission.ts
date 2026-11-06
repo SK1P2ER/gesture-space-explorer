@@ -8,6 +8,7 @@ import { padFrame, type BaseNode } from '../scene/bases';
 import { WarpStreaks } from '../scene/rocket';
 import { SEPARATE_AT, type RocketOptions } from '../scene/rocketKit';
 import { RocketStage } from './rocketStage';
+import { HorizonView, type HorizonPose } from './horizonView';
 import { atmosphereOf, dustFor, type Atmosphere } from '../data/atmosphere';
 import { dockingParams, startDocking, stepDocking, STEER_RANGE, type DockingParams, type DockingState } from '../sim/docking';
 import type { LandingContext } from '../sim/landingReplay';
@@ -170,13 +171,8 @@ export class Mission {
   readonly warp = new WarpStreaks();
   /** The clock's speed before you came down to a base: bases run in real time, so they don't spin away. */
   private savedRate: number | null = null;
-  /** The horizon view (showcase bases): standing on the ground, looking along it. Yaw turns round the base. */
-  horizon: { yaw: number; pitch: number; distance: number } | null = null;
-  /** Where the horizon view's eye stands, in the base's frame (for the sky dome). */
-  readonly horizonEye = new THREE.Vector3();
-  private savedClip: { near: number; far: number } | null = null;
-  /** The horizon camera's eye and look point, in the base's frame (eased there, so it rides along with the ground). */
-  private horizonCam: { eye: THREE.Vector3; look: THREE.Vector3 } | null = null;
+  /** The horizon view (showcase bases): standing on the ground, looking in across the base. */
+  private readonly view: HorizonView;
   /** Build mode: where the camera looks on the ground (base units; drag pans), and how much it frames (set by main for the screen). */
   readonly buildPan = new THREE.Vector2();
   buildFrame = 1.2;
@@ -189,6 +185,17 @@ export class Mission {
   constructor(private readonly d: MissionDeps) {
     d.scene.add(this.warp.lines);
     this.stage = new RocketStage(d);
+    this.view = new HorizonView(d.rig.camera, d.reducedMotion);
+  }
+
+  /** Where the horizon view stands (yaw turns round the base); null when it's off. */
+  get horizon(): HorizonPose | null {
+    return this.view.pose;
+  }
+
+  /** Where the horizon view's eye stands, in the base's frame (for the sky dome). */
+  get horizonEye(): THREE.Vector3 {
+    return this.view.eye;
   }
 
   /** The rocket's scene object (built on first use, at the current quality). */
@@ -273,19 +280,7 @@ export class Mission {
   toggleHorizon() {
     if (this.horizon) return this.exitHorizon();
     if (!this.base || !LAYOUTS[this.base.base.id] || this.d.modes.mode !== 'baseView') return;
-    this.horizon = { yaw: Math.PI / 2 - 0.25, pitch: 0.04, distance: 2.1 }; // south of the base, clear of the panels
-    // Start from where the camera is now, in the base's frame, and glide down from there.
-    const g = this.base.group;
-    g.updateWorldMatrix(true, false);
-    const eye = g.worldToLocal(this.d.rig.camera.position.clone());
-    const ahead = new THREE.Vector3(0, 0, -1).applyQuaternion(this.d.rig.camera.quaternion).add(this.d.rig.camera.position);
-    this.horizonCam = { eye, look: g.worldToLocal(ahead) };
-    // The eye is a few cm (scene units) off the ground: clip much nearer than the orbit views need.
-    const cam = this.d.rig.camera;
-    this.savedClip = { near: cam.near, far: cam.far };
-    cam.near = 0.002;
-    cam.far = 1200; // the starfield is 600–1000 out
-    cam.updateProjectionMatrix();
+    this.view.enter(this.base.group);
   }
 
   /**
@@ -298,25 +293,14 @@ export class Mission {
     if (!golden) return this.d.flash(t('noSunset', this.d.state.lang));
     this.d.clock.jumpTo(golden.ms);
     if (!this.horizon) this.toggleHorizon();
-    if (this.horizon) {
-      // Stand to the side of the Sun's line, looking in across the base: the light rakes from the side.
-      this.horizon.yaw = Math.atan2(golden.sun.z, golden.sun.x) + Math.PI / 2;
-      this.horizon.pitch = 0.04;
-    }
+    if (this.horizon) this.view.faceAcross(golden.sun);
   }
 
   /** Back up to the usual view over the base. */
   exitHorizon() {
-    if (!this.horizon) return;
-    this.horizon = null;
-    this.horizonCam = null;
-    const cam = this.d.rig.camera;
-    if (this.savedClip) [cam.near, cam.far] = [this.savedClip.near, this.savedClip.far];
-    this.savedClip = null;
-    cam.updateProjectionMatrix();
-    cam.up.set(0, 1, 0);
+    if (!this.view.exit()) return;
     if (this.base) {
-      this.d.rig.adopt(cam.position, padFrame(this.base).center);
+      this.d.rig.adopt(this.d.rig.camera.position, padFrame(this.base).center);
       this.frameBase(this.base);
     }
   }
@@ -517,12 +501,11 @@ export class Mission {
         if (this.horizon) {
           // On the ground: drag (or the open hand) looks around, zoom steps closer or back, Esc stands up.
           if (intent.type === 'rotate') {
-            this.horizon.yaw += intent.dx;
-            this.horizon.pitch = THREE.MathUtils.clamp(this.horizon.pitch - intent.dy * 0.5, -0.15, 0.6);
+            this.view.look(intent.dx, intent.dy);
             return true;
           }
           if (intent.type === 'zoom') {
-            this.horizon.distance = THREE.MathUtils.clamp(this.horizon.distance * intent.factor, 0.7, 2.3);
+            this.view.step(intent.factor);
             return true;
           }
           if (intent.type === 'dismiss' && !state.weightOpen) {
@@ -665,7 +648,10 @@ export class Mission {
     // Keep framing the base as the planet's overview boost fades on the way in (the size changes).
     this.d.rig.reframe(pad.size * 0.2, pad.size * (LAYOUTS[this.base.base.id]?.frame ?? 0.55));
     if (mode === 'baseView' && this.d.modes.mode === 'baseView' && this.baseCamera?.(dt, camera)) return 'chase';
-    if (this.horizon && mode === 'baseView') return this.horizonCamera(dt, camera);
+    if (this.horizon && mode === 'baseView') {
+      this.view.update(dt, this.base.group, camera);
+      return 'chase';
+    }
     if (mode === 'build') {
       // From above, tilted a little toward the south: the grid reads, and dragging pans across the base.
       this.exitHorizon();
@@ -678,26 +664,6 @@ export class Mission {
     }
     this.d.rig.setViewDirection(pad.normal.clone().multiplyScalar(0.8).addScaledVector(side.normalize(), 0.6));
     return { target: pad.center };
-  }
-
-  /** Standing on the plain outside the base, eye height, looking in across it with the sky behind. */
-  private horizonCamera(dt: number, camera: THREE.PerspectiveCamera): CameraControl {
-    const h = this.horizon!;
-    const g = this.base!.group;
-    g.updateWorldMatrix(true, false);
-    const eye = this.horizonEye.set(Math.cos(h.yaw) * h.distance, 0.055, Math.sin(h.yaw) * h.distance);
-    const look = new THREE.Vector3(-Math.cos(h.yaw), Math.tan(h.pitch), -Math.sin(h.yaw)).add(eye);
-    // Eased in the base's frame, then placed: if the planet jumps (a time jump), the view jumps with it.
-    const cam = (this.horizonCam ??= { eye: eye.clone(), look: look.clone() });
-    const k = this.d.reducedMotion() ? 1 : 1 - Math.exp(-dt * 4);
-    cam.eye.lerp(eye, k);
-    cam.look.lerp(look, k);
-    const up = new THREE.Vector3(0, 1, 0).transformDirection(g.matrixWorld);
-    camera.position.copy(g.localToWorld(cam.eye.clone()));
-    camera.up.copy(up);
-    camera.lookAt(g.localToWorld(cam.look.clone()));
-    camera.updateMatrixWorld();
-    return 'chase';
   }
 
   /** Docking: the sim steps, the rocket hovers over the pad accordingly, the camera watches from above. */
