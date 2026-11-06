@@ -103,7 +103,7 @@ export function polygonsOverlap(p: Point[], q: Point[]): boolean {
 }
 
 /** Shortest distance from a point to a segment. */
-export function pointSegmentDistance([px, pz]: Point, [ax, az]: Point, [bx, bz]: Point): number {
+function pointSegmentDistance([px, pz]: Point, [ax, az]: Point, [bx, bz]: Point): number {
   const [dx, dz] = [bx - ax, bz - az];
   const t = Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / (dx * dx + dz * dz || 1)));
   return Math.hypot(px - (ax + t * dx), pz - (az + t * dz));

@@ -27,7 +27,7 @@ export interface MapView {
 }
 
 /** "1.52 AU" from far away, "384,400 km" near. */
-export function distanceLabel(km: number, lang: Lang): string {
+function distanceLabel(km: number, lang: Lang): string {
   const au = km / 149_597_870.7;
   if (au >= 0.1) return `${numberFormat(lang, { maximumFractionDigits: 2 }).format(au)} AU`;
   return `${numberFormat(lang, { maximumFractionDigits: 0 }).format(km)} km`;

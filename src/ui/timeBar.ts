@@ -8,7 +8,7 @@ import { dateLabel, speedLabel } from './timeFormat';
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 
 /** The full time bar folds back into the pill after this long without a touch. */
-export const TIME_BAR_COLLAPSE_MS = 4000;
+const TIME_BAR_COLLAPSE_MS = 4000;
 
 /**
  * Date, Now, pause and the speed slider. On compact screens it's a small pill

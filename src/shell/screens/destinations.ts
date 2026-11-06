@@ -19,7 +19,7 @@ export function journeyLine(d: Destination, lang: Lang) {
 }
 
 /** A destination as a card: where, what it's like, how long, whether it can be booked. */
-export function destinationCard(ctx: ScreenContext, d: Destination, heading: 'h3' | 'h4' = 'h3') {
+function destinationCard(ctx: ScreenContext, d: Destination, heading: 'h3' | 'h4' = 'h3') {
   const { lang } = ctx;
   const base = baseById(d.base);
   return h('article', { class: 'al-card', 'data-destination': d.base },
