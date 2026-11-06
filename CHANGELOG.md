@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## Unreleased
 
+### Changed
+
+- Development: a rocket trip's parts (the rocket on stage, the horizon view, the landing and the flight) are separate modules next to `app/mission.ts`, and a test pins a whole visit frame by frame. No change in behavior.
+
 ### Experimental (behind `?flags=`)
 
 - AstroLife: the boarding pass's souvenir link is much shorter, and no longer shows its fields: `…/?al#KZNYpEBBZGE` instead of `…/?flags=astrolife#souvenir=1&ref=…&nick=…&av=…&fl=…&cab=…` (11 characters after the `#` instead of 57 for a short nickname; 24 instead of 91 for 山田 花子), so the QR code is smaller and easier to scan. `?al` turns AstroLife on, like `?flags=astrolife`. Souvenir links made by 2.6.0 now open the hub (`docs/decisions.md`, entry 27).
