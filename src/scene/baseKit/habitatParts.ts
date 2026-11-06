@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { TUNNEL_RADIUS } from '../../data/baseLayout';
+import type { KitDetail } from '../../quality';
 
 export type HabitatSlot = 'hull' | 'hullFlat' | 'dark' | 'window' | 'red' | 'safety';
 export type HabitatPart = [HabitatSlot, THREE.BufferGeometry];
@@ -15,7 +16,7 @@ export const HABITAT_IDENTITIES: Readonly<Record<string, HabitatIdentity>> = Obj
 });
 
 export interface HabitatOptions {
-  quality: 'low' | 'high';
+  detail: KitDetail;
   identifier: string;
   /** Port headings about local Y, measured from +Z toward +X. */
   ports: readonly number[];
@@ -62,8 +63,8 @@ function feature(geometry: THREE.BufferGeometry, name: string) {
  * place, so geometry is not cached/shared across habitats. Materials are supplied
  * and shared by Showcase; this factory allocates no material or texture.
  */
-export function habitatParts({ quality, identifier, ports }: HabitatOptions): HabitatPart[] {
-  const rich = quality === 'high';
+export function habitatParts({ detail, identifier, ports }: HabitatOptions): HabitatPart[] {
+  const rich = detail === 'high';
   const profile = [new THREE.Vector2(0, 0), new THREE.Vector2(0.16, 0), new THREE.Vector2(0.16, 0.05)];
   const steps = rich ? 8 : 5;
   const segments = rich ? 28 : 14;
@@ -105,8 +106,8 @@ export function habitatParts({ quality, identifier, ports }: HabitatOptions): Ha
 }
 
 /** Local X is the corridor axis. Keep the original .035 swept radius and endpoints. */
-export function corridorParts(length: number, quality: 'low' | 'high'): HabitatPart[] {
-  const rich = quality === 'high';
+export function corridorParts(length: number, detail: KitDetail): HabitatPart[] {
+  const rich = detail === 'high';
   const parts: HabitatPart[] = [['hull', new THREE.CylinderGeometry(0.031, 0.031, length, rich ? 12 : 8, 1, true).rotateZ(Math.PI / 2).translate(0, TUNNEL_RADIUS, 0)]];
   const count = rich ? 7 : 3;
   for (let n = 0; n < count; n++) {

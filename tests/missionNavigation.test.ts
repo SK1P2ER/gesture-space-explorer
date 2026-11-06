@@ -62,7 +62,7 @@ function setup(bodyId = 'mars', rate = WEEK) {
     state, modes, rig, clock, bases, scene, setFocus, flash, report,
     reducedMotion: () => true,
     goldenHour: () => null,
-    rocketOptions: () => ({ quality: 'low', textureSize: 32 }),
+    rocketOptions: () => ({ detail: 'low', textureSize: 32 }),
   });
   const build = new Build({
     state, modes, enabled: false, flash,

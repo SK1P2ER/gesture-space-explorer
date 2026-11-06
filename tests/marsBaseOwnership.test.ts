@@ -60,7 +60,7 @@ describe('Mars base architecture ownership contracts', () => {
     const environment = new THREE.Texture();
     const planetDispose = vi.spyOn(planet, 'dispose');
     const environmentDispose = vi.spyOn(environment, 'dispose');
-    const showcase = new Showcase(JEZERO, { quality: 'high', textureSize: 16, R: 5.6,
+    const showcase = new Showcase(JEZERO, { detail: 'high', textureSize: 16, R: 5.6,
       site: { point: new THREE.Vector3(0, 1, 0), quaternion: new THREE.Quaternion(), scale: 1 / 5.6 } });
     try {
       showcase.syncMap(planet);

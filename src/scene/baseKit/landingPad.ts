@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { LANDING_ANCHORS, landingPadParts, type LandingQuality, type LandingSlot } from './landingPadParts';
+import { LANDING_ANCHORS, landingPadParts, type LandingSlot } from './landingPadParts';
 import { STATUS, type OperationalState } from './operations';
+import type { KitDetail } from '../../quality';
 
 /** Entry-owned additive art; never owns BaseNode.pad, its shared material or Mission's rocket. */
 export class LandingPad {
@@ -22,13 +23,13 @@ export class LandingPad {
   };
   private readonly dayColors = Object.values(this.materials).map((material) => material.color.clone());
 
-  constructor(readonly quality: LandingQuality) {
+  constructor(readonly detail: KitDetail) {
     this.group.name = 'landing:LZ-01';
     this.anchors = new Map(Object.entries(LANDING_ANCHORS).map(([identifier, anchor]) => [identifier, {
       identifier, position: new THREE.Vector3(...anchor.position), radius: anchor.radius,
     }]));
     const buckets = new Map<LandingSlot, THREE.BufferGeometry[]>();
-    for (const [slot, source] of landingPadParts(quality)) {
+    for (const [slot, source] of landingPadParts(detail)) {
       const geometry = source.index ? source.toNonIndexed() : source;
       if (geometry !== source) source.dispose();
       const list = buckets.get(slot) ?? [];

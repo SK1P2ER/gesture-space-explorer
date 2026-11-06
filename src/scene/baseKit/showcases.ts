@@ -3,12 +3,13 @@ import type { BaseLayout } from '../../data/baseLayout';
 import { JEZERO } from '../../data/baseLayouts/jezero';
 import type { BaseNode } from '../bases';
 import { HORIZON, HorizonSky, type SkyObject } from './horizon';
-import { Showcase, siteUv, type KitQuality } from './showcase';
+import { Showcase, siteUv } from './showcase';
 import { BuildView } from './buildView';
 import { LandingPad } from './landingPad';
 import { MarsBaseOperationsController, type OperationalState } from './operations';
 import { BaseLighting, setBaseLayer, type LightingOptions } from './baseLighting';
 import type { Placed } from '../../sim/buildRules';
+import type { KitDetail } from '../../quality';
 
 /** Bases with a showcase layout (the rest keep their v2.0 buildings). */
 export const LAYOUTS: Readonly<Record<string, BaseLayout>> = { jezero: JEZERO };
@@ -51,7 +52,7 @@ export class Showcases {
   trueScale = false;
   /** Base building: what's built at a base, and Build mode's guides (null outside Build mode). */
   buildAt: ((baseId: string) => { placed: readonly Placed[]; version: number; guides: Parameters<BuildView['setGuides']>[0] } | null) | null = null;
-  private readonly live = new Map<string, { showcase: Showcase; landing: LandingPad; operations: MarsBaseOperationsController; lastSeconds: number; quality: KitQuality; flat: boolean; sky: HorizonSky | null; build: BuildView; light: BaseLighting; lightKey: string; layered?: number }>();
+  private readonly live = new Map<string, { showcase: Showcase; landing: LandingPad; operations: MarsBaseOperationsController; lastSeconds: number; detail: KitDetail; flat: boolean; sky: HorizonSky | null; build: BuildView; light: BaseLighting; lightKey: string; layered?: number }>();
   operationsEnabled = false;
   operationsPaused = false;
   operationsAt: ((baseId: string) => OperationalState) | null = null;
@@ -100,7 +101,7 @@ export class Showcases {
    */
   update(
     isActive: (baseId: string) => boolean,
-    quality: KitQuality,
+    detail: KitDetail,
     seconds: number,
     camera: THREE.Camera,
     reducedMotion: boolean,
@@ -118,7 +119,7 @@ export class Showcases {
       const want = isActive(id);
       const flat = horizonAt === id;
       const lightKey = JSON.stringify([this.lighting, this.textureSize, this.operationsEnabled]);
-      if (entry && (!want || entry.quality !== quality || entry.flat !== flat || entry.lightKey !== lightKey)) {
+      if (entry && (!want || entry.detail !== detail || entry.flat !== flat || entry.lightKey !== lightKey)) {
         entry.operations.dispose();
         entry.showcase.dispose();
         entry.landing.dispose();
@@ -132,9 +133,9 @@ export class Showcases {
         const g = node.group;
         const site = { point: g.position.clone(), quaternion: g.quaternion.clone(), scale: g.scale.x };
         const R = flat ? FLAT_R : 1 / g.scale.x;
-        const showcase = new Showcase(layout, { quality, R, site, textureSize: this.textureSize, operations: this.operationsEnabled });
+        const showcase = new Showcase(layout, { detail, R, site, textureSize: this.textureSize, operations: this.operationsEnabled });
         g.add(showcase.group);
-        const landing = new LandingPad(quality);
+        const landing = new LandingPad(detail);
         g.add(landing.group);
         const build = new BuildView(R);
         g.add(build.group);
@@ -144,8 +145,8 @@ export class Showcases {
         showcase.setEnvironment(light.envMap);
         landing.setEnvironment(light.envMap);
         showcase.setShadows(this.lighting.shadows);
-        const operations = new MarsBaseOperationsController(this.operationsEnabled && quality === 'high', quality === 'high');
-        entry = { showcase, landing, operations, lastSeconds: seconds, quality, flat, sky, build, light, lightKey };
+        const operations = new MarsBaseOperationsController(this.operationsEnabled && detail === 'high', detail === 'high');
+        entry = { showcase, landing, operations, lastSeconds: seconds, detail, flat, sky, build, light, lightKey };
         this.live.set(id, entry);
       }
       for (const b of node.buildings) b.visible = !entry;

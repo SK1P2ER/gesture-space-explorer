@@ -2,11 +2,12 @@ import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import { onSphere } from '../src/data/baseLayout';
 import { JEZERO } from '../src/data/baseLayouts/jezero';
-import { Showcase, type KitQuality } from '../src/scene/baseKit/showcase';
+import { Showcase } from '../src/scene/baseKit/showcase';
+import type { KitDetail } from '../src/quality';
 
 const R = 1.574 / 0.28; // Mars' radius in base units
 const site = { point: new THREE.Vector3(0.3, 0.32, 0.9).normalize(), quaternion: new THREE.Quaternion(), scale: 1 / R };
-const build = (quality: KitQuality) => new Showcase(JEZERO, { quality, R, site });
+const build = (detail: KitDetail) => new Showcase(JEZERO, { detail, R, site });
 
 describe('the Jezero showcase', () => {
   it('stays within the draw-call and triangle budget (High ≤ 22 / 18k, Low ≤ 16 / 7k)', () => {

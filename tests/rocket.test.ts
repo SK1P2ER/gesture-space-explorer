@@ -35,16 +35,16 @@ describe('the v2.2 rocket', () => {
   });
 
   it('stays within budget: 5 draw calls with the flame; ≤ 6k triangles on High, ≤ 2.5k on Low', () => {
-    const high = new Rocket({ engines: 5, textureSize: 64, quality: 'high' }).stats();
-    const low = new Rocket({ engines: 5, textureSize: 64, quality: 'low' }).stats();
+    const high = new Rocket({ engines: 5, textureSize: 64, detail: 'high' }).stats();
+    const low = new Rocket({ engines: 5, textureSize: 64, detail: 'low' }).stats();
     expect(high.meshes).toBeLessThanOrEqual(6);
     expect(high.triangles).toBeLessThanOrEqual(6000);
     expect(low.triangles).toBeLessThanOrEqual(2500);
-    expect(new Rocket({ engines: 9, textureSize: 64, quality: 'high' }).stats().triangles).toBeLessThanOrEqual(6000);
+    expect(new Rocket({ engines: 9, textureSize: 64, detail: 'high' }).stats().triangles).toBeLessThanOrEqual(6000);
   });
 
   it('two stages that can part (step 3), about one unit tall like the v2.0 rocket', () => {
-    const r = new Rocket({ textureSize: 64, quality: 'high' });
+    const r = new Rocket({ textureSize: 64, detail: 'high' });
     expect(r.booster.getObjectByName('rocket:booster')).toBeDefined();
     expect(r.upper.getObjectByName('rocket:upper')).toBeDefined();
     expect(r.booster.getObjectByName('flame')).toBeDefined();
@@ -70,10 +70,10 @@ describe('the v2.2 rocket', () => {
   });
 
   it('High has a normal map, Low doesn’t; everything it made is freed', () => {
-    const high = new Rocket({ textureSize: 64, quality: 'high' });
+    const high = new Rocket({ textureSize: 64, detail: 'high' });
     const hull = high.booster.getObjectByName('rocket:booster') as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
     expect(hull.material.normalMap).not.toBeNull();
-    const low = new Rocket({ textureSize: 64, quality: 'low' });
+    const low = new Rocket({ textureSize: 64, detail: 'low' });
     expect((low.booster.getObjectByName('rocket:booster') as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>).material.normalMap).toBeNull();
     const spies: ReturnType<typeof vi.spyOn>[] = [];
     high.group.traverse((o) => {

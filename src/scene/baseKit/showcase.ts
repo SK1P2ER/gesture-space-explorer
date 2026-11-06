@@ -8,16 +8,16 @@ import { communicationsParts } from './communicationsParts';
 import { solarArrayParts, solarPanelGeometry, solarSupportGeometry } from './solarArrayParts';
 import { corridorParts, HABITAT_IDENTITIES, habitatParts, type HabitatIdentity } from './habitatParts';
 import { along, onSphere, PANEL, pathLength, solarFieldSize, TUNNEL_RADIUS, type BaseLayout, type Module } from '../../data/baseLayout';
+import type { KitDetail } from '../../quality';
 
 // The showcase base kit (v2.1): builds a declarative layout (data/baseLayout.ts)
 // into a few draw calls. Static parts are merged per material; repeated parts
 // (solar panels, rovers, astronauts, dust) are instanced. Everything stands on
 // the curved ground of its world. Built lazily, disposed when you leave.
 
-export type KitQuality = 'high' | 'low';
 
 export interface ShowcaseOptions {
-  quality: KitQuality;
+  detail: KitDetail;
   /** Experimental moving parts; default batching stays unchanged until hardware profiling. */
   operations?: boolean;
   /** Generated texture size (the quality profile's kitTextureSize). */
@@ -158,9 +158,9 @@ const box = (w: number, h: number, d: number) => new THREE.BoxGeometry(w, h, d).
 const cyl = (r: number, h: number, seg = 10) => new THREE.CylinderGeometry(r, r, h, seg).translate(0, h / 2, 0);
 
 /** Each kind's parts, in its own frame (y up from the ground at its center). */
-function moduleParts(m: Module, quality: KitQuality, ports: readonly number[], operations = false): [MatKey, THREE.BufferGeometry][] {
+function moduleParts(m: Module, detail: KitDetail, ports: readonly number[], operations = false): [MatKey, THREE.BufferGeometry][] {
   switch (m.kind) {
-    case 'habitat': return habitatParts({ quality, identifier: HABITAT_IDENTITIES[m.id]?.identifier ?? 'HAB-01', ports });
+    case 'habitat': return habitatParts({ detail, identifier: HABITAT_IDENTITIES[m.id]?.identifier ?? 'HAB-01', ports });
     case 'greenhouse': {
       const shell = new THREE.CylinderGeometry(0.08, 0.08, 0.42, 12, 1, true, 0, Math.PI).rotateZ(Math.PI / 2).rotateX(-Math.PI / 2);
       const parts: [MatKey, THREE.BufferGeometry][] = [
@@ -171,25 +171,25 @@ function moduleParts(m: Module, quality: KitQuality, ports: readonly number[], o
       for (const x of [-0.2, -0.07, 0.07, 0.2]) parts.push(['dark', at(new THREE.TorusGeometry(0.08, 0.004, 3, 8, Math.PI).rotateY(Math.PI / 2), x, 0, 0)]);
       return parts;
     }
-    case 'garage': return garageParts(quality, operations);
-    case 'antenna': return communicationsParts(quality);
+    case 'garage': return garageParts(detail, operations);
+    case 'antenna': return communicationsParts(detail);
     case 'flag':
       return [
         ['dark', cyl(0.004, 0.12, 5)],
         ['red', at(new THREE.PlaneGeometry(0.06, 0.038), 0.03, 0.1, 0)],
       ];
     case 'solarField':
-      return solarArrayParts(m, quality); // panels remain instanced below
+      return solarArrayParts(m, detail); // panels remain instanced below
   }
 }
 
 /** A tunnel: a tube from one module's center to the other's, low over the ground. */
-function tunnelParts(a: Module, b: Module, R: number, quality: KitQuality): [MatKey, THREE.BufferGeometry][] {
+function tunnelParts(a: Module, b: Module, R: number, detail: KitDetail): [MatKey, THREE.BufferGeometry][] {
   const [mx, mz] = [(a.x + b.x) / 2, (a.z + b.z) / 2];
   const len = Math.hypot(b.x - a.x, b.z - a.z);
   const heading = -Math.atan2(b.z - a.z, b.x - a.x);
   const matrix = siteMatrix(mx, mz, (heading * 180) / Math.PI, R);
-  return corridorParts(len, quality).map(([key, g]) => [key, addGrime(g, WIND_FROM, TUNNEL_RADIUS * 2).applyMatrix4(matrix)]);
+  return corridorParts(len, detail).map(([key, g]) => [key, addGrime(g, WIND_FROM, TUNNEL_RADIUS * 2).applyMatrix4(matrix)]);
 }
 
 /** The planet texture's coordinates under a point of the base's ground (base units). */
@@ -319,9 +319,9 @@ export class Showcase {
   private readonly upV = new THREE.Vector3();
 
   constructor(readonly layout: BaseLayout, private readonly opts: ShowcaseOptions) {
-    const { R, quality } = opts;
+    const { R, detail } = opts;
     this.group.name = 'showcase';
-    const rich = quality === 'high';
+    const rich = detail === 'high';
     this.mats = materials(rich, opts.textureSize ?? 512);
     const byId = new Map(layout.modules.map((m) => [m.id, m]));
 
@@ -347,7 +347,7 @@ export class Showcase {
         matrix: site.clone(), bounds: new THREE.Box3(new THREE.Vector3(-0.163, 0, -0.163), new THREE.Vector3(0.163, 0.13, 0.163)),
       });
       const moving = !!opts.operations && rich;
-      const parts = moduleParts(m, quality, ports, moving);
+      const parts = moduleParts(m, detail, ports, moving);
       if (m.kind === 'garage' || m.kind === 'solarField' || m.kind === 'antenna') {
         const identifier = m.kind === 'garage' ? 'ROV-01' : m.kind === 'solarField' ? 'PWR-01' : 'COM-01';
         const role = m.kind === 'garage' ? 'maintenance' : m.kind === 'solarField' ? 'power' : 'communications';
@@ -388,7 +388,7 @@ export class Showcase {
         this.doorPivot.add(mesh); root.add(this.doorPivot); this.group.add(root);
       }
     }
-    for (const t of layout.tunnels) for (const [key, geometry] of tunnelParts(byId.get(t.from)!, byId.get(t.to)!, R, quality)) put(key, geometry);
+    for (const t of layout.tunnels) for (const [key, geometry] of tunnelParts(byId.get(t.from)!, byId.get(t.to)!, R, detail)) put(key, geometry);
     for (const [key, list] of buckets) {
       const merged = mergeGeometries(list)!;
       for (const g of list) g.dispose();
@@ -423,8 +423,8 @@ export class Showcase {
     this.panelSites = panelSites;
     if (panelSites.length) {
       // The plate pivots about its north–south axis (a single-axis tracker); setDaylight turns it.
-      const plate = solarPanelGeometry(quality);
-      const post = solarSupportGeometry(quality);
+      const plate = solarPanelGeometry(detail);
+      const post = solarSupportGeometry(detail);
       for (const [g, key] of [[plate, 'solar'], [addGrime(post, WIND_FROM, 0.05), 'dark']] as const) {
         const inst = new THREE.InstancedMesh(g, this.mats[key], panelSites.length);
         panelSites.forEach((s, i) => inst.setMatrixAt(i, s));
@@ -438,7 +438,7 @@ export class Showcase {
     this.loops = layout.roverLoops.map((pts) => ({ pts, length: pathLength(pts, true) }));
     if (this.loops.length) {
       // Sized to ROVER (data/baseLayout.ts), wheels included: building keeps clear of the strip it sweeps.
-      for (const [key, geometry] of roverParts(quality)) {
+      for (const [key, geometry] of roverParts(detail)) {
         const g = addGrime(geometry, WIND_FROM, 0.04);
         const inst = new THREE.InstancedMesh(g, this.mats[key], this.loops.length);
         inst.name = `kit:rovers:${key}`;
@@ -466,7 +466,7 @@ export class Showcase {
       return r ? [{ x: m.x, z: m.z, r }] : [];
     });
     this.blobStatics = statics.length;
-    this.contactMaterial = new THREE.MeshBasicMaterial({ map: blobTexture(), color: 0x000000, transparent: true, depthWrite: false, opacity: quality === 'high' ? 0.35 : 0.55, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    this.contactMaterial = new THREE.MeshBasicMaterial({ map: blobTexture(), color: 0x000000, transparent: true, depthWrite: false, opacity: detail === 'high' ? 0.35 : 0.55, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
     this.contact = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), this.contactMaterial, statics.length + this.loops.length + this.walks.length);
     this.contact.name = 'kit:contact';
     this.contact.renderOrder = -0.5; // over the ground patch, under everything else
@@ -475,7 +475,7 @@ export class Showcase {
     this.group.add(this.contact);
 
     // The ground patch, in the planet's own texture (set by syncMap), fading at its rim.
-    const [rings, segments] = quality === 'high' ? [24, 48] : [12, 24];
+    const [rings, segments] = detail === 'high' ? [24, 48] : [12, 24];
     const terrainMat = new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, roughness: 1, metalness: 0, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
     this.terrain = new THREE.Mesh(terrainGeometry(layout.terrainRadius, R, rings, segments, opts.site), terrainMat);
     this.terrain.name = 'kit:terrain';
@@ -484,7 +484,7 @@ export class Showcase {
     this.group.add(this.terrain);
 
     // An occasional dust devil (High only; never with reduced motion).
-    if (quality === 'high') {
+    if (detail === 'high') {
       const puff = new THREE.PlaneGeometry(1, 1);
       const mat = new THREE.MeshBasicMaterial({ map: puffTexture(), transparent: true, depthWrite: false, opacity: 0.55 });
       this.dust = new THREE.InstancedMesh(puff, mat, DUST_PUFFS);
