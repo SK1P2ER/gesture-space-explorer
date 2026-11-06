@@ -330,6 +330,7 @@ confirmed.
 ## 22. AstroLife: the boarding pass's QR code is a souvenir link, made by lean-qr
 
 - **Date:** 2026-10-30. Decided by the user; the library chosen by measurement.
+- **Superseded in part (2026-11-06, entry 25):** "nothing reaches a server" means this app's host. The link itself goes wherever people share it; entry 25 states that scope and the rule for what goes after the `#`.
 - **Decision:**
   - **What the QR holds:** a link to this app with the pass after the `#`, `?flags=astrolife#souvenir=1&ref=…&nick=…&av=…&fl=…&cab=…` (`src/travel/souvenir.ts`). A fragment never leaves the browser, so nothing reaches a server and `SECURITY.md` is unchanged. Any phone opens it as a keepsake; it is not a ticket and authorizes nothing.
   - **Reading a link:** every field is checked: the reference against the booking pattern, the avatar, flight and cabin against their lists, the nickname as a booking's would be. A fragment over 400 characters, a missing, extra or repeated field, or any bad field, and the whole souvenir is ignored: the shell opens on its hub. The route and the date come from the timetable via the flight number, never from the link. Fields are shown as text only: a test fails if `innerHTML` or its relatives appear in `src/shell` or `src/travel`.
@@ -374,3 +375,13 @@ confirmed.
   - **Accessibility, automated:** on a 390 × 844 phone, in English, Burmese and Japanese, every AstroLife screen that needs no booking has a dialog title and no unnamed control, the page's language follows, and nothing scrolls sideways (a smoke case). Tabs are 44 px tall.
 - **Not verified, so not claimed:** real phones (Android Chrome, iOS Safari), Firefox and Safari on a desktop, a screen reader, the camera prompt on a real device, and the 113 new Burmese strings (`docs/i18n-review-my.md`, last section).
 - **Phone check for the release** (a Vercel preview, `?flags=astrolife`, with `?debug` once to copy its report): the hub over Mars; the camera prompt appears only after Open the explorer; book Jezero, check in, scan the QR with another phone (it opens the souvenir); Begin journey, launch, land (auto-land is fine); the stamp, a postcard saved to the photo library; back to the hub; the date is back to today in free roam; in Burmese and Japanese too.
+
+## 25. Links: the app's state in the query, what the visitor typed after the `#`
+
+- **Date:** 2026-11-06. Decided by the user.
+- **Decision:**
+  - **The query** holds the app's own state, which nothing the visitor typed is part of: the view (`?body=`, `?base=`, `&view=`, `?date=`, `?lang=`) and switches (`?flags=`, `?debug`, `?reset`).
+  - **The fragment** holds what the visitor typed or what names them: today the souvenir link's nickname and booking reference (entry 22). A browser separates the fragment before it requests a URL (RFC 3986, section 3.5), so it is never in a request to this app's host, nor in that host's logs.
+  - A new link that carries such data puts it after the `#`, and is read the way the souvenir is: every field checked, the whole link ignored on any bad field, shown as text only.
+- **Scope of the promise:** only this app's host never sees the fragment. The link itself goes wherever people share it: a chat, an email, the scanning phone's history. Services that fetch a shared link for a preview request it without the fragment, but the full link stays in the message. That is why the field is a nickname, with a hint that it appears in the link (entry 22).
+- **Alternative:** the souvenir in the query. The nickname and reference would then be in every request to the host, against entry 21's on-device promise. It would allow previews rendered on a server, which needs a backend, and entry 21 rules that out.
