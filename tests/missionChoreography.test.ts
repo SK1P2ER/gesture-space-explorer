@@ -8,6 +8,7 @@ import { CameraRig } from '../src/scene/cameraRig';
 import type { Passport } from '../src/sim/passport';
 import type { Intent } from '../src/intents';
 import type { RocketOptions } from '../src/scene/rocketKit';
+import { SHAKE_SECONDS } from '../src/app/flight';
 import { landingBases } from './helpers/landingBase';
 
 // A whole visit, frame by frame, through a real Mission: at a base, the horizon view, Build's camera,
@@ -17,11 +18,14 @@ import { landingBases } from './helpers/landingBase';
 // exactly; a deliberate change to how a trip looks updates it (vitest -u).
 
 const DT = 1 / 30;
-const SAMPLE_EVERY = 10;
+/** Once a second (sparse, so a deliberate change stays a reviewable snapshot diff)... */
+const SAMPLE_EVERY = 30;
+/** ...and more often through the moments shorter than that: the liftoff shake and the look-back. */
+const SAMPLE_BRIEF = 5;
 /** Where each body sits, so trips have a length (the fixtures otherwise stand at the origin). */
 const PLACES: Record<string, [number, number, number]> = { earth: [0, 0, 0], moon: [6, 0.5, 0], mars: [60, -2, 20], europa: [-90, 3, -40], titan: [130, -4, 70] };
 
-const round = (x: number) => Math.round(x * 1e4) / 1e4 + 0;
+const round = (x: number) => Math.round(x * 1e3) / 1e3 + 0;
 const v = (p: THREE.Vector3) => [round(p.x), round(p.y), round(p.z)];
 const q = (p: THREE.Quaternion) => [round(p.x), round(p.y), round(p.z), round(p.w)];
 
@@ -91,7 +95,9 @@ function setup(reducedMotion: boolean) {
       rig.setTarget(view?.target ?? new THREE.Vector3());
       rig.update(DT);
     }
-    if (frameNo++ % SAMPLE_EVERY === 0) {
+    const trip = mission.trip;
+    const brief = !!trip && (trip.elapsed < SHAKE_SECONDS || trip.lookBack !== null);
+    if (frameNo++ % (brief ? SAMPLE_BRIEF : SAMPLE_EVERY) === 0) {
       const [rocket, dust] = mission.baseRoots();
       trace.push({
         f: frameNo - 1, mode: modes.mode,
