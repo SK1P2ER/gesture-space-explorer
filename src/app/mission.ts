@@ -4,11 +4,10 @@ import { BODIES, bodyById, bodyIndex, type Body, type Lang } from '../data/bodie
 import type { Intent } from '../intents';
 import { nextInSystem } from '../navigation';
 import { LAYOUTS } from '../scene/baseKit/showcases';
-import { setBaseLayer } from '../scene/baseKit/baseLighting';
 import { padFrame, type BaseNode } from '../scene/bases';
 import { WarpStreaks } from '../scene/rocket';
-import { Rocket, SEPARATE_AT, type RocketOptions } from '../scene/rocketKit';
-import { DUST_PUFFS, PadDust } from '../scene/padDust';
+import { SEPARATE_AT, type RocketOptions } from '../scene/rocketKit';
+import { RocketStage } from './rocketStage';
 import { atmosphereOf, dustFor, type Atmosphere } from '../data/atmosphere';
 import { dockingParams, startDocking, stepDocking, STEER_RANGE, type DockingParams, type DockingState } from '../sim/docking';
 import type { LandingContext } from '../sim/landingReplay';
@@ -164,11 +163,8 @@ export class Mission {
   trip: Trip | null = null;
   /** The docking mini-game, while in Docking. */
   dock: { state: DockingState; params: DockingParams; steer: { x: number; y: number } | null; auto: boolean; startAlt: number; misses: number; settle: number; legT: number } | null = null;
-  /** The rocket (v2.2): built the first time it's needed, freed when you leave the bases and trips. */
-  private kit: { rocket: Rocket; key: string; dust: PadDust; layers?: string } | null = null;
-  /** A full stack (booster attached), or the lander alone after a separation. Kept here: the rocket itself may be freed and rebuilt. */
-  private stacked = true;
-  private night = 0;
+  /** The rocket and its pad dust: built when first needed, freed when you leave the bases and trips. */
+  private readonly stage: RocketStage;
   /** The pad the dust is on (it settles there after the engines stop). */
   private dustPad: BaseNode | null = null;
   readonly warp = new WarpStreaks();
@@ -192,41 +188,17 @@ export class Mission {
 
   constructor(private readonly d: MissionDeps) {
     d.scene.add(this.warp.lines);
+    this.stage = new RocketStage(d);
   }
 
   /** The rocket's scene object (built on first use, at the current quality). */
   get rocket(): THREE.Group {
-    if (!this.kit) this.buildRocket();
-    return this.kit!.rocket.group;
-  }
-
-  /** Once a frame: rebuild if the quality changed (the options are compared here, not on every read). */
-  private checkRocket() {
-    if (this.kit && this.kit.key !== JSON.stringify(this.d.rocketOptions())) this.freeRocket();
-  }
-
-  private buildRocket() {
-    const opts = this.d.rocketOptions();
-    const key = JSON.stringify(opts);
-    {
-      const rocket = new Rocket(opts);
-      if (!this.stacked) rocket.separate(true); // the booster is long gone: a lander
-      const dust = new PadDust(opts.detail === 'low' ? DUST_PUFFS.few : DUST_PUFFS.full);
-      this.d.scene.add(rocket.group, dust.mesh);
-      this.kit = { rocket, key, dust };
-    }
-  }
-
-  private freeRocket() {
-    this.kit?.rocket.dispose();
-    this.kit?.dust.dispose();
-    this.kit = null;
+    return this.stage.group;
   }
 
   /** Windows glow after dark; sunlit paint and dust dim. */
   setRocketNight(night: number) {
-    this.night = night;
-    this.kit?.rocket.setNight(night, this.rocketOnBaseLayer);
+    this.stage.setNight(night, this.rocketOnBaseLayer);
   }
 
   /**
@@ -240,7 +212,7 @@ export class Mission {
 
   /** The rocket and its dust, as scene branches (the base pass draws only what it needs). */
   baseRoots(): THREE.Object3D[] {
-    return this.kit ? [this.kit.rocket.group, this.kit.dust.mesh] : [];
+    return this.stage.roots();
   }
 
   /** A showcase base has its own Sun, pass and shadows (High, Ultra; Low: off). Set by main from the quality. */
@@ -248,16 +220,12 @@ export class Mission {
 
   /** Engines at this level, in this air (whichever stage is firing; steady with reduced motion). */
   private thrust(level: number, air: Atmosphere) {
-    this.kit?.rocket.setThrust(level, this.seconds, air, this.d.reducedMotion());
+    this.stage.thrust(level, this.seconds, air);
   }
 
   /** The rocket's numbers, if it exists (for tests and the budget). */
   rocketStats() {
-    return this.kit?.rocket.stats() ?? null;
-  }
-
-  private legs(deploy: number) {
-    this.kit?.rocket.setLegs(deploy);
+    return this.stage.stats();
   }
 
   node(baseId: string) {
@@ -279,8 +247,7 @@ export class Mission {
     this.base = b;
     if (this.destination === b) this.destination = null;
     this.stampPassport(b);
-    this.stacked = true;
-    this.kit?.rocket.restack();
+    this.stage.restack();
     state.selected = null;
     if (this.savedRate === null && !clock.paused) {
       this.savedRate = clock.rate;
@@ -402,7 +369,7 @@ export class Mission {
       km: routeKm(this.base.base.body, this.destination.base.body, this.d.clock.time),
       fuel: tripFuel(routeKm(this.base.base.body, this.destination.base.body, this.d.clock.time)),
       camStart: { position: rig.camera.position.clone(), quaternion: rig.camera.quaternion.clone() },
-      lander: !this.stacked,
+      lander: !this.stage.stacked,
       lookBack: null,
     };
     this.d.flash(t('liftoff', this.d.state.lang));
@@ -655,21 +622,14 @@ export class Mission {
     this.seconds += dt;
     const mode = this.d.modes.mode;
     const shown = mode === 'baseView' || mode === 'launch' || mode === 'travel' || mode === 'docking' || mode === 'build';
-    if (!shown) this.freeRocket(); // nothing to show it in: free it (rebuilt when needed)
+    if (!shown) this.stage.free(); // nothing to show it in (rebuilt when needed)
     else {
-      this.checkRocket();
-      this.rocket.visible = true;
-      this.kit!.rocket.update(dt);
       // The rocket and its pad dust: in the base pass at a showcase base (lit by its Sun, sorted with its glass), else with the planets.
-      const onBase = this.rocketOnBaseLayer;
-      const dustOnBase = this.baseShadows && !!this.dustPad && !!LAYOUTS[this.dustPad.base.id] && this.d.modes.mode !== 'travel';
-      const key = `${onBase}|${dustOnBase}|${this.baseShadows}|${this.stacked}`;
-      if (this.kit!.layers !== key) {
-        setBaseLayer(this.kit!.rocket.group, onBase);
-        this.kit!.rocket.setShadows(onBase && this.baseShadows);
-        setBaseLayer(this.kit!.dust.mesh, dustOnBase);
-        this.kit!.layers = key;
-      }
+      this.stage.show(dt, {
+        onBase: this.rocketOnBaseLayer,
+        dustOnBase: this.baseShadows && !!this.dustPad && !!LAYOUTS[this.dustPad.base.id] && this.d.modes.mode !== 'travel',
+        shadows: this.baseShadows,
+      });
       this.updateDust(dt, camera);
     }
 
@@ -697,9 +657,9 @@ export class Mission {
     this.rocket.position.copy(pad.center).addScaledVector(pad.normal, pad.size * 0.02);
     this.rocket.quaternion.setFromUnitVectors(UP, pad.normal);
     this.rocket.scale.setScalar(pad.size * 0.5 * (this.horizon ? 0.3 : 1)); // from the ground it would tower over the base
-    this.kit!.rocket.setLander(!this.stacked);
+    this.stage.rocket.setLander(!this.stage.stacked);
     this.thrust(mode === 'launch' ? 0.25 : 0, atmosphereOf(this.base.base.body));
-    this.legs(this.stacked ? 0 : 1); // a stack stands on the booster; the lander on its legs
+    this.stage.legs(this.stage.stacked ? 0 : 1); // a stack stands on the booster; the lander on its legs
     const side = new THREE.Vector3().crossVectors(UP, pad.normal);
     if (side.lengthSq() < 1e-6) side.set(1, 0, 0);
     // Keep framing the base as the planet's overview boost fades on the way in (the size changes).
@@ -772,7 +732,7 @@ export class Mission {
     // The landing legs swing out from 40% of the way down, over a second.
     const dock = this.dock!;
     if (1 - s.alt / dock.startAlt >= LEGS_AT) dock.legT += dt;
-    this.legs(legDeploy(1 - s.alt / dock.startAlt, dock.legT));
+    this.stage.legs(legDeploy(1 - s.alt / dock.startAlt, dock.legT));
     const unit = pad.size * PAD_RADIUS;
     this.rocket.position.copy(pad.center)
       .addScaledVector(right, s.x * unit)
@@ -782,7 +742,7 @@ export class Mission {
     const lean = new THREE.Vector3().copy(n).addScaledVector(right, s.vx * 0.12).addScaledVector(toward, s.vz * 0.12).normalize();
     this.rocket.quaternion.setFromUnitVectors(UP, lean);
     this.rocket.scale.setScalar(pad.size * 0.5);
-    this.kit!.rocket.setLander(!this.stacked);
+    this.stage.rocket.setLander(!this.stage.stacked);
     this.thrust(s.outcome ? 0 : 0.6, atmosphereOf(this.base!.base.body));
     this.dockCamera(camera, pad.center, n, toward, s.alt * unit, pad.size, dt);
     return 'chase';
@@ -827,7 +787,7 @@ export class Mission {
     if (this.d.reducedMotion()) emit = 0;
     const pad = this.dustPad;
     const dust = pad ? dustFor(pad.base.body) : { amount: 0, color: 0 };
-    this.kit!.dust.update(dt, pad ? padFrame(pad) : null, camera, emit, dust.amount, dust.color, this.night);
+    this.stage.dust(dt, pad ? padFrame(pad) : null, camera, emit, dust.amount, dust.color);
   }
 
   /** Travel: the rocket along the arc, the chase camera behind it, the warp streaks. */
@@ -835,15 +795,14 @@ export class Mission {
     const trip = this.trip!;
     trip.elapsed += dt;
     const fraction = trip.elapsed / trip.seconds;
-    const rocket = this.kit!.rocket;
+    const rocket = this.stage.rocket;
     // Booster separation partway out; the upper stage flies on (and will land on its own legs).
-    if (this.stacked && fraction >= SEPARATE_AT) {
-      this.stacked = false;
-      rocket.separate(this.d.reducedMotion());
+    if (this.stage.stacked && fraction >= SEPARATE_AT) {
+      this.stage.separate();
       if (!this.d.reducedMotion()) trip.lookBack = 0; // a look back at the booster falling away
     }
     rocket.setLander(trip.lander);
-    this.legs(trip.lander ? Math.max(0, 1 - trip.elapsed) : 0); // a lander folds its legs in the first second
+    this.stage.legs(trip.lander ? Math.max(0, 1 - trip.elapsed) : 0); // a lander folds its legs in the first second
     const arc = this.arc(trip);
     const u = flightProgress(fraction);
     const pos = vec(bezier(arc, u));
