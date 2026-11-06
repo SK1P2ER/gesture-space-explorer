@@ -44,6 +44,43 @@ function write(key: string, value: unknown) {
 }
 
 /**
+ * The mouse in Build mode: hover shows what would go there; a click places it (a tap on a phone
+ * previews first, a second tap on the same cell places); press on a module and drag to move it.
+ * Points are client pixels; the cursor intent takes fractions of the viewport.
+ */
+export function buildPointer(
+  build: Pick<Build, 'active' | 'cursor' | 'chosenBefore' | 'ghost'>,
+  emit: (intent: Intent) => void,
+  viewport: () => { width: number; height: number },
+) {
+  const cursor = (x: number, y: number) => {
+    const { width, height } = viewport();
+    emit({ type: 'buildCursor', x: x / width, y: y / height });
+  };
+  return {
+    down(x: number, y: number) {
+      if (!build.active) return false;
+      cursor(x, y);
+      if (!build.cursor || build.ghost()) return false; // empty ground: a drag pans, a click places (below)
+      emit({ type: 'buildGrab' });
+      return true;
+    },
+    move: cursor,
+    up: () => emit({ type: 'buildDrop' }),
+    click(x: number, y: number) {
+      if (!build.active) return false;
+      cursor(x, y);
+      const same = build.chosenBefore && build.cursor && build.chosenBefore[0] === build.cursor[0] && build.chosenBefore[1] === build.cursor[1];
+      if (same && build.ghost()) {
+        emit({ type: 'buildGrab' });
+        emit({ type: 'buildDrop' });
+      }
+      return true;
+    },
+  };
+}
+
+/**
  * Build mode (v2.1 prototype, ?flags=build): the layout and its history, the module
  * you've chosen and the one you hold, and what the rules make of it. Takes the build
  * intents; the scene and the panel only read from it.
