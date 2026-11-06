@@ -2,8 +2,15 @@ import type { BaseLayout } from '../data/baseLayout';
 import type { Intent } from '../intents';
 import { best, BUILD_KINDS, BUILD_RADIUS, cellAt, cellBlocked, evaluate, History, MAX_MODULES, parsePlaced, type BaseStatus, type BuildKind, type Placed, type SolConditions } from '../sim/buildRules';
 import { t, tf, type StringKey } from '../ui/i18n';
-import type { ModeMachine } from './modes';
+import type { Mode } from './modes';
 import type { Lang } from '../data/bodies';
+
+/** The app's mode, as Build reads and changes it. */
+export interface BuildModes {
+  readonly mode: Mode;
+  /** Moves to `to` if allowed; returns whether it did. */
+  go(to: Mode): boolean;
+}
 
 /** What Build reads and changes of the app's state. */
 export interface BuildState {
@@ -20,7 +27,7 @@ export type BuildStorage = Pick<Storage, 'getItem' | 'setItem'> | null;
 export interface BuildDeps {
   state: BuildState;
   storage: BuildStorage;
-  modes: ModeMachine;
+  modes: BuildModes;
   /** Which base (id) you're at, and its layout, if it can be built on. */
   site: () => { id: string; layout: BaseLayout } | null;
   /** A screen point (0–1) → the base's ground there (base units), if it hits. */
