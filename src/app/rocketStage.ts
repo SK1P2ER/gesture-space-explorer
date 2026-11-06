@@ -17,21 +17,24 @@ export interface RocketStageDeps {
  * Whether it is a full stack or the lander alone outlives any one build.
  */
 export class RocketStage {
-  private kit: { rocket: Rocket; key: string; dust: PadDust; layers?: string } | null = null;
-  private stackedNow = true;
-  private night = 0;
+  #kit: { rocket: Rocket; key: string; dust: PadDust; layers?: string } | null = null;
+  #stackedNow = true;
+  #night = 0;
+  readonly #d: RocketStageDeps;
 
-  constructor(private readonly d: RocketStageDeps) {}
+  constructor(d: RocketStageDeps) {
+    this.#d = d;
+  }
 
   /** A full stack (booster attached), or the lander alone after a separation. */
   get stacked() {
-    return this.stackedNow;
+    return this.#stackedNow;
   }
 
   /** The rocket (built on first use). */
   get rocket(): Rocket {
-    if (!this.kit) this.build();
-    return this.kit!.rocket;
+    if (!this.#kit) this.#build();
+    return this.#kit!.rocket;
   }
 
   /** The rocket's scene object (built on first use). */
@@ -39,21 +42,21 @@ export class RocketStage {
     return this.rocket.group;
   }
 
-  private build() {
-    const opts = this.d.rocketOptions();
+  #build() {
+    const opts = this.#d.rocketOptions();
     const key = JSON.stringify(opts);
     const rocket = new Rocket(opts);
-    if (!this.stackedNow) rocket.separate(true); // the booster is long gone: a lander
+    if (!this.#stackedNow) rocket.separate(true); // the booster is long gone: a lander
     const dust = new PadDust(opts.detail === 'low' ? DUST_PUFFS.few : DUST_PUFFS.full);
-    this.d.scene.add(rocket.group, dust.mesh);
-    this.kit = { rocket, key, dust };
+    this.#d.scene.add(rocket.group, dust.mesh);
+    this.#kit = { rocket, key, dust };
   }
 
   /** Nothing to show it in: free it (rebuilt when needed). */
   free() {
-    this.kit?.rocket.dispose();
-    this.kit?.dust.dispose();
-    this.kit = null;
+    this.#kit?.rocket.dispose();
+    this.#kit?.dust.dispose();
+    this.#kit = null;
   }
 
   /**
@@ -61,11 +64,11 @@ export class RocketStage {
    * on every read), animated, and put in the base pass or with the planets (with its dust).
    */
   show(dt: number, layers: { onBase: boolean; dustOnBase: boolean; shadows: boolean }) {
-    if (this.kit && this.kit.key !== JSON.stringify(this.d.rocketOptions())) this.free();
+    if (this.#kit && this.#kit.key !== JSON.stringify(this.#d.rocketOptions())) this.free();
     this.group.visible = true;
-    const kit = this.kit!;
+    const kit = this.#kit!;
     kit.rocket.update(dt);
-    const key = `${layers.onBase}|${layers.dustOnBase}|${layers.shadows}|${this.stackedNow}`;
+    const key = `${layers.onBase}|${layers.dustOnBase}|${layers.shadows}|${this.#stackedNow}`;
     if (kit.layers !== key) {
       setBaseLayer(kit.rocket.group, layers.onBase);
       kit.rocket.setShadows(layers.onBase && layers.shadows);
@@ -76,43 +79,43 @@ export class RocketStage {
 
   /** Windows glow after dark; sunlit paint and dust dim. */
   setNight(night: number, onBaseLayer: boolean) {
-    this.night = night;
-    this.kit?.rocket.setNight(night, onBaseLayer);
+    this.#night = night;
+    this.#kit?.rocket.setNight(night, onBaseLayer);
   }
 
   /** The rocket and its dust, as scene branches (the base pass draws only what it needs). */
   roots(): THREE.Object3D[] {
-    return this.kit ? [this.kit.rocket.group, this.kit.dust.mesh] : [];
+    return this.#kit ? [this.#kit.rocket.group, this.#kit.dust.mesh] : [];
   }
 
   /** The rocket's numbers, if it exists (for tests and the budget). */
   stats() {
-    return this.kit?.rocket.stats() ?? null;
+    return this.#kit?.rocket.stats() ?? null;
   }
 
   /** Engines at this level, in this air (whichever stage is firing; steady with reduced motion). */
   thrust(level: number, seconds: number, air: Atmosphere) {
-    this.kit?.rocket.setThrust(level, seconds, air, this.d.reducedMotion());
+    this.#kit?.rocket.setThrust(level, seconds, air, this.#d.reducedMotion());
   }
 
   legs(deploy: number) {
-    this.kit?.rocket.setLegs(deploy);
+    this.#kit?.rocket.setLegs(deploy);
   }
 
   /** Refueled at a base: a full stack again. */
   restack() {
-    this.stackedNow = true;
-    this.kit?.rocket.restack();
+    this.#stackedNow = true;
+    this.#kit?.rocket.restack();
   }
 
   /** Booster separation: the upper stage flies on as the lander. */
   separate() {
-    this.stackedNow = false;
-    this.rocket.separate(this.d.reducedMotion());
+    this.#stackedNow = false;
+    this.rocket.separate(this.#d.reducedMotion());
   }
 
   /** The pad dust this frame: how much the engines blow onto which pad, and its look there. */
   dust(dt: number, pad: PadFrame | null, camera: THREE.Camera, emit: number, amount: number, color: number) {
-    this.kit!.dust.update(dt, pad, camera, emit, amount, color, this.night);
+    this.#kit!.dust.update(dt, pad, camera, emit, amount, color, this.#night);
   }
 }

@@ -52,7 +52,15 @@ export interface Trip {
 export class Flight {
   trip: Trip | null = null;
 
-  constructor(private readonly stage: RocketStage, private readonly warp: WarpStreaks, private readonly reducedMotion: () => boolean) {}
+  readonly #stage: RocketStage;
+  readonly #warp: WarpStreaks;
+  readonly #reducedMotion: () => boolean;
+
+  constructor(stage: RocketStage, warp: WarpStreaks, reducedMotion: () => boolean) {
+    this.#stage = stage;
+    this.#warp = warp;
+    this.#reducedMotion = reducedMotion;
+  }
 
   /** Liftoff from one base for another, on the date `time` (ms), from where the camera is now. */
   begin(from: BaseNode, to: BaseNode, time: number, camera: THREE.Camera) {
@@ -66,7 +74,7 @@ export class Flight {
       km: routeKm(from.base.body, to.base.body, time),
       fuel: tripFuel(routeKm(from.base.body, to.base.body, time)),
       camStart: { position: camera.position.clone(), quaternion: camera.quaternion.clone() },
-      lander: !this.stage.stacked,
+      lander: !this.#stage.stacked,
       lookBack: null,
     };
   }
@@ -83,7 +91,7 @@ export class Flight {
   }
 
   /** The arc as it is now (the planets move): from above the start pad to the approach point above the far one. */
-  private arc(trip: Trip) {
+  #arc(trip: Trip) {
     const a = padFrame(trip.from);
     const startN = a.normal.clone();
     const start = a.center.clone().addScaledVector(startN, a.size * 0.6);
@@ -101,24 +109,24 @@ export class Flight {
     const trip = this.trip!;
     trip.elapsed += dt;
     const fraction = trip.elapsed / trip.seconds;
-    const rocket = this.stage.rocket;
+    const rocket = this.#stage.rocket;
     // Booster separation partway out; the upper stage flies on (and will land on its own legs).
-    if (this.stage.stacked && fraction >= SEPARATE_AT) {
-      this.stage.separate();
-      if (!this.reducedMotion()) trip.lookBack = 0; // a look back at the booster falling away
+    if (this.#stage.stacked && fraction >= SEPARATE_AT) {
+      this.#stage.separate();
+      if (!this.#reducedMotion()) trip.lookBack = 0; // a look back at the booster falling away
     }
     rocket.setLander(trip.lander);
-    this.stage.legs(trip.lander ? Math.max(0, 1 - trip.elapsed) : 0); // a lander folds its legs in the first second
-    const arc = this.arc(trip);
+    this.#stage.legs(trip.lander ? Math.max(0, 1 - trip.elapsed) : 0); // a lander folds its legs in the first second
+    const arc = this.#arc(trip);
     const u = flightProgress(fraction);
     const pos = vec(bezier(arc, u));
     const dir = vec(bezierTangent(arc, Math.min(0.999, Math.max(0.001, u)))).normalize();
     const size = padFrame(trip.from).size;
-    this.stage.group.position.copy(pos);
-    this.stage.group.quaternion.setFromUnitVectors(UP, dir);
-    this.stage.group.scale.setScalar(size * 0.5);
+    this.#stage.group.position.copy(pos);
+    this.#stage.group.quaternion.setFromUnitVectors(UP, dir);
+    this.#stage.group.scale.setScalar(size * 0.5);
     // Still in the launch world's air for the first moments, then vacuum: the flame turns blue-white and spreads.
-    this.stage.thrust(1, seconds, fraction < 0.08 ? atmosphereOf(trip.from.base.body) : 'none');
+    this.#stage.thrust(1, seconds, fraction < 0.08 ? atmosphereOf(trip.from.base.body) : 'none');
 
     // Behind and a little above the rocket, looking past it.
     const back = Math.max(0.6, size * 4);
@@ -129,7 +137,7 @@ export class Flight {
     // Never underground: right after liftoff "behind the rocket" points into the planet.
     for (const node of [trip.from, trip.to]) keepAbove(chasePos, node.body.mesh.getWorldPosition(new THREE.Vector3()), node.body.body.radius * node.body.tilt.scale.x * 1.06);
     // A small shake at liftoff (none with reduced motion).
-    if (!this.reducedMotion() && trip.elapsed < SHAKE_SECONDS) {
+    if (!this.#reducedMotion() && trip.elapsed < SHAKE_SECONDS) {
       const a = back * 0.015 * (1 - trip.elapsed / SHAKE_SECONDS);
       chasePos.add(new THREE.Vector3(Math.sin(seconds * 53) * a, Math.sin(seconds * 47 + 1) * a, Math.cos(seconds * 59) * a));
     }
@@ -155,7 +163,7 @@ export class Flight {
     camera.position.lerpVectors(trip.camStart.position, chasePos, k);
     camera.quaternion.slerpQuaternions(trip.camStart.quaternion, chaseQ, k);
     camera.updateMatrixWorld();
-    this.warp.update(camera, dir, this.reducedMotion() ? 0 : warpLevel(fraction), dt);
+    this.#warp.update(camera, dir, this.#reducedMotion() ? 0 : warpLevel(fraction), dt);
     return fraction >= 1;
   }
 }

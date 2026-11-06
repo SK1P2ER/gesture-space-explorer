@@ -41,7 +41,13 @@ export interface DockAttempt {
 export class Landing {
   attempt: DockAttempt | null = null;
 
-  constructor(private readonly stage: RocketStage, private readonly reducedMotion: () => boolean) {}
+  readonly #stage: RocketStage;
+  readonly #reducedMotion: () => boolean;
+
+  constructor(stage: RocketStage, reducedMotion: () => boolean) {
+    this.#stage = stage;
+    this.#reducedMotion = reducedMotion;
+  }
 
   /** A new attempt from the approach height, under this gravity. Returns the approach height (pad radii). */
   start(gravity: number, misses: number): number {
@@ -106,9 +112,9 @@ export class Landing {
     const s = dock.state;
     // The landing legs swing out from 40% of the way down, over a second.
     if (1 - s.alt / dock.startAlt >= LEGS_AT) dock.legT += dt;
-    this.stage.legs(legDeploy(1 - s.alt / dock.startAlt, dock.legT));
+    this.#stage.legs(legDeploy(1 - s.alt / dock.startAlt, dock.legT));
     const unit = pad.size * PAD_RADIUS;
-    const rocket = this.stage.group;
+    const rocket = this.#stage.group;
     rocket.position.copy(pad.center)
       .addScaledVector(right, s.x * unit)
       .addScaledVector(toward, s.z * unit)
@@ -117,22 +123,22 @@ export class Landing {
     const lean = new THREE.Vector3().copy(n).addScaledVector(right, s.vx * 0.12).addScaledVector(toward, s.vz * 0.12).normalize();
     rocket.quaternion.setFromUnitVectors(UP, lean);
     rocket.scale.setScalar(pad.size * 0.5);
-    this.stage.rocket.setLander(!this.stage.stacked);
+    this.#stage.rocket.setLander(!this.#stage.stacked);
     thrust(s.outcome ? 0 : 0.6);
-    this.watch(camera, pad.center, n, toward, s.alt * unit, pad.size, dt);
+    this.#watch(camera, pad.center, n, toward, s.alt * unit, pad.size, dt);
   }
 
   /**
    * Behind and above the rocket, looking down at ~40° with the pad's normal as up: the
    * rocket reads upright, the pad below it. Closes in as it comes down; eases there.
    */
-  private watch(camera: THREE.PerspectiveCamera, pad: THREE.Vector3, n: THREE.Vector3, toward: THREE.Vector3, height: number, size: number, dt: number) {
+  #watch(camera: THREE.PerspectiveCamera, pad: THREE.Vector3, n: THREE.Vector3, toward: THREE.Vector3, height: number, size: number, dt: number) {
     const look = pad.clone().addScaledVector(n, height * 0.62);
     const extent = size * 0.8 + height * 0.8;
     const distance = extent / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
     const goal = look.clone().addScaledVector(n.clone().multiplyScalar(0.62).addScaledVector(toward, 0.78).normalize(), distance);
     const goalQ = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(goal, look, n));
-    const k = this.reducedMotion() ? 1 : 1 - Math.exp(-dt * 3);
+    const k = this.#reducedMotion() ? 1 : 1 - Math.exp(-dt * 3);
     camera.position.lerp(goal, k);
     camera.quaternion.slerp(goalQ, k);
     camera.up.copy(n);
