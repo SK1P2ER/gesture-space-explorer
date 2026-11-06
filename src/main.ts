@@ -1,5 +1,6 @@
 // Wiring and the frame loop. What the app does lives in src/app/: the mode
-// machine (modes.ts), intent handling (intentHandler.ts), photos, tracking,
+// machine (modes.ts), intent handling (intentHandler.ts), the Quality setting
+// and tier (qualityControl.ts), ?flags= features (flags.ts), photos, tracking,
 // debug tools, settings and the phone info sheet.
 import * as THREE from 'three';
 import { createIntentHandler } from './app/intentHandler';
@@ -23,10 +24,8 @@ import { attachKeyboardAndMouse } from './input/keyboard';
 import { steerFromPalm } from './gestures/steer';
 import { createIntentBus, type Intent } from './intents';
 import { pickable } from './navigation';
-import {
-  AutoTier, autoStartTier, currentDevice, isMobile, nextQualitySetting, PROFILES, readAutoMemory, renderPixelRatio,
-  ResolutionGovernor, saveQuality, UltraGuard, writeAutoMemory, type QualitySetting, type QualityTier,
-} from './quality';
+import { currentDevice, PROFILES } from './quality';
+import { QualityControl } from './app/qualityControl';
 import { CameraRig } from './scene/cameraRig';
 import type { CinematicContext, CinematicRequest } from './scene/marsCinematicDirector';
 import {
@@ -73,20 +72,24 @@ const modes = new ModeMachine();
 
 // ---------------------------------------------------------------- scene ----
 const canvas = document.querySelector<HTMLCanvasElement>('#scene')!;
-// v2.4 auto-quality: under the chosen tier's pixel-ratio cap, render resolution follows the frame
-// rate (quality.ts ResolutionGovernor). Texture detail is chosen for the full ratio, so a step
-// never loads or drops a texture.
-const device = currentDevice();
-const mobileDevice = isMobile(device);
-const governor = new ResolutionGovernor();
-// v2.4 Auto (quality.ts AutoTier): capable devices get High, weak ones stay on Low, learned per device.
-const newAutoTier = () => new AutoTier(autoStartTier(device), readAutoMemory(storage), { version: __APP_VERSION__, now: Date.now, remember: (m) => writeAutoMemory(m, storage) });
-let autoTier = state.qualitySetting === 'auto' ? newAutoTier() : null;
-if (autoTier) state.qualityTier = autoTier.tier; // what this device learned on an earlier visit
-const fullPixelRatio = () => Math.min(devicePixelRatio, PROFILES[state.qualityTier].pixelRatio);
-const pixelRatio = () => renderPixelRatio(devicePixelRatio, PROFILES[state.qualityTier].pixelRatio, governor.scale, mobileDevice);
+// The Quality setting, the tier in effect, Auto and resolution scaling (app/qualityControl.ts).
+const quality = new QualityControl({
+  state, storage, device: currentDevice(), version: __APP_VERSION__, now: Date.now,
+  devicePixelRatio: () => devicePixelRatio,
+  // Low: 1K→2K textures, no bloom, pixel ratio 1. High: 2K→4K textures, bloom, pixel ratio ≤ 2, 4× MSAA. Ultra (desktop): pixel ratio ≤ 3, 8× MSAA.
+  applyTier(tier) {
+    pipeline.bloomEnabled = PROFILES[tier].bloom;
+    pipeline.setSamples(PROFILES[tier].msaa);
+    applyBaseLighting();
+    resize();
+    system.setTextureSizes(PROFILES[tier]);
+    system.setBeltCounts(PROFILES[tier]);
+    system.setSkyTextures(PROFILES[tier].skyTextures);
+  },
+  resize,
+});
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(pixelRatio());
+renderer.setPixelRatio(quality.pixelRatio());
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = config.render.exposure;
@@ -108,10 +111,9 @@ focusCamera(0, true);
 const pipeline = new ScenePipeline(renderer, system.scene, rig.camera, config.render);
 pipeline.bloomEnabled = PROFILES[state.qualityTier].bloom;
 pipeline.setSamples(PROFILES[state.qualityTier].msaa);
-const ultraGuard = new UltraGuard();
 
 function resize() {
-  renderer.setPixelRatio(pixelRatio());
+  renderer.setPixelRatio(quality.pixelRatio());
   renderer.setSize(innerWidth, innerHeight, false);
   pipeline.setSize(innerWidth, innerHeight);
   rig.resize(innerWidth / innerHeight);
@@ -121,34 +123,10 @@ resize();
 canvas.addEventListener('webglcontextlost', () => system.suspendTextureUploads());
 canvas.addEventListener('webglcontextrestored', () => system.reloadTextures());
 
-/** Low: 1K→2K textures, no bloom, pixel ratio 1. High: 2K→4K textures, bloom, pixel ratio ≤ 2, 4× MSAA. Ultra (desktop): pixel ratio ≤ 3, 8× MSAA. */
-let prewarmPending = false;
-/** The Quality button (and Ultra giving way to High): a fixed tier, or Auto. */
-function setQualitySetting(setting: QualitySetting) {
-  state.qualitySetting = setting;
-  saveQuality(setting, storage);
-  autoTier = setting === 'auto' ? newAutoTier() : null;
-  setQualityTier(autoTier ? autoTier.tier : (setting as QualityTier));
-}
-/** The tier in effect, from the setting or from Auto. */
-function setQualityTier(tier: QualityTier) {
-  state.qualityTier = tier;
-  pipeline.bloomEnabled = PROFILES[tier].bloom;
-  pipeline.setSamples(PROFILES[tier].msaa);
-  if (tier === 'ultra') ultraGuard.rearm();
-  governor.reset(); // a new tier starts at its full resolution
-  applyBaseLighting?.();
-  resize();
-  system.setTextureSizes(PROFILES[tier]);
-  system.setBeltCounts(PROFILES[tier]);
-  system.setSkyTextures(PROFILES[tier].skyTextures);
-  prewarmPending = true; // compile only after this frame replaces retired scene owners
-}
-
 // While the browser is idle after startup, compile the shaders the other quality needs, so switching
 // never stalls. (Safari has no requestIdleCallback: a short delay instead.)
-if ('requestIdleCallback' in window) requestIdleCallback(() => { prewarmPending = true; }, { timeout: 4000 });
-else setTimeout(() => { prewarmPending = true; }, 1500);
+if ('requestIdleCallback' in window) requestIdleCallback(() => quality.requestPrewarm(), { timeout: 4000 });
+else setTimeout(() => quality.requestPrewarm(), 1500);
 
 /** Focus a body: fly there, in SolarView (the Sun) or Focus mode. */
 function setFocus(index: number, instant = false) {
@@ -187,7 +165,7 @@ const photo = new PhotoFlow(
 );
 
 // Dev builds only: a handle for poking at the scene from the console or test scripts.
-if (import.meta.env.DEV) Object.assign(window, { __app: { renderer, system, pipeline, config, rig, clock, extras, modes, governor, get autoTier() { return autoTier; }, get mission() { return mission; }, get showcases() { return showcases; }, get build() { return build; }, bus } });
+if (import.meta.env.DEV) Object.assign(window, { __app: { renderer, system, pipeline, config, rig, clock, extras, modes, governor: quality.governor, get autoTier() { return quality.autoTier; }, get mission() { return mission; }, get showcases() { return showcases; }, get build() { return build; }, bus } });
 const labels = new PlanetLabels();
 
 // Mouse hover → name label (only while not dragging).
@@ -346,7 +324,7 @@ for (const [id, intent] of [
   });
 }
 document.querySelector<HTMLButtonElement>('#quality')!.addEventListener('click', (e) => {
-  setQualitySetting(nextQualitySetting(state.qualitySetting, mobileDevice));
+  quality.cycleSetting();
   (e.currentTarget as HTMLElement).blur(); // keep Space / Enter for the scene
 });
 
@@ -421,8 +399,6 @@ const missionMap = () => miniMap({
 // ----------------------------------------------------------------- loop ----
 const focusPos = new THREE.Vector3();
 let lastNow = performance.now();
-/** The previous frame's own CPU time (this callback), for Auto's headroom check. */
-let lastCpuMs = 0;
 
 // ------------------------------------------------------------- deep links (v2.4, app/deepLink.ts) ----
 const link = parseDeepLink(location.search, {
@@ -518,13 +494,7 @@ const phases: FramePhases = {
     frame.now = now;
     frame.cpuStart = performance.now();
     // Ultra that can't keep up gives way to High (once; choosing Ultra again re-arms it).
-    if (ultraGuard.frame(now - lastNow, state.qualityTier)) {
-      setQualitySetting('high');
-      gestureHud.flash(t('ultraTooSlow', state.lang));
-    }
-    if (governor.frame(now - lastNow)) resize();
-    const autoSwitch = autoTier?.frame(now - lastNow, lastCpuMs, governor.targetMs, canSwitchTier());
-    if (autoSwitch && autoSwitch !== state.qualityTier) setQualityTier(autoSwitch);
+    if (quality.frame(now - lastNow, canSwitchTier)) gestureHud.flash(t('ultraTooSlow', state.lang));
     frame.dt = Math.min((now - lastNow) / 1000, 0.1); // avoid jumps after tab switches
     lastNow = now;
   },
@@ -585,20 +555,15 @@ const phases: FramePhases = {
     }
     system.setHorizon(mission.horizon ? state.focus : null);
     document.body.classList.toggle('horizon', mission.horizon !== null);
-    system.updateView(rig.camera, state.focus, { height: innerHeight, pixelRatio: fullPixelRatio() }, dt, rig.zoomDistance, state.trueScale);
+    system.updateView(rig.camera, state.focus, { height: innerHeight, pixelRatio: quality.fullPixelRatio() }, dt, rig.zoomDistance, state.trueScale);
     showcases.syncMaps(); // updateView can finish a fade and close the previously borrowed image.
-    // A photo gets every pixel the tier allows; auto-quality measures afresh afterwards.
-    if (photo.pending && governor.scale < 1) {
-      governor.reset();
-      resize();
-    }
+    if (photo.pending) quality.fullResolution();
   },
 
   render() {
     if (overlay.enabled) {
-      const target = governor.targetMs;
-      overlay.resolutionInfo = `${Math.round(governor.scale * 100)}% · ${renderer.getPixelRatio().toFixed(2)}x · holds ${target ? Math.round(1000 / target) : '—'} fps`;
-      overlay.tierInfo = autoTier ? `Auto: ${autoTier.describe()}` : `${state.qualitySetting} (fixed)`;
+      overlay.resolutionInfo = quality.describeResolution(renderer.getPixelRatio());
+      overlay.tierInfo = quality.describeTier();
     }
     debug.frameStats?.beginGpu();
     pipeline.render();
@@ -689,14 +654,11 @@ const phases: FramePhases = {
   },
 
   end() {
-    // Optional warm-up must not retain programs belonging to replaceable base or
-    // mission owners. Defer until navigation returns to the persistent scene.
-    if (prewarmPending && !showcases.hasEntries && (modes.mode === 'focus' || modes.mode === 'solarView')) {
-      prewarmPending = false; // coalesce rapid quality requests
-      void pipeline.prewarm();
-    }
-    lastCpuMs = performance.now() - frame.cpuStart;
-    debug.frameStats?.frame(frame.now, lastCpuMs);
+    // The persistent scene: no base or mission owners whose programs a warm-up would retain.
+    if (quality.takePrewarm(!showcases.hasEntries && (modes.mode === 'focus' || modes.mode === 'solarView'))) void pipeline.prewarm();
+    const cpuMs = performance.now() - frame.cpuStart;
+    quality.endFrame(cpuMs);
+    debug.frameStats?.frame(frame.now, cpuMs);
   },
 };
 
