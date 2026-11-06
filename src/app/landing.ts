@@ -15,7 +15,7 @@ const PAD_RADIUS = 0.35;
 /** How far the arrow keys move the steering point per press (−1 … 1 across). */
 const KEY_STEP = 0.25;
 /** A moment on the ground (or off the pad) before the outcome counts, seconds. */
-const SETTLE_SECONDS = 0.8;
+export const SETTLE_SECONDS = 0.8;
 const UP = new THREE.Vector3(0, 1, 0);
 
 /** One attempt at the pad, from the approach height down. */

@@ -9,7 +9,7 @@ import { WarpStreaks } from '../scene/rocket';
 import type { RocketOptions } from '../scene/rocketKit';
 import { RocketStage } from './rocketStage';
 import { HorizonView, type HorizonPose } from './horizonView';
-import { Landing, type DockAttempt } from './landing';
+import { Landing, SETTLE_SECONDS, type DockAttempt } from './landing';
 import { Flight, type Trip } from './flight';
 import { atmosphereOf, dustFor, type Atmosphere } from '../data/atmosphere';
 import type { LandingContext } from '../sim/landingReplay';
@@ -634,7 +634,7 @@ export class Mission {
       this.dustPad = this.trip.from;
     } else if (mode === 'docking' && this.dock && this.base) {
       const progress = 1 - this.dock.state.alt / this.dock.startAlt;
-      emit = this.dock.state.outcome ? 0.5 * (this.dock.settle / 0.8) : THREE.MathUtils.smoothstep(progress, DUST_FROM, 0.97);
+      emit = this.dock.state.outcome ? 0.5 * (this.dock.settle / SETTLE_SECONDS) : THREE.MathUtils.smoothstep(progress, DUST_FROM, 0.97);
       this.dustPad = this.base;
     }
     if (this.d.reducedMotion()) emit = 0;
