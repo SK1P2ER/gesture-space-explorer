@@ -58,7 +58,7 @@ describe('quality', () => {
   it('Low is cheaper on every axis', () => {
     expect(PROFILES.low.pixelRatio).toBeLessThan(PROFILES.high.pixelRatio);
     expect(PROFILES.low.bloom).toBe(false);
-    expect([PROFILES.low.baseTier, PROFILES.low.hdTier]).toEqual(['1k', '2k']);
+    expect([PROFILES.low.standardTextures, PROFILES.low.hdTextures]).toEqual(['1k', '2k']);
   });
 });
 
@@ -89,8 +89,8 @@ describe('Ultra (desktop only)', () => {
   it('is sharper than High: pixel ratio, MSAA and generated textures; planet textures stay', () => {
     expect(PROFILES.ultra.pixelRatio).toBeGreaterThan(PROFILES.high.pixelRatio);
     expect(PROFILES.ultra.msaa).toBeGreaterThan(PROFILES.high.msaa);
-    expect(PROFILES.ultra.kitTexture).toBeGreaterThan(PROFILES.high.kitTexture);
-    expect(PROFILES.ultra.hdTier).toBe(PROFILES.high.hdTier);
+    expect(PROFILES.ultra.kitTextureSize).toBeGreaterThan(PROFILES.high.kitTextureSize);
+    expect(PROFILES.ultra.hdTextures).toBe(PROFILES.high.hdTextures);
     expect(PROFILES.low.particles).toBe('few');
   });
 

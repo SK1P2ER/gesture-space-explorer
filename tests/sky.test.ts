@@ -27,8 +27,8 @@ describe('sky orientation', () => {
 
 describe('the star map texture', () => {
   it('ships at 2K (Low) and 4K (High)', () => {
-    expect(PROFILES.low.skyTier).toBe('2k');
-    expect(PROFILES.high.skyTier).toBe('4k');
+    expect(PROFILES.low.skyTextures).toBe('2k');
+    expect(PROFILES.high.skyTextures).toBe('4k');
     for (const tier of ['2k', '4k']) expect(existsSync(`public/textures/${tier}/sky.jpg`), tier).toBe(true);
   });
 

@@ -177,7 +177,7 @@ const UPPER: [number, number][] = [[VB.rim, ROCKET.split - VB.height], [VB.rim *
 export interface RocketOptions {
   /** 4–9 (default 5). */
   engines?: number;
-  /** Generated texture size (the quality profile's kitTexture: 256 / 512 / 1024). */
+  /** Generated texture size (the quality profile's kitTextureSize: 256 / 512 / 1024). */
   textureSize: number;
   /** Fewer facets and no normal map on Low. */
   quality: 'low' | 'high';
