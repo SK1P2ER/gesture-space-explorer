@@ -1,5 +1,5 @@
 import { BASES, type Base } from '../data/bases';
-import { BODIES, type Lang } from '../data/bodies';
+import { bodyById, type Lang } from '../data/bodies';
 import type { Intent } from '../intents';
 import type { SkyReport } from '../app/baseSky';
 import { LAYOUTS } from '../scene/baseKit/showcases';
@@ -40,7 +40,7 @@ export class BasePanel {
     const skyKey = sky ? `${clockLabel(sky.day.hours)}|${sky.up.map((u) => `${u.id}${Math.round(u.elevation)}${u.approximate ? '~' : ''}`).join()}` : '';
     if (skyKey !== this.lastSky) {
       this.lastSky = skyKey;
-      const body = BODIES.find((b) => b.id === base.body)!;
+      const body = bodyById(base.body);
       this.facts!.replaceChildren(el('dt', t('gravityHere', lang)), el('dd', `${body.gravity} m/s²`), ...(sky ? skyFacts(sky, lang) : []));
     }
     if (destination !== this.lastDestination) {
@@ -51,7 +51,7 @@ export class BasePanel {
   }
 
   private rebuild(base: Base, lang: Lang, canBuild: boolean, cameraControls?: HTMLElement) {
-    const body = BODIES.find((b) => b.id === base.body)!;
+    const body = bodyById(base.body);
     const leave = el('button', '×', 'close') as HTMLButtonElement;
     leave.type = 'button';
     leave.setAttribute('aria-label', t('leaveBase', lang));

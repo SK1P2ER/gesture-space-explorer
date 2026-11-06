@@ -1,4 +1,4 @@
-import { BODIES, type Body } from '../data/bodies';
+import { bodyById, type Body } from '../data/bodies';
 import { heliocentric, length } from '../data/ephemeris';
 
 // The numbers on the mission HUD: how far a trip really is (from the ephemeris,
@@ -7,16 +7,15 @@ import { heliocentric, length } from '../data/ephemeris';
 
 export const KM_PER_AU = 149_597_870.7;
 
-const byId = (id: string) => BODIES.find((b) => b.id === id)!;
 /** The planet a body belongs to (itself, or a moon's parent). */
-const planetOf = (b: Body) => (b.parent ? byId(b.parent) : b);
+const planetOf = (b: Body) => (b.parent ? bodyById(b.parent) : b);
 
 /**
  * Straight-line distance between two bodies on a date, km. Moons count as their
  * planet, plus their orbit's size when the trip stays in one planet's system.
  */
 export function routeKm(fromId: string, toId: string, ms: number): number {
-  const [a, b] = [byId(fromId), byId(toId)];
+  const [a, b] = [bodyById(fromId), bodyById(toId)];
   const [pa, pb] = [planetOf(a), planetOf(b)];
   if (pa === pb) return Math.abs((a.moon?.aKm ?? 0) - (b.moon?.aKm ?? 0)) || (a.moon ?? b.moon)?.aKm || 0;
   const [ha, hb] = [heliocentric(pa.orbit!, ms), heliocentric(pb.orbit!, ms)];

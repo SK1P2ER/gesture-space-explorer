@@ -1,6 +1,6 @@
 import type { Build } from './build';
 import { SENSITIVITY_ORDER } from '../gestures/steer';
-import { BODIES, LANGS } from '../data/bodies';
+import { BODIES, bodyIndex, LANGS } from '../data/bodies';
 import type { Intent } from '../intents';
 import { nextInSystem, step } from '../navigation';
 import type { CameraRig } from '../scene/cameraRig';
@@ -49,7 +49,7 @@ export function createIntentHandler({ state, modes, rig, clock, overlay, gesture
         break;
       }
       case 'select': {
-        const index = intent.bodyId ? BODIES.findIndex((b) => b.id === intent.bodyId) : state.focus;
+        const index = intent.bodyId ? bodyIndex(intent.bodyId) : state.focus;
         if (index < 0) break;
         if (index !== state.focus) setFocus(index);
         state.selected = BODIES[index];

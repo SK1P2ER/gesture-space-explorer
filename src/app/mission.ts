@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { BASES, baseById, baseOn } from '../data/bases';
-import { BODIES, type Body } from '../data/bodies';
+import { BODIES, bodyById, bodyIndex, type Body } from '../data/bodies';
 import type { Intent } from '../intents';
 import { nextInSystem } from '../navigation';
 import type { CameraRig } from '../scene/cameraRig';
@@ -73,8 +73,6 @@ export const legDeploy = (progress: number, secondsSince: number) => (progress <
 const PAD_RADIUS = 0.35;
 /** How far the arrow keys move the steering point per press (−1 … 1 across). */
 const KEY_STEP = 0.25;
-
-const bodyIndex = (id: string) => BODIES.findIndex((b) => b.id === id);
 
 /** Push a point out to `radius` from `center` if it's inside (the chase camera must stay above ground). */
 export function keepAbove(point: THREE.Vector3, center: THREE.Vector3, radius: number) {
@@ -397,7 +395,7 @@ export class Mission {
 
   /** A docking attempt from the approach height (pad radii). */
   private startDock(misses: number) {
-    const body = BODIES[bodyIndex(this.base!.base.body)];
+    const body = bodyById(this.base!.base.body);
     const startAlt = APPROACH_HEIGHT / PAD_RADIUS;
     this.lastLanding = { baseId: this.base!.base.id, gravity: body.gravity, sensitivity: this.d.state.steerSensitivity, autoLand: this.d.state.autoLand, startAlt };
     this.dock = { state: startDocking(startAlt), startAlt, params: dockingParams(body.gravity), steer: null, auto: false, misses, settle: 0, legT: 0 };
@@ -535,7 +533,7 @@ export class Mission {
               // Pointing at a body: fly to its base.
               const base = baseOn(intent.bodyId);
               if (base && base.id !== this.base?.base.id) this.choose(base.id);
-              else if (!base) this.d.flash(tf('noBaseThere', state.lang, { name: BODIES[bodyIndex(intent.bodyId)].name[state.lang] }));
+              else if (!base) this.d.flash(tf('noBaseThere', state.lang, { name: bodyById(intent.bodyId).name[state.lang] }));
             }
             return true;
           case 'launch': this.startCountdown(true); return true;

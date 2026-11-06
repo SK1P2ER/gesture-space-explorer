@@ -1,5 +1,5 @@
 import { baseById } from '../../data/bases';
-import { BODIES, type Lang } from '../../data/bodies';
+import { bodyById, type Lang } from '../../data/bodies';
 import { routeKm } from '../../sim/route';
 import { bodyOf, DESTINATIONS, destinationById, journeyTime, roundKm, SPACEPORT, type Destination } from '../../travel/destinations';
 import { numberFormat, t } from '../../ui/i18n';
@@ -7,7 +7,7 @@ import { button, h, title, type ScreenContext } from '../dom';
 import { st, stf } from '../strings';
 
 const EARTH_G = 9.80665;
-const body = (d: Destination) => BODIES.find((b) => b.id === bodyOf(d))!;
+const body = (d: Destination) => bodyById(bodyOf(d));
 const spaceport = (lang: Lang) => baseById(SPACEPORT).name[lang];
 
 /** "9 days by fusion liner", with its "fictional" tag. */

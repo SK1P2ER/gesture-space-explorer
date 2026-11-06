@@ -1,5 +1,5 @@
 import { BASES } from '../data/bases';
-import { BODIES, type Lang } from '../data/bodies';
+import { bodyById, type Lang } from '../data/bodies';
 import type { Intent } from '../intents';
 import type { Passport } from '../sim/passport';
 import { t, tf } from './i18n';
@@ -35,7 +35,7 @@ export class PassportPanel {
       const name = document.createElement('strong');
       name.textContent = b.name[lang];
       const body = document.createElement('span');
-      body.textContent = BODIES.find((x) => x.id === b.body)!.name[lang];
+      body.textContent = bodyById(b.body).name[lang];
       const when = document.createElement('span');
       when.className = 'when';
       when.textContent = ms === undefined ? t('notYet', lang) : `✅ ${date.format(ms)}${levels[b.id] ? ` · 🏅 ${tf('baseLevel', lang, { n: String(levels[b.id]) })}` : ''}`;

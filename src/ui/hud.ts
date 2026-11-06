@@ -1,5 +1,5 @@
 import { baseOn } from '../data/bases';
-import { BODIES, moonsOf, type Body, type Lang } from '../data/bodies';
+import { bodyById, moonsOf, type Body, type Lang } from '../data/bodies';
 import { length, LIGHT_SECONDS_PER_AU, lightSeconds, nextPerihelion, sunCentered } from '../data/ephemeris';
 import { weightOn } from '../data/weight';
 import type { Intent } from '../intents';
@@ -124,7 +124,7 @@ export class Hud {
     if (s.selected.id !== this.cardFor) this.info.classList.remove('collapsed');
     this.cardFor = s.selected.id;
     const b = s.selected;
-    const parent = b.parent ? BODIES.find((p) => p.id === b.parent)! : null;
+    const parent = b.parent ? bodyById(b.parent) : null;
     this.info.hidden = false;
     const facts = el(
       'dl',

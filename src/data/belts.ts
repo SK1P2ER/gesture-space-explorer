@@ -7,7 +7,7 @@
 // period, so inner rocks overtake outer ones. On screen the belt fills the
 // clear band between its neighbours' systems (scale.ts), spread by log distance.
 
-import { BODIES, sceneDistance, systemReach, type Body } from './bodies';
+import { BODIES, bodyById, sceneDistance, systemReach, type Body } from './bodies';
 import { SCALE } from './scale';
 
 export { sceneDistance };
@@ -56,13 +56,12 @@ export function nearCameraScale(distance: number): number {
   return x * x * (3 - 2 * x); // smoothstep
 }
 
-const body = (id: string) => BODIES.find((b) => b.id === id)!;
 const planets = () => BODIES.filter((b) => b.kind === 'planet');
 
 /** Where a belt goes on screen: [inner, outer] scene radius, clear of its neighbours' systems. */
 export function beltBand(spec: BeltSpec): [number, number] {
   if (spec === ASTEROIDS) {
-    const [mars, jupiter] = [body('mars'), body('jupiter')];
+    const [mars, jupiter] = [bodyById('mars'), bodyById('jupiter')];
     return [mars.orbitRadius + systemReach(mars) + SCALE.clearance, jupiter.orbitRadius - systemReach(jupiter) - SCALE.clearance];
   }
   const neptune = planets().at(-1)!;
