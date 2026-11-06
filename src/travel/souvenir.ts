@@ -1,8 +1,9 @@
 import { departureById, isAvatar, isCabin, nameError, REF_PATTERN, type AvatarId, type Booking, type CabinId } from './booking';
 
-// The boarding pass's souvenir link (decision 22). The QR code holds a link to this app with the
-// pass after the "#": a fragment never leaves the browser, so nothing reaches a server, and the
-// link opens the pass as a keepsake on any phone. It is not a ticket and authorizes nothing.
+// The boarding pass's souvenir link (decisions 22 and 26). The QR code holds a link to this app
+// with the pass after the "#": a browser never sends the fragment, so the nickname and reference
+// never reach this app's host (the link itself goes wherever people share it). The link opens the
+// pass as a keepsake on any phone. It is not a ticket and authorizes nothing.
 //
 //   …/?flags=astrolife#souvenir=1&ref=AL-9NH92&nick=Ada&av=a3&fl=AL216&cab=suite
 //
