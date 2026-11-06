@@ -4,6 +4,7 @@ import type { BaseNode } from './bases';
 import type { Showcase } from './baseKit/showcase';
 import type { LandingPad } from './baseKit/landingPad';
 import type { Mode } from '../app/modes';
+import type { QualityTier } from '../quality';
 
 export const CINEMATIC_VIEWS = ['overview', 'habitats', 'landing', 'garage', 'panorama'] as const;
 export type CinematicView = typeof CINEMATIC_VIEWS[number];
@@ -14,7 +15,7 @@ export interface CinematicContext {
   landing: LandingPad;
   mode: Mode;
   horizon: boolean;
-  quality: string;
+  qualityTier: QualityTier;
 }
 const UP = new THREE.Vector3(0, 1, 0);
 const FLIGHT = ['overview', 'habitats', 'landing', 'garage', 'overview'] as const;
@@ -55,7 +56,7 @@ export class MarsCinematicDirector {
   validate(context: CinematicContext | null) {
     const old = this.lease;
     if (old && (!context || context.mode !== 'baseView' || context.base !== old.base ||
-      context.owner !== old.owner || context.horizon !== old.horizon || context.quality !== old.quality ||
+      context.owner !== old.owner || context.horizon !== old.horizon || context.qualityTier !== old.qualityTier ||
       old.owner.group.parent !== old.base.group)) this.cancel();
   }
 

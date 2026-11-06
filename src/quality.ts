@@ -1,6 +1,6 @@
 import type { TextureTier } from './data/bodies';
 
-export type Quality = 'low' | 'high' | 'ultra';
+export type QualityTier = 'low' | 'high' | 'ultra';
 
 export interface QualityProfile {
   /** Cap on devicePixelRatio. */
@@ -23,7 +23,7 @@ export interface QualityProfile {
   particles: 'few' | 'full';
 }
 
-export const PROFILES: Record<Quality, QualityProfile> = {
+export const PROFILES: Record<QualityTier, QualityProfile> = {
   low: { pixelRatio: 1, bloom: false, baseTier: '1k', hdTier: '2k', asteroids: 1500, kuiper: 400, skyTier: '2k', msaa: 0, kitTexture: 256, particles: 'few' },
   high: { pixelRatio: 2, bloom: true, baseTier: '2k', hdTier: '4k', asteroids: 6000, kuiper: 1500, skyTier: '4k', msaa: 4, kitTexture: 512, particles: 'full' },
   // Desktop only, never picked by itself: sharp on 4K screens (pixel ratio up to 3), 8× MSAA, bigger generated textures.
@@ -32,7 +32,7 @@ export const PROFILES: Record<Quality, QualityProfile> = {
 };
 
 /** What the Quality button sets: a fixed tier, or Auto (AutoTier picks Low or High for this device). */
-export type QualitySetting = 'auto' | Quality;
+export type QualitySetting = 'auto' | QualityTier;
 
 /** The Quality button: Auto → Low → High → Ultra → Auto on desktop; phones and tablets skip Ultra. */
 export function nextQualitySetting(current: QualitySetting, mobile: boolean): QualitySetting {
@@ -51,8 +51,8 @@ export class UltraGuard {
   constructor(private readonly limitMs = 18, private readonly forSeconds = 3) {}
 
   /** @returns true once, when Ultra should give way to High */
-  frame(dtMs: number, quality: Quality): boolean {
-    if (quality !== 'ultra' || this.tripped) {
+  frame(dtMs: number, tier: QualityTier): boolean {
+    if (tier !== 'ultra' || this.tripped) {
       this.slowFor = 0;
       return false;
     }

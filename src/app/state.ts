@@ -2,14 +2,14 @@ import { readLevels } from './build';
 import type { SteerSensitivity } from '../gestures/steer';
 import type { Passport } from '../sim/passport';
 import type { Body, Lang } from '../data/bodies';
-import { autoStartTier, currentDevice, initialQualitySetting, type Quality, type QualitySetting } from '../quality';
+import { autoStartTier, currentDevice, initialQualitySetting, type QualitySetting, type QualityTier } from '../quality';
 import type { TrackingStatus } from '../ui/hud';
 import { KEYS, readFlag, readPassport, readSensitivity, readWeight, storage } from './settings';
 
 /** Everything the app shows that isn't the scene or the clock. Changed only by intent handling. */
 export interface AppState {
   /** The tier in effect: the user's fixed choice, or what Auto picked. */
-  quality: Quality;
+  qualityTier: QualityTier;
   /** What the Quality button is set to (Auto picks Low or High per device). */
   qualitySetting: QualitySetting;
   /** Index into BODIES; 0 = the Sun (the overview). */
@@ -47,7 +47,7 @@ export function createState(): AppState {
   const qualitySetting = initialQualitySetting(device, storage);
   return {
     // Auto: Low on phones/tablets, High elsewhere, until main's AutoTier applies what this device learned.
-    quality: qualitySetting === 'auto' ? autoStartTier(device) : qualitySetting,
+    qualityTier: qualitySetting === 'auto' ? autoStartTier(device) : qualitySetting,
     qualitySetting,
     focus: 0,
     selected: null,

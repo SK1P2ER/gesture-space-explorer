@@ -18,7 +18,7 @@ function fixture() {
   camera.position.copy(base.group.localToWorld(new THREE.Vector3(2, 3, 4)));
   camera.lookAt(base.group.localToWorld(new THREE.Vector3())); camera.updateMatrixWorld();
   const director = new MarsCinematicDirector(camera);
-  const context: CinematicContext = { base, owner, landing, mode: 'baseView', horizon: false, quality: 'high' };
+  const context: CinematicContext = { base, owner, landing, mode: 'baseView', horizon: false, qualityTier: 'high' };
   return { base, owner, landing, camera, director, context, dispose() { director.dispose(); owner.dispose(); landing.dispose(); bases.dispose(); } };
 }
 const tick = (d: MarsCinematicDirector, count = 100, reduced = false) => {
@@ -125,7 +125,7 @@ describe('exclusive Mars cinematic camera lease', () => {
   it('cancels on quality, owner retirement and destination changes', () => {
     const f = fixture();
     try {
-      for (const context of [{ ...f.context, quality: 'low' }, null]) {
+      for (const context of [{ ...f.context, qualityTier: 'low' as const }, null]) {
         f.director.start('overview', f.context, false); tick(f.director, 2);
         f.director.validate(context); expect(f.director.active).toBe(false);
       }
