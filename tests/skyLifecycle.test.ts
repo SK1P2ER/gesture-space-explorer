@@ -35,13 +35,13 @@ function texture() {
 it('retains the recovery placeholder and detaches an old map before replacing it', async () => {
   const f = fixture(), first = texture(), second = texture();
   load.mockResolvedValueOnce(first.value).mockResolvedValueOnce(second.value);
-  await f.sky.setTier('2k');
+  await f.sky.setSize('2k');
   expect(f.material.map).toBe(first.value);
   expect(first.value.wrapS).toBe(THREE.RepeatWrapping);
   expect(f.upload).toHaveBeenCalledWith(first.value, { mipmaps: false, signal: expect.any(AbortSignal) });
   expect(f.placeholderReleased).not.toHaveBeenCalled();
   first.value.addEventListener('dispose', () => { expect(f.material.map).toBe(second.value); });
-  await f.sky.setTier('4k');
+  await f.sky.setSize('4k');
   expect(first.released).toHaveBeenCalledTimes(1);
   expect(second.released).not.toHaveBeenCalled();
   expect(f.placeholderReleased).not.toHaveBeenCalled();
@@ -53,9 +53,9 @@ it('retains the recovery placeholder and detaches an old map before replacing it
 it('cancels A to B to A requests and cannot publish the first A after the latest A', async () => {
   const f = fixture(), old = deferred<THREE.Texture>(), stale = texture(), middle = texture(), latest = texture();
   load.mockReturnValueOnce(old.promise).mockResolvedValueOnce(middle.value).mockResolvedValueOnce(latest.value);
-  const first = f.sky.setTier('2k');
+  const first = f.sky.setSize('2k');
   const oldSignal = load.mock.calls[0][4]!;
-  await f.sky.setTier('4k'); await f.sky.setTier('2k');
+  await f.sky.setSize('4k'); await f.sky.setSize('2k');
   expect(oldSignal.aborted).toBe(true);
   old.resolve(stale.value); await first;
   expect(f.material.map).toBe(latest.value);
@@ -70,9 +70,9 @@ it('releases a late completed upload instead of publishing it after a tier chang
   const f = fixture(), old = texture(), uploaded = texture(), latest = texture(), waiting = deferred<THREE.Texture>();
   load.mockResolvedValueOnce(old.value).mockResolvedValueOnce(latest.value);
   f.upload.mockImplementationOnce(() => waiting.promise);
-  const first = f.sky.setTier('2k'); await settle();
+  const first = f.sky.setSize('2k'); await settle();
   const uploadSignal = f.upload.mock.calls[0][1]!.signal!;
-  await f.sky.setTier('4k');
+  await f.sky.setSize('4k');
   expect(uploadSignal.aborted).toBe(true);
   // The fake uploader consumed the input and returns a distinct target.
   disposeTexture(old.value); waiting.resolve(uploaded.value); await first;
@@ -85,7 +85,7 @@ it('releases a late completed upload instead of publishing it after a tier chang
 it('detaches recovered textures immediately and invalidates same-tier work across repeated reloads', async () => {
   const f = fixture(), initial = texture(), old = deferred<THREE.Texture>(), stale = texture(), latest = texture();
   load.mockResolvedValueOnce(initial.value).mockReturnValueOnce(old.promise).mockResolvedValueOnce(latest.value);
-  await f.sky.setTier('2k');
+  await f.sky.setSize('2k');
   initial.value.addEventListener('dispose', () => { expect(f.material.map).toBe(f.placeholder); });
   f.sky.reload();
   expect(f.material.map).toBe(f.placeholder);
@@ -105,7 +105,7 @@ it('captures context cancellation before decode and never uploads a late result 
   const f = fixture(), old = deferred<THREE.Texture>(), stale = texture(), latest = texture();
   const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
   load.mockReturnValueOnce(old.promise).mockResolvedValueOnce(latest.value);
-  const first = f.sky.setTier('2k');
+  const first = f.sky.setSize('2k');
   const oldSignal = load.mock.calls[0][4]!;
   f.suspend(); f.resume(); f.sky.reload(); await settle();
   old.resolve(stale.value); await first;
@@ -122,7 +122,7 @@ it('does not dispose an input twice when the queue rejects after taking ownershi
   const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
   load.mockResolvedValueOnce(input.value);
   f.upload.mockImplementationOnce(async (decoded) => { disposeTexture(decoded); throw failure; });
-  await f.sky.setTier('2k');
+  await f.sky.setSize('2k');
   expect(input.released).toHaveBeenCalledTimes(1);
   expect(warning).toHaveBeenCalledWith('[sky] star map unavailable; plain background', failure);
   expect(f.material.map).toBe(f.placeholder);
@@ -134,7 +134,7 @@ it('ignores obsolete rejections while preserving the latest published map', asyn
   const f = fixture(), old = deferred<THREE.Texture>(), latest = texture();
   const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
   load.mockReturnValueOnce(old.promise).mockResolvedValueOnce(latest.value);
-  const first = f.sky.setTier('2k'); await f.sky.setTier('4k');
+  const first = f.sky.setSize('2k'); await f.sky.setSize('4k');
   old.reject(new Error('old request failed')); await first;
   expect(f.material.map).toBe(latest.value);
   expect(warning).not.toHaveBeenCalled();
@@ -148,8 +148,8 @@ it('terminal teardown detaches the sampler and releases each owned resource once
   f.sky.mesh.geometry.addEventListener('dispose', geometryReleased);
   f.material.addEventListener('dispose', materialReleased);
   load.mockResolvedValueOnce(published.value).mockReturnValueOnce(pending.promise);
-  await f.sky.setTier('2k');
-  const loading = f.sky.setTier('4k'), signal = load.mock.calls[1][4]!;
+  await f.sky.setSize('2k');
+  const loading = f.sky.setSize('4k'), signal = load.mock.calls[1][4]!;
   for (const value of [f.placeholder, published.value]) value.addEventListener('dispose', () => {
     expect(f.material.map).toBeNull(); expect(f.sky.mesh.parent).toBeNull();
   });
@@ -163,7 +163,7 @@ it('terminal teardown detaches the sampler and releases each owned resource once
   expect(materialReleased).toHaveBeenCalledTimes(1);
   expect(f.material.map).toBeNull();
   const calls = load.mock.calls.length;
-  f.sky.reload(); await f.sky.setTier('2k');
+  f.sky.reload(); await f.sky.setSize('2k');
   expect(load).toHaveBeenCalledTimes(calls);
 });
 
@@ -171,7 +171,7 @@ it('keeps a valid placeholder after a failed recovery and releases it only at te
   const f = fixture(), published = texture(), failure = new Error('offline');
   const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
   load.mockResolvedValueOnce(published.value).mockRejectedValueOnce(failure);
-  await f.sky.setTier('2k'); f.sky.reload(); await settle();
+  await f.sky.setSize('2k'); f.sky.reload(); await settle();
   expect(f.material.map).toBe(f.placeholder);
   expect(published.released).toHaveBeenCalledTimes(1);
   expect(f.placeholderReleased).not.toHaveBeenCalled();

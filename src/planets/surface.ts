@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Body, BodyTextures, TextureTier } from '../data/bodies';
+import type { Body, BodyTextures, TextureSize } from '../data/bodies';
 import { patchShader, replaceOnce } from './shaderPatch';
 import { combineTextureSignals, disposeTexture, loadTexture, solidTexture, type TextureRole, type UploadQueue } from './textureLoader';
 
@@ -21,7 +21,7 @@ interface LayerSpec {
   material: keyof SurfaceMaterials;
   slot: Slot;
   role: TextureRole;
-  /** Whether a 4K version exists (when the body's maxTier allows it). */
+  /** Whether a 4K version exists (when the body's maxSize allows it). */
   hd: boolean;
   /** Shown until the image arrives; RGBA bytes. */
   placeholder: (body: Body) => [number, number, number, number];
@@ -47,10 +47,10 @@ const LAYERS = {
 export type Layer = keyof typeof LAYERS & keyof BodyTextures;
 export type Layers = Partial<Record<Layer, THREE.Texture>>;
 
-const TIERS: TextureTier[] = ['1k', '2k', '4k'];
-/** Width in texels of each tier's maps. */
-export const TIER_WIDTH: Record<TextureTier, number> = { '1k': 1024, '2k': 2048, '4k': 4096 };
-const minTier = (a: TextureTier, b: TextureTier) => TIERS[Math.min(TIERS.indexOf(a), TIERS.indexOf(b))];
+const SIZES: TextureSize[] = ['1k', '2k', '4k'];
+/** Width in texels of each size's maps. */
+export const TEXTURE_WIDTH: Record<TextureSize, number> = { '1k': 1024, '2k': 2048, '4k': 4096 };
+const smallerSize = (a: TextureSize, b: TextureSize) => SIZES[Math.min(SIZES.indexOf(a), SIZES.indexOf(b))];
 
 const FADE_SECONDS = 0.6;
 
@@ -59,14 +59,14 @@ export function bodyLayers(body: Body): Layer[] {
   return (Object.keys(LAYERS) as Layer[]).filter((l) => body.textures[l]);
 }
 
-/** The tier a layer is really loaded at when `tier` is asked for: 2K-only maps and the body's maxTier cap it. */
-export function layerTier(body: Body, layer: Layer, tier: TextureTier): TextureTier {
-  return LAYERS[layer].hd ? minTier(tier, body.textures.maxTier) : minTier(tier, '2k');
+/** The size a layer is really loaded at when `size` is asked for: 2K-only maps and the body's maxSize cap it. */
+export function layerSize(body: Body, layer: Layer, size: TextureSize): TextureSize {
+  return LAYERS[layer].hd ? smallerSize(size, body.textures.maxSize) : smallerSize(size, '2k');
 }
 
-/** The layers that switch to `tier` when the body is seen up close (none if the body has no such tier). */
-export function hdLayers(body: Body, tier: TextureTier): Layer[] {
-  if (TIERS.indexOf(body.textures.maxTier) < TIERS.indexOf(tier)) return [];
+/** The layers that switch to `size` when the body is seen up close (none if the body has no such size). */
+export function hdLayers(body: Body, size: TextureSize): Layer[] {
+  if (SIZES.indexOf(body.textures.maxSize) < SIZES.indexOf(size)) return [];
   return bodyLayers(body).filter((l) => LAYERS[l].hd);
 }
 
@@ -82,33 +82,33 @@ export function hdLayers(body: Body, tier: TextureTier): Layer[] {
  */
 export class PlanetSurface {
   readonly fade = { value: 0 };
-  baseState: 'loading' | 'ready' | 'fallback' = 'loading';
+  standardState: 'loading' | 'ready' | 'fallback' = 'loading';
   hdLoading = false;
 
   /**
    * The textures every body keeps are on their way: the first load, or a quality change's swap.
-   * During a swap `baseState` stays 'ready' (the old set is still shown), so this is the only sign
+   * During a swap `standardState` stays 'ready' (the old set is still shown), so this is the only sign
    * of one; swaps queue for the shared upload slices, one body after another.
    */
-  get baseLoading(): boolean {
-    return this.baseRequest !== null;
+  get standardLoading(): boolean {
+    return this.standardRequest !== null;
   }
 
   private readonly layers: Layer[];
   private readonly next: Partial<Record<Layer, { value: THREE.Texture | null }>> = {};
   private readonly placeholder: Layers = {};
-  private base: Layers | null = null;
-  private baseTier: TextureTier | null = null;
-  /** Base sets replaced by a quality change, disposed once they're no longer on screen. */
+  private standard: Layers | null = null;
+  private standardSize: TextureSize | null = null;
+  /** Standard sets replaced by a quality change, disposed once they're no longer on screen. */
   private retired: Layers[] = [];
-  /** Up-close textures (4K on High, 2K on Low) and the tier they were loaded at. */
-  private hd: { tier: TextureTier; set: Layers } | null = null;
-  private hdWanted: TextureTier | null = null;
+  /** Up-close textures (4K on High, 2K on Low) and the size they were loaded at. */
+  private hd: { size: TextureSize; set: Layers } | null = null;
+  private hdWanted: TextureSize | null = null;
   private shown: Layers;
   private fadingTo: Layers | null = null;
-  private baseGeneration = 0;
+  private standardGeneration = 0;
   private hdGeneration = 0;
-  private baseRequest: AbortController | null = null;
+  private standardRequest: AbortController | null = null;
   private hdRequest: AbortController | null = null;
   private disposed = false;
 
@@ -138,19 +138,19 @@ export class PlanetSurface {
   }
 
   /** Loads (or, on a quality change, swaps to) the textures every body keeps; the swap cross-fades too. */
-  async loadBase(tier: TextureTier) {
-    if (this.disposed || tier === this.baseTier || this.baseState === 'fallback') return;
-    const generation = ++this.baseGeneration;
-    this.baseRequest?.abort();
-    const request = this.baseRequest = new AbortController();
+  async loadStandard(size: TextureSize) {
+    if (this.disposed || size === this.standardSize || this.standardState === 'fallback') return;
+    const generation = ++this.standardGeneration;
+    this.standardRequest?.abort();
+    const request = this.standardRequest = new AbortController();
     const cancellation = combineTextureSignals(request.signal, this.ctx.uploads.signal);
     const { signal } = cancellation;
-    this.baseTier = tier;
-    const first = this.base === null;
+    this.standardSize = size;
+    const first = this.standard === null;
     let set: Layers;
     try {
-      set = await this.loadLayers(this.layers, tier, signal);
-      if (signal.aborted || this.disposed || generation !== this.baseGeneration) {
+      set = await this.loadLayers(this.layers, size, signal);
+      if (signal.aborted || this.disposed || generation !== this.standardGeneration) {
         disposeLayers(set);
         return;
       }
@@ -159,19 +159,19 @@ export class PlanetSurface {
         throw new Error('color map missing');
       }
     } catch (e) {
-      if (signal.aborted || this.disposed || generation !== this.baseGeneration) return;
+      if (signal.aborted || this.disposed || generation !== this.standardGeneration) return;
       if (!first) return; // keep the textures we have
       console.warn(`[textures] ${this.body.id}: images unavailable, using procedural textures`, e);
-      this.base = this.fallback();
-      this.baseState = 'fallback';
+      this.standard = this.fallback();
+      this.standardState = 'fallback';
       return;
     } finally {
       cancellation.dispose();
-      if (this.baseRequest === request) this.baseRequest = null;
+      if (this.standardRequest === request) this.standardRequest = null;
     }
-    if (this.base) this.retired.push(this.base);
-    this.base = set;
-    this.baseState = 'ready';
+    if (this.standard) this.retired.push(this.standard);
+    this.standard = set;
+    this.standardState = 'ready';
     this.releaseUnused();
   }
 
@@ -181,18 +181,18 @@ export class PlanetSurface {
    * makes that cheap) and fade back in from the placeholders.
    */
   reload() {
-    if (this.disposed || this.baseState === 'fallback' || !this.baseTier) return; // procedural canvases restore themselves
-    const tier = this.baseTier;
-    this.baseRequest?.abort();
+    if (this.disposed || this.standardState === 'fallback' || !this.standardSize) return; // procedural canvases restore themselves
+    const size = this.standardSize;
+    this.standardRequest?.abort();
     this.hdRequest?.abort();
-    this.baseRequest = this.hdRequest = null;
-    ++this.baseGeneration;
+    this.standardRequest = this.hdRequest = null;
+    ++this.standardGeneration;
     ++this.hdGeneration;
     this.hdLoading = false;
-    if (this.base) this.retired.push(this.base);
+    if (this.standard) this.retired.push(this.standard);
     if (this.hd) this.retired.push(this.hd.set);
-    this.base = this.hd = null;
-    this.baseTier = null;
+    this.standard = this.hd = null;
+    this.standardSize = null;
     this.shown = this.placeholder; // what's on the GPU now is blank anyway
     this.fadingTo = null;
     this.fade.value = 0;
@@ -201,30 +201,30 @@ export class PlanetSurface {
       this.next[l]!.value = this.placeholder[l]!;
     }
     this.releaseUnused();
-    void this.loadBase(tier).then(() => {
+    void this.loadStandard(size).then(() => {
       if (this.hdWanted) this.setHd(this.hdWanted);
     });
   }
 
   /**
-   * Asks for the up-close textures at `tier`, or releases them (null).
+   * Asks for the up-close textures at `size`, or releases them (null).
    * Loading happens in the background; the fade starts once they're on the GPU.
    */
-  setHd(tier: TextureTier | null) {
+  setHd(size: TextureSize | null) {
     if (this.disposed) return;
-    if (tier !== this.hdWanted) {
+    if (size !== this.hdWanted) {
       this.hdRequest?.abort();
       this.hdRequest = null;
       ++this.hdGeneration;
       this.hdLoading = false;
     }
-    this.hdWanted = tier;
-    if (this.hd && tier && this.hd.tier !== tier) {
+    this.hdWanted = size;
+    if (this.hd && size && this.hd.size !== size) {
       this.retired.push(this.hd.set); // from before a quality change
       this.hd = null;
     }
-    if (tier && !this.hd && !this.hdLoading && this.baseState === 'ready' && hdLayers(this.body, tier).length) {
-      void this.loadHd(tier);
+    if (size && !this.hd && !this.hdLoading && this.standardState === 'ready' && hdLayers(this.body, size).length) {
+      void this.loadHd(size);
     }
     this.releaseUnused();
   }
@@ -248,11 +248,11 @@ export class PlanetSurface {
   }
 
   private goal(): Layers {
-    const base = { ...this.placeholder, ...this.base };
-    return this.hd && this.hd.tier === this.hdWanted ? { ...base, ...this.hd.set } : base;
+    const standard = { ...this.placeholder, ...this.standard };
+    return this.hd && this.hd.size === this.hdWanted ? { ...standard, ...this.hd.set } : standard;
   }
 
-  private async loadHd(tier: TextureTier) {
+  private async loadHd(size: TextureSize) {
     const generation = ++this.hdGeneration;
     this.hdRequest?.abort();
     const request = this.hdRequest = new AbortController();
@@ -261,7 +261,7 @@ export class PlanetSurface {
     this.hdLoading = true;
     let set: Layers;
     try {
-      set = await this.loadLayers(hdLayers(this.body, tier), tier, signal);
+      set = await this.loadLayers(hdLayers(this.body, size), size, signal);
     } catch (e) {
       if (!signal.aborted && !this.disposed && generation === this.hdGeneration) console.warn(`[textures] ${this.body.id}:`, e);
       return;
@@ -271,18 +271,18 @@ export class PlanetSurface {
       if (this.hdRequest === request) this.hdRequest = null;
     }
     if (!signal.aborted && !this.disposed && generation === this.hdGeneration) {
-      this.hd = { tier, set };
+      this.hd = { size, set };
     } else {
       disposeLayers(set); // this request no longer owns publication
     }
   }
 
   /** Loads, decodes and uploads layers. A failed layer is left out (its placeholder or 2K version stays). */
-  private async loadLayers(layers: Layer[], tier: TextureTier, signal: AbortSignal): Promise<Layers> {
+  private async loadLayers(layers: Layer[], size: TextureSize, signal: AbortSignal): Promise<Layers> {
     const results = await Promise.allSettled(
       layers.map(async (layer) => {
         const file = this.body.textures[layer]!;
-        const decoded = await loadTexture(file, layerTier(this.body, layer, tier), LAYERS[layer].role, this.ctx.anisotropy, signal);
+        const decoded = await loadTexture(file, layerSize(this.body, layer, size), LAYERS[layer].role, this.ctx.anisotropy, signal);
         if (signal.aborted) {
           disposeTexture(decoded);
           signal.throwIfAborted();
@@ -322,10 +322,10 @@ export class PlanetSurface {
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
-    this.baseRequest?.abort();
+    this.standardRequest?.abort();
     this.hdRequest?.abort();
-    this.baseRequest = this.hdRequest = null;
-    ++this.baseGeneration;
+    this.standardRequest = this.hdRequest = null;
+    ++this.standardGeneration;
     ++this.hdGeneration;
     this.hdLoading = false;
     this.fade.value = 0;
@@ -334,10 +334,10 @@ export class PlanetSurface {
       this.next[layer]!.value = null;
     }
     const textures = new Set<THREE.Texture>();
-    for (const set of [this.placeholder, this.base, this.hd?.set, ...this.retired]) {
+    for (const set of [this.placeholder, this.standard, this.hd?.set, ...this.retired]) {
       if (set) for (const texture of Object.values(set)) textures.add(texture);
     }
-    this.base = this.hd = this.fadingTo = null;
+    this.standard = this.hd = this.fadingTo = null;
     this.retired = [];
     this.shown = {};
     for (const layer of this.layers) delete this.placeholder[layer];

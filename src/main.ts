@@ -136,9 +136,9 @@ function setQualityTier(tier: QualityTier) {
   governor.reset(); // a new tier starts at its full resolution
   applyBaseLighting?.();
   resize();
-  system.setTiers(PROFILES[tier]);
+  system.setTextureSizes(PROFILES[tier]);
   system.setBeltCounts(PROFILES[tier]);
-  system.setSkyTier(PROFILES[tier].skyTier);
+  system.setSkyTextures(PROFILES[tier].skyTextures);
   prewarmPending = true; // compile only after this frame replaces retired scene owners
 }
 
@@ -212,7 +212,7 @@ const mission = new Mission({
     const ms = nextSetting(node.body.body, node.base.lat, node.base.lon, clock.time);
     return ms === null ? null : { ms, sun: skyOver(node, ms).local.sun };
   },
-  rocketOptions: () => ({ engines: 5, textureSize: PROFILES[state.qualityTier].kitTexture, quality: state.qualityTier === 'low' ? 'low' : 'high' }),
+  rocketOptions: () => ({ engines: 5, textureSize: PROFILES[state.qualityTier].kitTextureSize, quality: state.qualityTier === 'low' ? 'low' : 'high' }),
   report: (message) => overlay.report(message),
   // AstroLife counts a booked journey's lift-off and landing (only with ?flags=astrolife).
   liftedOff: (from, to) => shell?.liftedOff(from, to),
@@ -229,7 +229,7 @@ renderer.shadowMap.autoUpdate = false;
 const applyBaseLighting = () => {
   const q = state.qualityTier;
   showcases.lighting = { shadows: q !== 'low', shadowSize: q === 'ultra' ? 4096 : 2048, envSize: q === 'ultra' ? 128 : 64 };
-  showcases.textureSize = PROFILES[q].kitTexture;
+  showcases.textureSize = PROFILES[q].kitTextureSize;
   mission.baseShadows = q !== 'low';
 };
 applyBaseLighting();

@@ -20,7 +20,7 @@ export interface ShowcaseOptions {
   quality: KitQuality;
   /** Experimental moving parts; default batching stays unchanged until hardware profiling. */
   operations?: boolean;
-  /** Generated texture size (the quality profile's kitTexture). */
+  /** Generated texture size (the quality profile's kitTextureSize). */
   textureSize?: number;
   /** The world's radius in base units (the ground curves away). */
   R: number;
