@@ -1,7 +1,7 @@
 import type { Config } from '../config';
 import { GestureEngine } from '../gestures/engine';
 import { steerFromPalm, type SteerSensitivity } from '../gestures/steer';
-import type { Recording } from '../ui/recorder';
+import type { HandFrame } from '../tracking/types';
 import { dockingParams, startDocking, STEER_RANGE, stepDocking, type DockingState } from './docking';
 
 // Replays a recorded landing (?debug, R) through the same steps the app takes:
@@ -18,6 +18,13 @@ export interface LandingContext {
   startAlt: number;
 }
 
+/** What a replay reads of a recording (the debug recorder writes these). */
+export interface LandingRecording {
+  /** Each frame tagged with the app's mode when it was seen ('docking' while landing). */
+  frames: readonly (HandFrame & { mode?: string })[];
+  landing?: LandingContext;
+}
+
 export interface LandingReplay {
   /** Every attempt in the recording, in order. */
   attempts: { outcome: DockingState['outcome']; seconds: number; offCenter: number }[];
@@ -29,7 +36,7 @@ export interface LandingReplay {
  * Frames recorded while landing (tagged mode 'docking') are replayed; anything
  * else just advances the gesture engine. Needs a recording with `landing` context.
  */
-export function replayLanding(rec: Recording, cfg: Pick<Config, 'gestures' | 'smoothing'>, aspect = 4 / 3): LandingReplay {
+export function replayLanding(rec: LandingRecording, cfg: Pick<Config, 'gestures' | 'smoothing'>, aspect = 4 / 3): LandingReplay {
   const ctx = rec.landing;
   if (!ctx) throw new Error('This recording has no landing in it (record with R during a landing, in ?debug).');
   const engine = new GestureEngine(cfg.gestures, cfg.smoothing, () => null);
