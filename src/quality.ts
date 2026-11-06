@@ -2,6 +2,9 @@ import type { TextureSize } from './data/bodies';
 
 export type QualityTier = 'low' | 'high' | 'ultra';
 
+/** Geometry detail of what is built in code (bases, the rocket): fewer facets and parts on Low. */
+export type KitDetail = 'low' | 'high';
+
 export interface QualityProfile {
   /** Cap on devicePixelRatio. */
   pixelRatio: number;
@@ -19,16 +22,17 @@ export interface QualityProfile {
   msaa: number;
   /** Size of the textures generated in code (rocket panels, base modules), px. */
   kitTextureSize: number;
+  kitDetail: KitDetail;
   /** Particle effects (dust, flame layers): a reduced set, or all of it. */
   particles: 'few' | 'full';
 }
 
 export const PROFILES: Record<QualityTier, QualityProfile> = {
-  low: { pixelRatio: 1, bloom: false, standardTextures: '1k', hdTextures: '2k', asteroids: 1500, kuiper: 400, skyTextures: '2k', msaa: 0, kitTextureSize: 256, particles: 'few' },
-  high: { pixelRatio: 2, bloom: true, standardTextures: '2k', hdTextures: '4k', asteroids: 6000, kuiper: 1500, skyTextures: '4k', msaa: 4, kitTextureSize: 512, particles: 'full' },
+  low: { pixelRatio: 1, bloom: false, standardTextures: '1k', hdTextures: '2k', asteroids: 1500, kuiper: 400, skyTextures: '2k', msaa: 0, kitTextureSize: 256, kitDetail: 'low', particles: 'few' },
+  high: { pixelRatio: 2, bloom: true, standardTextures: '2k', hdTextures: '4k', asteroids: 6000, kuiper: 1500, skyTextures: '4k', msaa: 4, kitTextureSize: 512, kitDetail: 'high', particles: 'full' },
   // Desktop only, never picked by itself: sharp on 4K screens (pixel ratio up to 3), 8× MSAA, bigger generated textures.
   // Planet textures stay as High: NASA's 4K maps are the top.
-  ultra: { pixelRatio: 3, bloom: true, standardTextures: '2k', hdTextures: '4k', asteroids: 6000, kuiper: 1500, skyTextures: '4k', msaa: 8, kitTextureSize: 1024, particles: 'full' },
+  ultra: { pixelRatio: 3, bloom: true, standardTextures: '2k', hdTextures: '4k', asteroids: 6000, kuiper: 1500, skyTextures: '4k', msaa: 8, kitTextureSize: 1024, kitDetail: 'high', particles: 'full' },
 };
 
 /** What the Quality button sets: a fixed tier, or Auto (AutoTier picks Low or High for this device). */

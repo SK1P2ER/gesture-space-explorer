@@ -10,7 +10,7 @@ import { landingBases } from './helpers/landingBase';
 const insets = { top: 0, right: 0, bottom: 0, left: 0 };
 function fixture() {
   const bases = landingBases(), base = bases.jezero;
-  const owner = new Showcase(JEZERO, { quality: 'high', textureSize: 16, R: 5.6,
+  const owner = new Showcase(JEZERO, { detail: 'high', textureSize: 16, R: 5.6,
     site: { point: new THREE.Vector3(0, 1, 0), quaternion: new THREE.Quaternion(), scale: 1 / 5.6 } });
   const landing = new LandingPad('high'); base.group.add(owner.group, landing.group);
   base.group.updateWorldMatrix(true, false);

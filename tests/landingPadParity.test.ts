@@ -56,7 +56,7 @@ describe('persistent landing pad parity (before Phase 2)', () => {
     const pad = fixture.jezero.pad as THREE.Mesh;
     const geometry = vi.spyOn(pad.geometry, 'dispose');
     const material = vi.spyOn(pad.material as THREE.Material, 'dispose');
-    const view = new Showcase(JEZERO, { quality: 'low', R: 5.6, site: { point: new THREE.Vector3(0, 1, 0), quaternion: new THREE.Quaternion(), scale: 1 / 5.6 } });
+    const view = new Showcase(JEZERO, { detail: 'low', R: 5.6, site: { point: new THREE.Vector3(0, 1, 0), quaternion: new THREE.Quaternion(), scale: 1 / 5.6 } });
     fixture.jezero.group.add(view.group);
     try {
       view.dispose();
@@ -67,7 +67,7 @@ describe('persistent landing pad parity (before Phase 2)', () => {
   });
 
   it('leaves the existing parked/docking rocket origin and deployed feet above the deck', () => {
-    const rocket = new Rocket({ quality: 'low', textureSize: 16 });
+    const rocket = new Rocket({ detail: 'low', textureSize: 16 });
     try {
       rocket.group.position.y = 0.02;
       rocket.group.scale.setScalar(0.5);

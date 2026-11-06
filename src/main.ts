@@ -212,7 +212,7 @@ const mission = new Mission({
     const ms = nextSetting(node.body.body, node.base.lat, node.base.lon, clock.time);
     return ms === null ? null : { ms, sun: skyOver(node, ms).local.sun };
   },
-  rocketOptions: () => ({ engines: 5, textureSize: PROFILES[state.qualityTier].kitTextureSize, quality: state.qualityTier === 'low' ? 'low' : 'high' }),
+  rocketOptions: () => ({ engines: 5, textureSize: PROFILES[state.qualityTier].kitTextureSize, detail: PROFILES[state.qualityTier].kitDetail }),
   report: (message) => overlay.report(message),
   // AstroLife counts a booked journey's lift-off and landing (only with ?flags=astrolife).
   liftedOff: (from, to) => shell?.liftedOff(from, to),
@@ -631,7 +631,7 @@ const phases: FramePhases = {
     showcases.operationsPaused = clock.paused;
     showcases.update(
       (id) => mission.base?.base.id === id || mission.trip?.to.base.id === id || baseById(id).body === BODIES[state.focus].id,
-      state.qualityTier === 'low' ? 'low' : 'high', now / 1000, rig.camera, reducedMotion.matches,
+      PROFILES[state.qualityTier].kitDetail, now / 1000, rig.camera, reducedMotion.matches,
       mission.horizon ? mission.base?.base.id ?? null : null,
       (id) => skyFor(id).local,
       mission.horizonEye,

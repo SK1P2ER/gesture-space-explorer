@@ -60,6 +60,10 @@ describe('quality', () => {
     expect(PROFILES.low.bloom).toBe(false);
     expect([PROFILES.low.standardTextures, PROFILES.low.hdTextures]).toEqual(['1k', '2k']);
   });
+
+  it('bases and the rocket are built in low detail on Low only', () => {
+    expect([PROFILES.low.kitDetail, PROFILES.high.kitDetail, PROFILES.ultra.kitDetail]).toEqual(['low', 'high', 'high']);
+  });
 });
 
 describe('Ultra (desktop only)', () => {

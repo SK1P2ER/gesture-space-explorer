@@ -173,7 +173,7 @@ export class Mission {
     {
       const rocket = new Rocket(opts);
       if (!this.stacked) rocket.separate(true); // the booster is long gone: a lander
-      const dust = new PadDust(opts.quality === 'low' ? DUST_PUFFS.few : DUST_PUFFS.full);
+      const dust = new PadDust(opts.detail === 'low' ? DUST_PUFFS.few : DUST_PUFFS.full);
       this.d.scene.add(rocket.group, dust.mesh);
       this.kit = { rocket, key, dust };
     }

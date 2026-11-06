@@ -27,8 +27,8 @@ function lowestSolid(rocket: Rocket) {
 }
 
 describe('entry-owned landing platform detail', () => {
-  it.each(['low', 'high'] as const)('%s detail respects the original footprint and rocket clearance', (quality) => {
-    const parts = landingPadParts(quality);
+  it.each(['low', 'high'] as const)('%s detail respects the original footprint and rocket clearance', (detail) => {
+    const parts = landingPadParts(detail);
     try {
       for (const [, geometry] of parts) {
         const p = geometry.getAttribute('position');
@@ -72,8 +72,8 @@ describe('entry-owned landing platform detail', () => {
   it('consumes factory geometry exactly once and releases independent owned outputs once', () => {
     const original = factory.landingPadParts;
     const sources: ReturnType<typeof vi.spyOn>[] = [];
-    const spy = vi.spyOn(factory, 'landingPadParts').mockImplementation((quality) => {
-      const parts = original(quality);
+    const spy = vi.spyOn(factory, 'landingPadParts').mockImplementation((detail) => {
+      const parts = original(detail);
       for (const [, geometry] of parts) sources.push(vi.spyOn(geometry, 'dispose'));
       return parts;
     });
@@ -121,7 +121,7 @@ describe('entry-owned landing platform detail', () => {
   });
 
   it.each([false, true])('keeps the parked solid envelope above all new detail (lander=%s)', (lander) => {
-    const rocket = new Rocket({ quality: 'low', textureSize: 16 });
+    const rocket = new Rocket({ detail: 'low', textureSize: 16 });
     try {
       rocket.setLander(lander);
       rocket.group.position.y = 0.02;
@@ -134,7 +134,7 @@ describe('entry-owned landing platform detail', () => {
   });
 
   it('clears the new deck detail through an existing Mars auto-docking trajectory, leg deployment and lift-off', () => {
-    const rocket = new Rocket({ quality: 'low', textureSize: 16 });
+    const rocket = new Rocket({ detail: 'low', textureSize: 16 });
     try {
       rocket.setLander(true);
       rocket.group.scale.setScalar(0.5);

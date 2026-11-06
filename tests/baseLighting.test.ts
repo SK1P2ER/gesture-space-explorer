@@ -130,14 +130,14 @@ describe('caching: redraw only when something changed', () => {
 
 describe('materials (v2.3)', () => {
   it('High: curved fabric smooth with fabric and normal maps; boxes flat; Low: the v2.1 look, flat and plain', () => {
-    const high = new Showcase(JEZERO, { quality: 'high', R, site, textureSize: 32 });
+    const high = new Showcase(JEZERO, { detail: 'high', R, site, textureSize: 32 });
     const hull = (high.group.getObjectByName('kit:hull') as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>).material;
     const flat = (high.group.getObjectByName('kit:hullFlat') as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>).material;
     expect(hull.flatShading).toBe(false);
     expect(hull.map).not.toBeNull();
     expect(hull.normalMap).not.toBeNull();
     expect(flat.flatShading).toBe(true);
-    const low = new Showcase(JEZERO, { quality: 'low', R, site, textureSize: 32 });
+    const low = new Showcase(JEZERO, { detail: 'low', R, site, textureSize: 32 });
     const lowHull = (low.group.getObjectByName('kit:hull') as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>).material;
     expect(lowHull.flatShading).toBe(true);
     expect(lowHull.map).toBeNull();
@@ -165,15 +165,15 @@ describe('materials (v2.3)', () => {
   });
 
   it('contact shadows under the modules and movers (one draw call), on every quality', () => {
-    for (const quality of ['high', 'low'] as const) {
-      const s = new Showcase(JEZERO, { quality, R, site, textureSize: 32 });
+    for (const detail of ['high', 'low'] as const) {
+      const s = new Showcase(JEZERO, { detail, R, site, textureSize: 32 });
       const blobs = s.group.getObjectByName('kit:contact') as THREE.InstancedMesh;
       expect(blobs.count).toBe(JEZERO.modules.length - 1 + JEZERO.roverLoops.length + JEZERO.walks.length); // all but the solar field
     }
   });
 
   it('only big things cast real shadows: rovers and astronauts get contact blobs instead', () => {
-    const s = new Showcase(JEZERO, { quality: 'high', R, site, textureSize: 32 });
+    const s = new Showcase(JEZERO, { detail: 'high', R, site, textureSize: 32 });
     s.setShadows(true);
     expect((s.group.getObjectByName('kit:hull') as THREE.Mesh).castShadow).toBe(true);
     expect((s.group.getObjectByName('kit:rovers:hullFlat') as THREE.Mesh).castShadow).toBe(false);
@@ -183,7 +183,7 @@ describe('materials (v2.3)', () => {
   });
 
   it('everything new is freed when leaving: textures, the light, its shadow map and the sky cube', () => {
-    const s = new Showcase(JEZERO, { quality: 'high', R, site, textureSize: 32 });
+    const s = new Showcase(JEZERO, { detail: 'high', R, site, textureSize: 32 });
     const textures: THREE.Texture[] = [];
     s.group.traverse((o) => {
       if (o instanceof THREE.Mesh) for (const t of ['map', 'normalMap'] as const) if ((o.material as THREE.MeshStandardMaterial)[t]) textures.push((o.material as THREE.MeshStandardMaterial)[t]!);
@@ -202,7 +202,7 @@ describe('materials (v2.3)', () => {
 
 describe('Low: no base pass, night by dimming (the v2.2 way)', () => {
   it('lit materials darken as night falls, and come back by day', () => {
-    const s = new Showcase(JEZERO, { quality: 'low', R, site, textureSize: 32 });
+    const s = new Showcase(JEZERO, { detail: 'low', R, site, textureSize: 32 });
     const hull = (s.group.getObjectByName('kit:hull') as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>).material;
     const day = hull.color.r;
     s.dimForNight(1);

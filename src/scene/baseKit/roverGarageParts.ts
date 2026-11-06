@@ -1,8 +1,9 @@
 import * as THREE from 'three';
-import { mergeOwned, utilityBox as box, utilityStencil, type UtilityPart, type UtilityQuality } from './utilityGeometry';
+import { mergeOwned, utilityBox as box, utilityStencil, type UtilityPart } from './utilityGeometry';
+import type { KitDetail } from '../../quality';
 
-export function garageParts(quality: UtilityQuality, hollow = false): UtilityPart[] {
-  const rich = quality === 'high';
+export function garageParts(detail: KitDetail, hollow = false): UtilityPart[] {
+  const rich = detail === 'high';
   const accent = rich ? 'safety' : 'red';
   const parts: UtilityPart[] = [
     ...(hollow ? [
@@ -37,8 +38,8 @@ export function garageParts(quality: UtilityQuality, hollow = false): UtilityPar
 }
 
 /** Two shared instance batches; every output is owned by this Showcase, not BuildView. */
-export function roverParts(quality: UtilityQuality): UtilityPart[] {
-  const rich = quality === 'high';
+export function roverParts(detail: KitDetail): UtilityPart[] {
+  const rich = detail === 'high';
   const bodyParts: THREE.BufferGeometry[] = [box(0.08, 0.025, 0.05, 0, 0.012), box(0.006, 0.03, 0.006, 0.025, 0.037), box(0.03, 0.004, 0.04, -0.01, 0.04),
     box(0.002, 0.025, 0.002, -0.027, 0.037), box(0.016, 0.008, 0.025, -0.015, 0.044)];
   const darkParts: THREE.BufferGeometry[] = [box(0.014, 0.008, 0.01, 0.025, 0.059), box(0.006, 0.004, 0.002, 0.025, 0.061, 0.006), box(0.074, 0.004, 0.046, 0, 0.01)];

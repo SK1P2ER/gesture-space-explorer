@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { PANEL, solarFieldSize, type Module } from '../../data/baseLayout';
-import { mergeOwned, utilityBox as box, utilityCylinder, utilityStencil, type UtilityQuality, type UtilityPart } from './utilityGeometry';
+import { mergeOwned, utilityBox as box, utilityCylinder, utilityStencil, type UtilityPart } from './utilityGeometry';
+import type { KitDetail } from '../../quality';
 
 function tinted(geometry: THREE.BufferGeometry, hex: number, constantUv = false) {
   const c = new THREE.Color(hex), count = geometry.getAttribute('position').count;
@@ -17,8 +18,8 @@ function tinted(geometry: THREE.BufferGeometry, hex: number, constantUv = false)
 const face = (w: number, d: number, x: number, z: number, y: number) => new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2).translate(x, y, z);
 
 /** One coloured instance batch: frames/cells follow the existing tracker without extra meshes. */
-export function solarPanelGeometry(quality: UtilityQuality) {
-  const rich = quality === 'high';
+export function solarPanelGeometry(detail: KitDetail) {
+  const rich = detail === 'high';
   const parts = [tinted(new THREE.BoxGeometry(PANEL.w, 0.0057, PANEL.d).translate(0, -0.00015, 0), 0x34558f)];
   for (const x of [-0.058, 0.058]) parts.push(tinted(rich ? new THREE.BoxGeometry(0.004, 0.006, 0.08).translate(x, 0, 0) : face(0.004, 0.08, x, 0, 0.003), 0xb8bcc4, true));
   for (const z of [-0.038, 0.038]) parts.push(tinted(rich ? new THREE.BoxGeometry(0.112, 0.006, 0.004).translate(0, 0, z) : face(0.112, 0.004, 0, z, 0.003), 0xb8bcc4, true));
@@ -28,14 +29,14 @@ export function solarPanelGeometry(quality: UtilityQuality) {
   return mergeOwned(parts);
 }
 
-export function solarSupportGeometry(quality: UtilityQuality) {
-  const parts = [utilityCylinder(0.005, 0.05, quality === 'high' ? 8 : 5), box(0.006, 0.004, 0.07, 0, 0.04)];
-  if (quality === 'high') for (const z of [-0.031, 0.031]) parts.push(new THREE.CylinderGeometry(0.004, 0.004, 0.006, 6).rotateX(Math.PI / 2).translate(0, 0.038, z));
+export function solarSupportGeometry(detail: KitDetail) {
+  const parts = [utilityCylinder(0.005, 0.05, detail === 'high' ? 8 : 5), box(0.006, 0.004, 0.07, 0, 0.04)];
+  if (detail === 'high') for (const z of [-0.031, 0.031]) parts.push(new THREE.CylinderGeometry(0.004, 0.004, 0.006, 6).rotateX(Math.PI / 2).translate(0, 0.038, z));
   return mergeOwned(parts);
 }
 
 /** Power equipment fits the first existing inter-row gap; panel sites/counts are untouched. */
-export function solarArrayParts(module: Module, quality: UtilityQuality): UtilityPart[] {
+export function solarArrayParts(module: Module, detail: KitDetail): UtilityPart[] {
   const { w, d } = solarFieldSize(module);
   // No inter-row gap exists in a one-row field: don't invent an external footprint.
   if ((module.rows ?? 4) < 2) return [];
@@ -46,6 +47,6 @@ export function solarArrayParts(module: Module, quality: UtilityQuality): Utilit
     ['dark', box(w - 0.02, 0.003, 0.002, 0, 0.006, z)],
     ['window', box(0.015, 0.003, 0.001, 0.021, 0.011, z + 0.016)],
   ];
-  if (quality === 'high') parts.push(['safety', box(0.078, 0.002, 0.003, 0, 0.015, z + 0.016)]);
+  if (detail === 'high') parts.push(['safety', box(0.078, 0.002, 0.003, 0, 0.015, z + 0.016)]);
   return parts;
 }

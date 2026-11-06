@@ -7,7 +7,7 @@ import { parsePlaced } from '../src/sim/buildRules';
 
 const R = 5.6;
 const site = { point: new THREE.Vector3(0, 1, 0), quaternion: new THREE.Quaternion(), scale: 1 / R };
-const make = (layout = JEZERO) => new Showcase(layout, { quality: 'low', R, site });
+const make = (layout = JEZERO) => new Showcase(layout, { detail: 'low', R, site });
 const mesh = (view: Showcase, name: string) => view.group.getObjectByName(name) as THREE.Mesh;
 const isolated = (id: string): BaseLayout => ({ modules: [JEZERO.modules.find((m) => m.id === id)!], tunnels: [], walks: [], roverLoops: [], terrainRadius: 2.4, frame: 1.4 });
 

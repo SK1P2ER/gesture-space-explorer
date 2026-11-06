@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { FLAME, type Atmosphere } from '../data/atmosphere';
+import type { KitDetail } from '../quality';
 
 // The rocket (v2.2): a two-stage launcher with a crew capsule, built in code from
 // lathe profiles; no image files. Its panels, seams, rivets, paint bands, soot and
@@ -180,7 +181,7 @@ export interface RocketOptions {
   /** Generated texture size (the quality profile's kitTextureSize: 256 / 512 / 1024). */
   textureSize: number;
   /** Fewer facets and no normal map on Low. */
-  quality: 'low' | 'high';
+  detail: KitDetail;
 }
 
 export class Rocket {
@@ -195,13 +196,13 @@ export class Rocket {
   deploy = -1;
 
   constructor(opts: RocketOptions) {
-    const segments = opts.quality === 'high' ? 28 : 14;
+    const segments = opts.detail === 'high' ? 28 : 14;
     const paint = paintHull(opts.textureSize);
     const map = texture(paint.color, paint.size, true);
     const glow = texture(paint.glow, paint.size, true);
     this.textures.push(map, glow);
     this.hullMaterial = new THREE.MeshStandardMaterial({ map, roughness: 0.55, metalness: 0.25, emissiveMap: glow, emissive: new THREE.Color(0xffffff), emissiveIntensity: 1 });
-    if (opts.quality === 'high') {
+    if (opts.detail === 'high') {
       const normal = texture(paint.normal, paint.size, false);
       this.textures.push(normal);
       this.hullMaterial.normalMap = normal;
@@ -219,7 +220,7 @@ export class Rocket {
     const { height: bh, rim, throat } = ROCKET.bell;
     const bellProfile = [new THREE.Vector2(rim, 0), new THREE.Vector2(rim * 0.8, bh * 0.4), new THREE.Vector2(throat, bh * 0.85), new THREE.Vector2(throat * 1.3, bh)];
     const parts: THREE.BufferGeometry[] = [];
-    for (const [x, z] of engineLayout(opts.engines ?? 5)) parts.push(new THREE.LatheGeometry(bellProfile, opts.quality === 'high' ? 14 : 8).translate(x, 0, z).toNonIndexed());
+    for (const [x, z] of engineLayout(opts.engines ?? 5)) parts.push(new THREE.LatheGeometry(bellProfile, opts.detail === 'high' ? 14 : 8).translate(x, 0, z).toNonIndexed());
     parts.push(new THREE.CylinderGeometry(0.108, 0.108, 0.01, segments).translate(0, bh, 0).toNonIndexed());
     for (let i = 0; i < 4; i++) {
       const a = (i / 4) * Math.PI * 2;
@@ -245,10 +246,10 @@ export class Rocket {
     this.upper.name = 'upper';
 
     // A flame per stage: the booster's under all its engines, the upper stage's under its vacuum bell.
-    this.boosterFlame = new Flame(0.11, 0.45, opts.quality);
+    this.boosterFlame = new Flame(0.11, 0.45, opts.detail);
     this.boosterFlame.mesh.name = 'flame';
     this.booster.add(this.boosterFlame.mesh);
-    this.upperFlame = new Flame(VB.rim * 0.9, 0.42, opts.quality);
+    this.upperFlame = new Flame(VB.rim * 0.9, 0.42, opts.detail);
     this.upperFlame.mesh.position.y = ROCKET.split - VB.height;
     this.upperFlame.mesh.name = 'flame:upper';
     this.upper.add(this.upperFlame.mesh);
@@ -431,13 +432,13 @@ void main() {
 export class Flame {
   readonly mesh: THREE.Mesh<THREE.CylinderGeometry, THREE.ShaderMaterial>;
 
-  constructor(nozzle: number, length: number, quality: 'low' | 'high') {
-    const g = new THREE.CylinderGeometry(nozzle, nozzle * 0.25, length, quality === 'high' ? 18 : 10, quality === 'high' ? 10 : 4, true).translate(0, -length / 2, 0);
+  constructor(nozzle: number, length: number, detail: KitDetail) {
+    const g = new THREE.CylinderGeometry(nozzle, nozzle * 0.25, length, detail === 'high' ? 18 : 10, detail === 'high' ? 10 : 4, true).translate(0, -length / 2, 0);
     this.mesh = new THREE.Mesh(g, new THREE.ShaderMaterial({
       vertexShader: FLAME_VERTEX,
       fragmentShader: FLAME_FRAGMENT,
       uniforms: {
-        time: { value: 0 }, level: { value: 0 }, flicker: { value: 1 }, shocks: { value: quality === 'high' ? 1 : 0 },
+        time: { value: 0 }, level: { value: 0 }, flicker: { value: 1 }, shocks: { value: detail === 'high' ? 1 : 0 },
         spread: { value: 1 }, len: { value: length },
         core: { value: new THREE.Color() }, edge: { value: new THREE.Color() },
       },
