@@ -1,4 +1,4 @@
-import { departureById, isAvatar, isCabin, nameError, REF_CHARS, REF_PATTERN, type AvatarId, type Booking, type CabinId } from './booking';
+import { departureById, isAvatar, isCabin, NAME_MAX, nameError, REF_CHARS, REF_PATTERN, type AvatarId, type Booking, type CabinId } from './booking';
 
 // The boarding pass's souvenir link (decisions 22, 26 and 27). The QR code holds a link to this app
 // with the pass after the "#": a browser never sends the fragment, so the nickname and reference
@@ -54,12 +54,16 @@ export interface WireFields {
   nick: Uint8Array;
 }
 
-/** The longest fragment a souvenir can have: 24 code points of 4 bytes each, after the fields. */
-export const FRAGMENT_MAX = Math.ceil(((HEAD + 24 * 4) * 4) / 3);
+/** The longest fragment a souvenir can have: the longest nickname, at 4 bytes a code point, after the fields. */
+export const FRAGMENT_MAX = Math.ceil(((HEAD + NAME_MAX * 4) * 4) / 3);
 
 export const souvenirOf = (b: Booking): Souvenir => ({ ref: b.ref, nick: b.traveller.name, avatar: b.traveller.avatar, flight: b.departure, cabin: b.cabin });
 
-/** The link for a souvenir, on this app (origin and path), with AstroLife's flag so it opens the shell. */
+/**
+ * The link for a souvenir, on this app (origin and path), with AstroLife's flag so it opens the shell.
+ * Throws if the link wouldn't open as this souvenir: a value with no place in WIRE or REF_CHARS would
+ * otherwise be packed as some other value (a catalog grew without WIRE, or the reference changed form).
+ */
 export function souvenirLink(appUrl: string, s: Souvenir): string {
   const url = new URL(appUrl);
   url.search = '?al';
@@ -72,6 +76,9 @@ export function souvenirLink(appUrl: string, s: Souvenir): string {
     pad: 0,
     nick: new TextEncoder().encode(s.nick),
   });
+  const back = parseSouvenir(url.hash);
+  const lost = (['ref', 'nick', 'avatar', 'flight', 'cabin'] as const).filter((k) => back?.[k] !== s[k]);
+  if (lost.length) throw new Error(`This souvenir can't be put in a souvenir link (${lost.join(', ')})`);
   return url.toString();
 }
 

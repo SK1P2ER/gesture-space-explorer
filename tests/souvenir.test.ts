@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { AVATARS, CABINS, createBooking, DEPARTURES, REF_CHARS } from '../src/travel/booking';
+import { AVATARS, CABINS, createBooking, DEPARTURES, NAME_MAX, REF_CHARS, type AvatarId, type CabinId } from '../src/travel/booking';
 import { encodeFields, FRAGMENT_MAX, parseSouvenir, souvenirLink, souvenirOf, WIRE, type Souvenir, type WireFields } from '../src/travel/souvenir';
 
 const APP = 'https://gesture-space-explorer.vercel.app/';
@@ -41,8 +41,19 @@ describe('the souvenir link', () => {
     }
   });
 
+  it('refuses a souvenir it cannot put in a link, rather than making a link that opens something else', () => {
+    for (const bad of [
+      { ...ADA, ref: 'AL-9NH9I' }, // I is not in the reference's alphabet
+      { ...ADA, ref: 'AL-9NH9' }, // four characters
+      { ...ADA, avatar: 'a9' as AvatarId },
+      { ...ADA, flight: 'AL999' },
+      { ...ADA, cabin: 'bunk' as CabinId },
+      { ...ADA, nick: ' Ada' }, // not a nickname the booking form keeps
+    ]) expect(() => souvenirLink(APP, bad), JSON.stringify(bad)).toThrow(/souvenir link/);
+  });
+
   it('fits the longest nickname under FRAGMENT_MAX', () => {
-    const s = { ...ADA, nick: '🪐'.repeat(24) }; // 4 bytes each: the most a nickname can take
+    const s = { ...ADA, nick: '🪐'.repeat(NAME_MAX) }; // 4 bytes each: the most a nickname can take
     const hash = new URL(souvenirLink(APP, s)).hash;
     expect(hash.length - 1).toBeLessThanOrEqual(FRAGMENT_MAX);
     expect(parseSouvenir(hash)).toEqual(s);
