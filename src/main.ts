@@ -28,8 +28,11 @@ import {
   ResolutionGovernor, saveQuality, UltraGuard, writeAutoMemory, type QualitySetting, type QualityTier,
 } from './quality';
 import { CameraRig } from './scene/cameraRig';
-import type { CinematicContext, CinematicRequest, MarsCinematicDirector } from './scene/marsCinematicDirector';
-import type { CinematicControls } from './ui/cinematicControls';
+import type { CinematicContext, CinematicRequest } from './scene/marsCinematicDirector';
+import {
+  type Director, idleBuildGrab, idleBuildPanel, idleCinematicControls, idleDirector, loadFlaggedCode, needsFlaggedCode,
+  NO_FLAGGED_CODE, parseFlags,
+} from './app/flags';
 import { pickBody } from './scene/picking';
 import { ScenePipeline } from './scene/postprocessing';
 import { SolarSystem } from './scene/solarSystem';
@@ -50,8 +53,6 @@ import { BasePanel } from './ui/basePanel';
 import { MissionOverlay } from './ui/missionOverlay';
 import { LAYOUTS, Showcases } from './scene/baseKit/showcases';
 import { Build } from './app/build';
-import type { BuildPanel } from './ui/buildPanel';
-import type { BuildGrab } from './gestures/buildGrab';
 import { CELL } from './sim/buildRules';
 import { skyOver, type SkyReport } from './app/baseSky';
 import { nextSetting } from './sim/localSky';
@@ -242,21 +243,10 @@ const skies = new Map<string, SkyReport>();
 const skyLabels = new SkyLabels();
 
 // ------------------------------------------------------------ building (?flags=build) ----
-const FLAGS = new Set((new URLSearchParams(location.search).get('flags') ?? '').split(',').filter(Boolean));
-// Code that only a ?flags= feature uses loads only with its flag (v2.5): visitors never download it.
-// Without the flag, a stand-in does what the real object does until that feature is used: nothing.
-// (Without a flag nothing is awaited: startup runs straight through, as before.)
-const [cinematicCode, buildCode, shellCode] = FLAGS.has('cinematic') || FLAGS.has('build') || FLAGS.has('astrolife') ? await Promise.all([
-  FLAGS.has('cinematic') ? Promise.all([import('./scene/marsCinematicDirector'), import('./ui/cinematicControls')]) : null,
-  FLAGS.has('build') ? Promise.all([import('./ui/buildPanel'), import('./gestures/buildGrab')]) : null,
-  FLAGS.has('astrolife') ? import('./shell/shell') : null,
-]) : [null, null, null];
-type Director = Pick<MarsCinematicDirector, 'active' | 'animating' | 'selected' | 'eye' | 'validate' | 'start' | 'update' | 'cancel' | 'dispose'>;
-/** Never started, so never active: what the real director is without ?flags=cinematic. */
-const idleDirector: Director = {
-  active: false, animating: false, selected: null, eye: new THREE.Vector3(),
-  validate() {}, start: () => false, update: () => false, cancel() {}, dispose() {},
-};
+const FLAGS = parseFlags(location.search);
+// Flagged code and its stand-ins: app/flags.ts. (Without a flag nothing is awaited: startup runs
+// straight through, as before.)
+const [cinematicCode, buildCode, shellCode] = needsFlaggedCode(FLAGS) ? await loadFlaggedCode(FLAGS) : NO_FLAGGED_CODE;
 const cinematic: Director = cinematicCode ? new cinematicCode[0].MarsCinematicDirector(rig.camera) : idleDirector;
 let cinematicRequest: CinematicRequest | null = null;
 const cinematicContext = (): CinematicContext | null => {
@@ -265,15 +255,13 @@ const cinematicContext = (): CinematicContext | null => {
     ? { base, owner, landing, mode: modes.mode, horizon: !!mission.horizon, qualityTier: state.qualityTier } : null;
 };
 const cancelCinematic = () => { cinematicRequest = null; cinematic.cancel(); };
-/** Without the flag the panel is never shown (cinematicAvailable), so it needn't exist. */
-const noControls: Pick<CinematicControls, 'root' | 'render' | 'dispose'> = { root: document.createElement('details'), render() {}, dispose() {} };
 const cinematicControls = cinematicCode ? new cinematicCode[1].CinematicControls((request) => {
   if (!FLAGS.has('cinematic') || !cinematicContext()) return;
   cancelCinematic();
   if (request === 'panorama') mission.goToGoldenHour();
   else if (mission.horizon) mission.exitHorizon();
   cinematicRequest = request;
-}, cancelCinematic) : noControls;
+}, cancelCinematic) : idleCinematicControls();
 mission.baseCamera = (dt) => {
   const owned = cinematic.update(dt, reducedMotion.matches, clock.paused, rig.viewInsets);
   if (owned && mission.horizon) mission.horizonEye.copy(cinematic.eye);
@@ -324,8 +312,7 @@ const build = new Build({
   flash: (text) => gestureHud.flash(text),
   enabled: FLAGS.has('build'),
 });
-// Without ?flags=build, Build mode can't start: its panel stays hidden and nothing is ever grabbed.
-const buildPanel: Pick<BuildPanel, 'render'> = buildCode ? new buildCode[0].BuildPanel(bus.emit) : { render() {} };
+const buildPanel = buildCode ? new buildCode[0].BuildPanel(bus.emit) : idleBuildPanel;
 // The panel's size frames the Build camera. Observed rather than measured in the loop, where reading
 // it straight after the panels' DOM writes forced a synchronous layout every frame.
 let buildPanelSize = { width: 0, height: 0 };
@@ -334,7 +321,7 @@ new ResizeObserver(([entry]) => {
   buildPanelSize = { width: box.inlineSize, height: box.blockSize };
 }).observe(document.querySelector('#build-panel')!);
 const coarsePointer = matchMedia('(pointer: coarse)');
-const buildGrab: Pick<BuildGrab, 'update' | 'reset'> = buildCode ? new buildCode[1].BuildGrab() : { update: () => [], reset() {} };
+const buildGrab = buildCode ? new buildCode[1].BuildGrab() : idleBuildGrab;
 showcases.buildAt = (id) => {
   const site = buildSite();
   if (!site || site.id !== id) return null;
