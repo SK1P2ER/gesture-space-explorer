@@ -3,7 +3,7 @@ import { BODIES, moonsOf, type Body, type Lang } from '../data/bodies';
 import { length, LIGHT_SECONDS_PER_AU, lightSeconds, nextPerihelion, sunCentered } from '../data/ephemeris';
 import { weightOn } from '../data/weight';
 import type { Intent } from '../intents';
-import type { Quality, QualitySetting } from '../quality';
+import type { QualitySetting, QualityTier } from '../quality';
 import type { TextureStatus } from '../scene/solarSystem';
 import { t, tf, type StringKey } from './i18n';
 import { kindLabel } from './kind';
@@ -27,7 +27,7 @@ export interface HudState {
   status: TrackingStatus;
   textures: TextureStatus;
   /** The tier in effect… */
-  quality: Quality;
+  qualityTier: QualityTier;
   /** …and what the Quality button is set to (Auto shows the tier it picked). */
   qualitySetting: QualitySetting;
   watermark: boolean;
@@ -69,7 +69,7 @@ export class Hud {
   render(s: HudState) {
     // Cheap change detection: the HUD is re-rendered every frame by main.
     const visit = s.selected?.comet ? nextPerihelion(s.selected.comet, s.timeMs) : 0;
-    const key = JSON.stringify([s.lang, s.focused.id, s.selected?.id, s.status, s.textures, s.quality, s.qualitySetting, s.watermark, s.trueScale, s.weightKg, visit]);
+    const key = JSON.stringify([s.lang, s.focused.id, s.selected?.id, s.status, s.textures, s.qualityTier, s.qualitySetting, s.watermark, s.trueScale, s.weightKg, visit]);
     if (key !== this.last) {
       this.last = key;
       this.rebuild(s);
@@ -106,9 +106,9 @@ export class Hud {
     this.focus.textContent = s.focused.name[s.lang];
     this.help.textContent = t('help', s.lang);
     this.creditsLink.textContent = t('credits', s.lang);
-    const tier = t(s.quality === 'ultra' ? 'qualityUltra' : s.quality === 'high' ? 'qualityHigh' : 'qualityLow', s.lang);
+    const tier = t(s.qualityTier === 'ultra' ? 'qualityUltra' : s.qualityTier === 'high' ? 'qualityHigh' : 'qualityLow', s.lang);
     this.qualityButton.textContent = `${t('quality', s.lang)}: ${s.qualitySetting === 'auto' ? `${t('qualityAuto', s.lang)} (${tier})` : tier}`;
-    this.qualityButton.setAttribute('aria-pressed', String(s.quality !== 'low'));
+    this.qualityButton.setAttribute('aria-pressed', String(s.qualityTier !== 'low'));
     this.photoButton.textContent = `📷 ${t('photo', s.lang)}`;
     this.watermarkButton.textContent = `${t('watermark', s.lang)}: ${t(s.watermark ? 'on' : 'off', s.lang)}`;
     this.watermarkButton.setAttribute('aria-pressed', String(s.watermark));

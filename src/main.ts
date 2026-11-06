@@ -25,7 +25,7 @@ import { createIntentBus, type Intent } from './intents';
 import { pickable } from './navigation';
 import {
   AutoTier, autoStartTier, currentDevice, isMobile, nextQualitySetting, PROFILES, readAutoMemory, renderPixelRatio,
-  ResolutionGovernor, saveQuality, UltraGuard, writeAutoMemory, type Quality, type QualitySetting,
+  ResolutionGovernor, saveQuality, UltraGuard, writeAutoMemory, type QualitySetting, type QualityTier,
 } from './quality';
 import { CameraRig } from './scene/cameraRig';
 import type { CinematicContext, CinematicRequest, MarsCinematicDirector } from './scene/marsCinematicDirector';
@@ -79,9 +79,9 @@ const governor = new ResolutionGovernor();
 // v2.4 Auto (quality.ts AutoTier): capable devices get High, weak ones stay on Low, learned per device.
 const newAutoTier = () => new AutoTier(autoStartTier(device), readAutoMemory(storage), { version: __APP_VERSION__, now: Date.now, remember: (m) => writeAutoMemory(m, storage) });
 let autoTier = state.qualitySetting === 'auto' ? newAutoTier() : null;
-if (autoTier) state.quality = autoTier.tier; // what this device learned on an earlier visit
-const fullPixelRatio = () => Math.min(devicePixelRatio, PROFILES[state.quality].pixelRatio);
-const pixelRatio = () => renderPixelRatio(devicePixelRatio, PROFILES[state.quality].pixelRatio, governor.scale, mobileDevice);
+if (autoTier) state.qualityTier = autoTier.tier; // what this device learned on an earlier visit
+const fullPixelRatio = () => Math.min(devicePixelRatio, PROFILES[state.qualityTier].pixelRatio);
+const pixelRatio = () => renderPixelRatio(devicePixelRatio, PROFILES[state.qualityTier].pixelRatio, governor.scale, mobileDevice);
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(pixelRatio());
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -91,7 +91,7 @@ renderer.toneMappingExposure = config.render.exposure;
 // (~25 ms on the first bloom frame, measured). three.js recommends them for development only.
 renderer.debug.checkShaderErrors = import.meta.env.DEV;
 
-const system = new SolarSystem(BODIES, renderer, PROFILES[state.quality]);
+const system = new SolarSystem(BODIES, renderer, PROFILES[state.qualityTier]);
 // The shown date: starts now, at a week per second (see sim/clock.ts).
 const clock = new SimClock(Date.now());
 const rig = new CameraRig(innerWidth / innerHeight);
@@ -103,8 +103,8 @@ rig.reducedMotion = system.shootingStars.reducedMotion = reducedMotion.matches; 
 reducedMotion.addEventListener('change', (e) => (rig.reducedMotion = system.shootingStars.reducedMotion = e.matches));
 focusCamera(0, true);
 const pipeline = new ScenePipeline(renderer, system.scene, rig.camera, config.render);
-pipeline.bloomEnabled = PROFILES[state.quality].bloom;
-pipeline.setSamples(PROFILES[state.quality].msaa);
+pipeline.bloomEnabled = PROFILES[state.qualityTier].bloom;
+pipeline.setSamples(PROFILES[state.qualityTier].msaa);
 const ultraGuard = new UltraGuard();
 
 function resize() {
@@ -125,20 +125,20 @@ function setQualitySetting(setting: QualitySetting) {
   state.qualitySetting = setting;
   saveQuality(setting, storage);
   autoTier = setting === 'auto' ? newAutoTier() : null;
-  setQuality(autoTier ? autoTier.tier : (setting as Quality));
+  setQualityTier(autoTier ? autoTier.tier : (setting as QualityTier));
 }
 /** The tier in effect, from the setting or from Auto. */
-function setQuality(quality: Quality) {
-  state.quality = quality;
-  pipeline.bloomEnabled = PROFILES[quality].bloom;
-  pipeline.setSamples(PROFILES[quality].msaa);
-  if (quality === 'ultra') ultraGuard.rearm();
+function setQualityTier(tier: QualityTier) {
+  state.qualityTier = tier;
+  pipeline.bloomEnabled = PROFILES[tier].bloom;
+  pipeline.setSamples(PROFILES[tier].msaa);
+  if (tier === 'ultra') ultraGuard.rearm();
   governor.reset(); // a new tier starts at its full resolution
   applyBaseLighting?.();
   resize();
-  system.setTiers(PROFILES[quality]);
-  system.setBeltCounts(PROFILES[quality]);
-  system.setSkyTier(PROFILES[quality].skyTier);
+  system.setTiers(PROFILES[tier]);
+  system.setBeltCounts(PROFILES[tier]);
+  system.setSkyTier(PROFILES[tier].skyTier);
   prewarmPending = true; // compile only after this frame replaces retired scene owners
 }
 
@@ -212,7 +212,7 @@ const mission = new Mission({
     const ms = nextSetting(node.body.body, node.base.lat, node.base.lon, clock.time);
     return ms === null ? null : { ms, sun: skyOver(node, ms).local.sun };
   },
-  rocketOptions: () => ({ engines: 5, textureSize: PROFILES[state.quality].kitTexture, quality: state.quality === 'low' ? 'low' : 'high' }),
+  rocketOptions: () => ({ engines: 5, textureSize: PROFILES[state.qualityTier].kitTexture, quality: state.qualityTier === 'low' ? 'low' : 'high' }),
   report: (message) => overlay.report(message),
   // AstroLife counts a booked journey's lift-off and landing (only with ?flags=astrolife).
   liftedOff: (from, to) => shell?.liftedOff(from, to),
@@ -227,7 +227,7 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.shadowMap.autoUpdate = false;
 const applyBaseLighting = () => {
-  const q = state.quality;
+  const q = state.qualityTier;
   showcases.lighting = { shadows: q !== 'low', shadowSize: q === 'ultra' ? 4096 : 2048, envSize: q === 'ultra' ? 128 : 64 };
   showcases.textureSize = PROFILES[q].kitTexture;
   mission.baseShadows = q !== 'low';
@@ -262,7 +262,7 @@ let cinematicRequest: CinematicRequest | null = null;
 const cinematicContext = (): CinematicContext | null => {
   const base = mission.base, owner = showcases.get('jezero'), landing = showcases.landingAt('jezero');
   return base?.base.id === 'jezero' && modes.mode === 'baseView' && owner && landing
-    ? { base, owner, landing, mode: modes.mode, horizon: !!mission.horizon, quality: state.quality } : null;
+    ? { base, owner, landing, mode: modes.mode, horizon: !!mission.horizon, qualityTier: state.qualityTier } : null;
 };
 const cancelCinematic = () => { cinematicRequest = null; cinematic.cancel(); };
 /** Without the flag the panel is never shown (cinematicAvailable), so it needn't exist. */
@@ -587,13 +587,13 @@ const phases: FramePhases = {
     frame.now = now;
     frame.cpuStart = performance.now();
     // Ultra that can't keep up gives way to High (once; choosing Ultra again re-arms it).
-    if (ultraGuard.frame(now - lastNow, state.quality)) {
+    if (ultraGuard.frame(now - lastNow, state.qualityTier)) {
       setQualitySetting('high');
       gestureHud.flash(t('ultraTooSlow', state.lang));
     }
     if (governor.frame(now - lastNow)) resize();
     const autoSwitch = autoTier?.frame(now - lastNow, lastCpuMs, governor.targetMs, canSwitchTier());
-    if (autoSwitch && autoSwitch !== state.quality) setQuality(autoSwitch);
+    if (autoSwitch && autoSwitch !== state.qualityTier) setQualityTier(autoSwitch);
     frame.dt = Math.min((now - lastNow) / 1000, 0.1); // avoid jumps after tab switches
     lastNow = now;
   },
@@ -631,7 +631,7 @@ const phases: FramePhases = {
     showcases.operationsPaused = clock.paused;
     showcases.update(
       (id) => mission.base?.base.id === id || mission.trip?.to.base.id === id || baseById(id).body === BODIES[state.focus].id,
-      state.quality === 'low' ? 'low' : 'high', now / 1000, rig.camera, reducedMotion.matches,
+      state.qualityTier === 'low' ? 'low' : 'high', now / 1000, rig.camera, reducedMotion.matches,
       mission.horizon ? mission.base?.base.id ?? null : null,
       (id) => skyFor(id).local,
       mission.horizonEye,
@@ -744,7 +744,7 @@ const phases: FramePhases = {
       selected: state.selected,
       status: state.status,
       textures: system.textureStatus,
-      quality: state.quality,
+      qualityTier: state.qualityTier,
       qualitySetting: state.qualitySetting,
       watermark: state.watermark,
       trueScale: state.trueScale,
