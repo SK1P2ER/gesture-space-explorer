@@ -113,6 +113,7 @@ confirmed.
 ## 9. The dev server doesn't watch generated evidence
 
 - **Date:** 2026-10-29.
+- **Superseded (2026-11-06, entry 25):** this repository has no generated evidence or experiments, so the watch-ignore is removed.
 - **Goal:** Dev-server startup stays fast and predictable, whatever QA has left on disk.
 - **Decision:** Vite's file watcher ignores `tests/artifacts/**` and `tests/experiments/**` (`server.watch.ignored` in `vite.config.ts`).
 - **Why (measured):** In isolated worktrees, the `mobile-panels` suite took 44–48 s cold. With the 22,749-file `tests/artifacts` tree present, it took 64–68 s, under either `optimizeDeps` configuration. The user's `optimizeDeps` change (`entries`, `noDiscovery`) was ruled out as the cause of the Phase 8.7 startup failures and stays.

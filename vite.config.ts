@@ -12,12 +12,6 @@ export default defineConfig(() => ({
     __MEDIAPIPE_VERSION__: JSON.stringify(mediapipeVersion),
     __APP_VERSION__: JSON.stringify(appVersion),
   },
-  server: {
-    // Generated evidence and isolated experiments are not the app. Watching them (tens of
-    // thousands of files) slowed every dev-server start. New evidence lives outside the repository
-    // (scripts/evidence-path.mjs); this covers older runs and folders configured inside it.
-    watch: { ignored: ['**/tests/artifacts/**', '**/tests/experiments/**'] },
-  },
   // These are imported lazily (import()), so Vite would only discover them after
   // startup and serve a stale pre-bundle ("504 Outdated Optimize Dep").
   optimizeDeps: {
