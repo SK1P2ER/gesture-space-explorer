@@ -34,6 +34,7 @@ import {
   NO_FLAGGED_CODE, parseFlags,
 } from './app/flags';
 import { pickBody } from './scene/picking';
+import { groundAt } from './scene/bases';
 import { ScenePipeline } from './scene/postprocessing';
 import { SolarSystem } from './scene/solarSystem';
 import { MAX_TIME, MIN_TIME, SimClock } from './sim/clock';
@@ -283,31 +284,9 @@ showcases.operationsAt = (id) => {
   return modes.mode === 'build' ? 'maintenance' : modes.mode === 'baseView' ? 'active' : 'standby';
 };
 const buildSite = () => (mission.base && LAYOUTS[mission.base.base.id] ? { id: mission.base.base.id, layout: LAYOUTS[mission.base.base.id] } : null);
-const ray = new THREE.Raycaster();
-/** A screen point (0–1) → the base's ground there, in base units (the curved ground, to within a hair). */
-function groundAt(x: number, y: number): [number, number] | null {
-  const b = mission.base;
-  if (!b) return null;
-  const g = b.group;
-  g.updateWorldMatrix(true, false);
-  ray.setFromCamera(new THREE.Vector2(x * 2 - 1, -(y * 2 - 1)), rig.camera);
-  const inv = g.matrixWorld.clone().invert();
-  const o = ray.ray.origin.clone().applyMatrix4(inv);
-  const d = ray.ray.direction.clone().transformDirection(inv);
-  const R = 1 / g.scale.x;
-  let h = 0;
-  for (let k = 0; k < 3; k++) {
-    if (Math.abs(d.y) < 1e-6) return null;
-    const s = (h - o.y) / d.y;
-    if (s <= 0) return null;
-    const [px, pz] = [o.x + d.x * s, o.z + d.z * s];
-    h = Math.sqrt(Math.max(0, R * R - px * px - pz * pz)) - R; // the ground curves away
-    if (k === 2) return [px, pz];
-  }
-  return null;
-}
 const build = new Build({
-  state, modes, site: buildSite, groundAt,
+  state, modes, site: buildSite,
+  groundAt: (x, y) => (mission.base ? groundAt(mission.base.group, rig.camera, x, y) : null),
   sol: () => (buildSite() ? skyOver(mission.base!, clock.time).sol : null),
   flash: (text) => gestureHud.flash(text),
   enabled: FLAGS.has('build'),
