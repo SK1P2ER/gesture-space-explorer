@@ -1,5 +1,5 @@
 import { baseById } from '../../data/bases';
-import { BODIES } from '../../data/bodies';
+import { bodyById } from '../../data/bodies';
 import { AVATARS, CABIN_ORDER, cleanName, departuresTo, LAUNCH_WINDOW, NAME_MAX, nameError, type AvatarId, type CabinId } from '../../travel/booking';
 import { bodyOf, destinationById, journeyTime } from '../../travel/destinations';
 import { LOCALE, numberFormat } from '../../ui/i18n';
@@ -77,7 +77,7 @@ function travellerStep(ctx: ScreenContext, draft: Draft) {
 
 function tripStep(ctx: ScreenContext, draft: Draft) {
   const { lang } = ctx;
-  const world = BODIES.find((b) => b.id === bodyOf(destinationById(draft.to)!))!.name[lang];
+  const world = bodyById(bodyOf(destinationById(draft.to)!)).name[lang];
   const departures = departuresTo(draft.to).map((d) => option('departure', d.id, draft.departure === d.id, () => (draft.departure = d.id),
     h('strong', {}, d.id), h('span', {}, when(d.at, lang))));
   const cabins = CABIN_ORDER.map((id) => option('cabin', id, draft.cabin === id, () => (draft.cabin = id),

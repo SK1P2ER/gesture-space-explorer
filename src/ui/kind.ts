@@ -1,10 +1,10 @@
-import { BODIES, type Body, type Lang } from '../data/bodies';
+import { bodyById, type Body, type Lang } from '../data/bodies';
 import { t, tf } from './i18n';
 
 /** What a body is, for labels and the info card ("moon of Jupiter", "dwarf planet"); empty for the Sun and planets. */
 export function kindLabel(body: Body, lang: Lang): string {
   if (body.kind === 'moon') {
-    const parent = BODIES.find((b) => b.id === body.parent)!;
+    const parent = bodyById(body.parent!);
     return tf('kind.moon', lang, { parent: parent.name[lang] });
   }
   if (body.kind === 'dwarf') return t('kind.dwarf', lang);

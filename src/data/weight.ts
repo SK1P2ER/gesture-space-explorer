@@ -1,6 +1,6 @@
-import { BODIES } from './bodies';
+import { bodyById } from './bodies';
 
-const EARTH_GRAVITY = BODIES.find((b) => b.id === 'earth')!.gravity;
+const EARTH_GRAVITY = bodyById('earth').gravity;
 
 /** The weights the panel accepts, in kg. */
 export const MIN_KG = 1;

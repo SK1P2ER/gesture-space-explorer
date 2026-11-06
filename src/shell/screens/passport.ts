@@ -1,5 +1,5 @@
 import { baseById } from '../../data/bases';
-import { BODIES } from '../../data/bodies';
+import { bodyById } from '../../data/bodies';
 import { AVATARS } from '../../travel/booking';
 import { DESTINATIONS } from '../../travel/destinations';
 import { arrivalAt, stamps } from '../../travel/memories';
@@ -28,7 +28,7 @@ export function passport(ctx: ScreenContext) {
         return h('li', { class: 'al-stamp-card', 'data-stamp': b.to },
           h('span', { class: 'al-stamp-mark', 'aria-hidden': 'true' }, '✦'),
           open,
-          h('span', {}, BODIES.find((x) => x.id === baseById(b.to).body)!.name[lang]),
+          h('span', {}, bodyById(baseById(b.to).body).name[lang]),
           h('span', {}, stf('passport.arrived', lang, { date: date.format(arrivalAt(b)) })),
           h('span', { class: 'al-tag' }, b.ref));
       }))

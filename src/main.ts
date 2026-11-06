@@ -15,7 +15,7 @@ import { attachPageLifecycle } from './app/pageLifecycle';
 import { runFrame, type FramePhases } from './app/frameLoop';
 import { boardClock, journeyOngoing, restoreClock, type Journey, type SavedTime } from './app/journey';
 import { config } from './config';
-import { BODIES, reachFactor } from './data/bodies';
+import { BODIES, bodyById, bodyIndex, reachFactor } from './data/bodies';
 import { BASES, baseById } from './data/bases';
 import { GestureEngine } from './gestures/engine';
 import { ExtraGestures } from './gestures/extras';
@@ -470,8 +470,8 @@ bus.on((intent) => {
 const MAP_BODIES = BODIES.map((b, i) => ({ b, i })).filter(({ b }) => b.kind === 'planet' || b.kind === 'dwarf');
 const MAP_RADIUS = Math.max(...MAP_BODIES.map(({ b }) => b.orbitRadius));
 const planetIndex = (bodyId: string) => {
-  const b = BODIES.find((x) => x.id === bodyId)!;
-  return BODIES.findIndex((x) => x.id === (b.parent ?? b.id));
+  const b = bodyById(bodyId);
+  return bodyIndex(b.parent ?? b.id);
 };
 const BASE_PLANETS = new Set(BASES.map((x) => planetIndex(x.body)));
 const mapPos = new THREE.Vector3();
@@ -508,7 +508,7 @@ if (link.time !== undefined) {
 /** The body, base and view need the planets where the date puts them: applied on the first frame. */
 let pendingLink = link.body !== undefined;
 function applyLink() {
-  setFocus(BODIES.findIndex((b) => b.id === link.body), true); // a link cuts there: no fly-in
+  setFocus(bodyIndex(link.body!), true); // a link cuts there: no fly-in
   if (link.base) bus.emit({ type: 'enterBase', baseId: link.base });
   if (link.view === 'horizon') bus.emit({ type: 'toggleHorizon' });
 }
@@ -547,7 +547,7 @@ const shell = shellCode ? new shellCode.Shell({
     if (mission.base) mission.leave();
   },
   show(bodyId) {
-    const index = BODIES.findIndex((b) => b.id === bodyId);
+    const index = bodyIndex(bodyId);
     if (index >= 0 && index !== state.focus) setFocus(index);
   },
   journey({ from, to, at }) {
@@ -640,7 +640,7 @@ const phases: FramePhases = {
     cinematic.validate(cinematicContext()); // rebuilds may have retired the owner in this frame
     pipeline.baseOn = showcases.drawing;
     // Pass 2 walks only the base's planet (whose surface holds the base) and the rocket with its dust.
-    pipeline.baseRoots = showcases.drawing && mission.base ? [system.nodes[BODIES.findIndex((b) => b.id === mission.base!.base.body)].pivot, ...mission.baseRoots()] : [];
+    pipeline.baseRoots = showcases.drawing && mission.base ? [system.nodes[bodyIndex(mission.base!.base.body)].pivot, ...mission.baseRoots()] : [];
     if (view !== 'chase') {
       rig.setTarget(view?.target ?? system.worldPosition(state.focus, focusPos));
       rig.update(dt);
@@ -695,7 +695,7 @@ const phases: FramePhases = {
     const horizonSky = mission.horizon && mission.base ? showcases.sky(mission.base.base.id) : null;
     skyLabels.render(
       horizonSky
-        ? horizonSky.labelPoints().map(({ id, world }) => ({ id, world, text: (SKY_MOONS.find((m) => m.id === id)?.name ?? BODIES.find((b) => b.id === id)!.name)[state.lang] }))
+        ? horizonSky.labelPoints().map(({ id, world }) => ({ id, world, text: (SKY_MOONS.find((m) => m.id === id)?.name ?? bodyById(id).name)[state.lang] }))
         : [],
       rig.camera,
     );

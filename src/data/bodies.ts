@@ -533,3 +533,8 @@ export function sceneDistance(au: number): number {
 export const moonsOf = (id: string) => BODIES.filter((b) => b.parent === id).sort((a, b) => a.orbitRadius - b.orbitRadius);
 
 export const BODIES: Body[] = placeInScene(DATA);
+
+/** The body with this id; ids come from the data, so it exists (like baseById). */
+export const bodyById = (id: string) => BODIES.find((b) => b.id === id)!;
+/** Its index in BODIES (the focus), or -1 for an unknown id. */
+export const bodyIndex = (id: string) => BODIES.findIndex((b) => b.id === id);
