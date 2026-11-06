@@ -62,6 +62,7 @@ describe('deep links: the address for what is on screen', () => {
   it('keeps every other parameter, and the date only while that moment is still shown', () => {
     expect(linkSearch('?flags=build&debug&body=mars', { ...view, body: 'earth' }, false)).toBe('?flags=build&debug&body=earth'); // as typed
     expect(linkSearch('?debug', view, false)).toBe('?debug'); // nothing to add: untouched
+    expect(linkSearch('?al', { ...view, body: 'mars' }, false)).toBe('?al&body=mars'); // a souvenir link's short flag stays
     expect(linkSearch('?date=2061-07-28&body=halley', { ...view, body: 'halley' }, true)).toBe('?date=2061-07-28&body=halley');
     expect(linkSearch('?date=2061-07-28&body=halley', { ...view, body: 'halley' }, false)).toBe('?body=halley');
   });

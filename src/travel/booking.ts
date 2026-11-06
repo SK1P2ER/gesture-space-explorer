@@ -131,7 +131,7 @@ export function createBooking(r: BookingRequest, ref: string, now: number): Book
 }
 
 /** Booking references use these 32 characters: no I, L, O or U, so none can be misread. */
-const REF_CHARS = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+export const REF_CHARS = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 export const REF_PATTERN = /^AL-[0-9A-HJKMNP-TV-Z]{5}$/;
 
 /** A reference from five random bytes (256 is a multiple of 32, so every character is equally likely). */

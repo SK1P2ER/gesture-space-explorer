@@ -35,6 +35,7 @@ import { ScenePipeline } from './scene/postprocessing';
 import { SolarSystem } from './scene/solarSystem';
 import { MAX_TIME, MIN_TIME, SimClock } from './sim/clock';
 import { linkSearch, parseDeepLink } from './app/deepLink';
+import { parseFlags } from './app/flags';
 import { CreditsDialog } from './ui/credits';
 import { DebugOverlay } from './ui/debugOverlay';
 import { GestureHud } from './ui/gestureHud';
@@ -242,7 +243,7 @@ const skies = new Map<string, SkyReport>();
 const skyLabels = new SkyLabels();
 
 // ------------------------------------------------------------ building (?flags=build) ----
-const FLAGS = new Set((new URLSearchParams(location.search).get('flags') ?? '').split(',').filter(Boolean));
+const FLAGS = parseFlags(location.search); // ?al counts as ?flags=astrolife (souvenir links)
 // Code that only a ?flags= feature uses loads only with its flag (v2.5): visitors never download it.
 // Without the flag, a stand-in does what the real object does until that feature is used: nothing.
 // (Without a flag nothing is awaited: startup runs straight through, as before.)
