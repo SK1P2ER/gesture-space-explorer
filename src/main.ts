@@ -223,7 +223,7 @@ const skies = new Map<string, SkyReport>();
 const skyLabels = new SkyLabels();
 
 // ------------------------------------------------------------ building (?flags=build) ----
-const FLAGS = parseFlags(location.search);
+const FLAGS = parseFlags(location.search); // ?al counts as ?flags=astrolife (souvenir links)
 // Flagged code and its stand-ins: app/flags.ts. (Without a flag nothing is awaited: startup runs
 // straight through, as before.)
 const [cinematicCode, buildCode, shellCode] = needsFlaggedCode(FLAGS) ? await loadFlaggedCode(FLAGS) : NO_FLAGGED_CODE;

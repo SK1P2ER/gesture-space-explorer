@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Experimental (behind `?flags=`)
+
+- AstroLife: the boarding pass's souvenir link is much shorter, and no longer shows its fields: `…/?al#KZNYpEBBZGE` instead of `…/?flags=astrolife#souvenir=1&ref=…&nick=…&av=…&fl=…&cab=…` (11 characters after the `#` instead of 57 for a short nickname; 24 instead of 91 for 山田 花子), so the QR code is smaller and easier to scan. `?al` turns AstroLife on, like `?flags=astrolife`. Souvenir links made by 2.6.0 now open the hub (`docs/decisions.md`, entry 27).
+
 ## 2.6.0 — 2026-10-31
 
 AstroLife 2126 behind `?flags=astrolife`, and the polish and upkeep prepared as 2.5.0. 2.5.0 was prepared but not released; its changes ship here.

@@ -33,7 +33,7 @@ user saves or shares it. Anything that breaks that is in scope, for example:
   own hand-tracking model and textures, and makes no third-party requests);
 - links that make the app run script or show content it shouldn't (deep links:
   `?body=`, `?base=`, `?date=`, `?lang=`, `?flags=`, `?debug`, `?reset`, and
-  AstroLife's souvenir links, `?flags=astrolife#souvenir=…`);
+  AstroLife's souvenir links, `?al#…`);
 - what it keeps in the browser (`localStorage`: settings, passport, weight, Build
   layouts, AstroLife's bookings) leaking to other sites;
 - the deployment's own headers, such as the camera `Permissions-Policy`.

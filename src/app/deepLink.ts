@@ -11,8 +11,8 @@ import type { Lang } from '../data/bodies';
 //                                   the app opens paused there
 //   &lang=ja                        en, my or ja
 //
-// Anything unknown or invalid is ignored, never an error. Other parameters (?flags=, ?debug) are
-// left as they are.
+// Anything unknown or invalid is ignored, never an error. Other parameters (?flags=, ?al, ?debug)
+// are left as they are.
 
 export interface DeepLink {
   body?: string;

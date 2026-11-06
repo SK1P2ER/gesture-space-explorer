@@ -334,7 +334,7 @@ confirmed.
 - **Date:** 2026-10-30. Decided by the user; the library chosen by measurement.
 - **Superseded in part (2026-11-06, entry 26):** "nothing reaches a server" means this app's host. The link itself goes wherever people share it; entry 26 states that scope and the rule for what goes after the `#`.
 - **Decision:**
-  - **What the QR holds:** a link to this app with the pass after the `#`, `?flags=astrolife#souvenir=1&ref=…&nick=…&av=…&fl=…&cab=…` (`src/travel/souvenir.ts`). A fragment never leaves the browser, so nothing reaches a server and `SECURITY.md` is unchanged. Any phone opens it as a keepsake; it is not a ticket and authorizes nothing.
+  - **What the QR holds:** a link to this app with the pass after the `#`, `?flags=astrolife#souvenir=1&ref=…&nick=…&av=…&fl=…&cab=…` (`src/travel/souvenir.ts`). **The link's format is superseded by entry 27**; the rest of this entry stands. A fragment never leaves the browser, so nothing reaches a server and `SECURITY.md` is unchanged. Any phone opens it as a keepsake; it is not a ticket and authorizes nothing.
   - **Reading a link:** every field is checked: the reference against the booking pattern, the avatar, flight and cabin against their lists, the nickname as a booking's would be. A fragment over 400 characters, a missing, extra or repeated field, or any bad field, and the whole souvenir is ignored: the shell opens on its hub. The route and the date come from the timetable via the flight number, never from the link. Fields are shown as text only: a test fails if `innerHTML` or its relatives appear in `src/shell` or `src/travel`.
   - **Nickname:** the field is labelled "Nickname" (နာမည်ပြောင်, ニックネーム), with a hint saying it appears in the souvenir link, so people don't put their real names into a shareable link. Nicknames, booked or linked, may hold only letters, marks, digits, emoji, spaces and `. ' ’ - ・`, at most 24 characters: no markup, URL, address or text-direction override.
   - **Library:** `lean-qr` 2.7.4 (MIT, no dependencies, published 2026-09-07), pinned exactly, imported only by the shell. Error correction M, dark on white with a four-module quiet zone, drawn as SVG with `createElementNS`.
@@ -396,3 +396,27 @@ confirmed.
   - A new link that carries such data puts it after the `#`, and is read the way the souvenir is: every field checked, the whole link ignored on any bad field, shown as text only.
 - **Scope of the promise:** only this app's host never sees the fragment. The link itself goes wherever people share it: a chat, an email, the scanning phone's history. Services that fetch a shared link for a preview request it without the fragment, but the full link stays in the message. That is why the field is a nickname, with a hint that it appears in the link (entry 22).
 - **Alternative:** the souvenir in the query. The nickname and reference would then be in every request to the host, against entry 21's on-device promise. It would allow previews rendered on a server, which needs a backend, and entry 21 rules that out.
+
+## 27. AstroLife: the souvenir link is packed, and `?al` turns AstroLife on
+
+- **Date:** 2026-11-06. Decided by the user, from four measured options.
+- **Goal:** The souvenir link was too long and too obvious: the field names showed (`souvenir=1&ref=…&nick=…`), and a Burmese or Japanese nickname, percent-encoded at 9 characters a letter, made it longer still, and the QR code denser.
+- **Decision:**
+  - **The link** is `?al#` and base64url (no padding) of five bytes of fields, then the nickname in UTF-8: 3 bits version (1), 3 avatar, 2 flight, 2 cabin, the reference's five characters after `AL-` as 5 bits each (its 32-character alphabet), and 5 zero bits. For Ada (`AL-9NH92`, 🌍, AL216, suite): `…/?al#KZNYpEBBZGE`.
+  - **The avatar, flight and cabin are positions** in fixed lists in `src/travel/souvenir.ts` (`WIRE`). Shared links hold the positions, so the lists only grow at the end; a test fails if they stop matching the catalogs' order. A value that doesn't fit its bits (a ninth avatar, a fifth flight or cabin) needs version 2.
+  - **`?al`** is short for `?flags=astrolife` (`parseFlags`, `src/app/flags.ts`). Like `?flags=`, it is a switch, so it belongs in the query (entry 26). The address keeps it as typed while the view changes.
+  - **Reading a link:** only the spelling `souvenirLink` makes is accepted: the base64url characters, at most 135 of them (24 code points of 4 bytes, plus the fields), decoding to at least one byte of nickname and encoding back to the same text (no padding, no stray bits). Then the version, the zero bits and each position are checked, the nickname must be valid UTF-8 (a BOM is kept, and so refused), and every check of entry 22 still applies to the nickname. One bad field and the whole souvenir is ignored, as before.
+  - **v2.6.0 links are no longer read.** AstroLife is behind a flag and the old format shipped six days earlier. An old link opens the hub. This can be reversed by keeping the old parser beside the new one, told apart by the `=` that base64url never has.
+- **Measured** (fragment characters / whole link on `gesture-space-explorer.vercel.app` / QR version at correction M, lean-qr 2.7.4):
+
+  | Nickname | v2.6.0 | Packed, `?al` |
+  |---|---|---|
+  | Ada | 57 / 116 / 7 | 11 / 57 / 4 |
+  | 山田 花子 | 91 / 150 / 8 | 24 / 70 / 5 |
+  | ジョン・スミス | 117 / 176 / 9 | 35 / 81 / 5 |
+  | ဒေါ်ခင်ခင်ကြည် | 180 / 239 / 10 | 63 / 109 / 7 |
+  | 🧑‍🚀 × 4 | 186 / 245 / 10 | 66 / 112 / 7 |
+
+- **Alternatives:** positional text (`#1.9NH92.3.1.s.Ada`: short for Latin nicknames, but other scripts stay percent-encoded and it reads at a glance); packing with `?flags=astrolife` (13 characters longer).
+- **What it does not do:** hide anything from someone who decodes it. base64url is an encoding, not encryption: the nickname is still in the link, which is why the form still asks for a nickname, not a name, and says it appears in the souvenir link. The fragment still never reaches this app's host (entry 26), so `SECURITY.md`'s scope is unchanged apart from the link's spelling.
+- **Not verified:** scanning the new, smaller QR code with real phones (iOS Camera, Android); the codes were not decoded back with an independent decoder as in entry 22.

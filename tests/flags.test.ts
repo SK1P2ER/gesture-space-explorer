@@ -8,6 +8,10 @@ describe('?flags=', () => {
     expect([...parseFlags('?body=mars&flags=,astrolife,')]).toEqual(['astrolife']);
     expect(parseFlags('?flags=').size).toBe(0);
     expect(parseFlags('').size).toBe(0);
+    expect([...parseFlags('?al')]).toEqual(['astrolife']); // a souvenir link's short form (decision 27)
+    expect([...parseFlags('?al=')]).toEqual(['astrolife']);
+    expect([...parseFlags('?flags=build&al&debug')].sort()).toEqual(['astrolife', 'build']);
+    expect(parseFlags('?alpha&flags=').size).toBe(0); // only the exact key
   });
 
   it('loads code only for the features that have it', () => {

@@ -385,10 +385,11 @@ test('AstroLife: check in, the pass’s souvenir link opens as a keepsake, and a
   await page.getByRole('button', { name: 'Copy souvenir link' }).click();
   await page.waitForFunction(() => /Copied/.test(document.querySelector('#shell .al-pass .al-actions')?.textContent ?? ''));
   const link = new URL(await page.evaluate(() => navigator.clipboard.readText()));
-  assert.equal(link.search, '?flags=astrolife'); // the pass is only after the #, which never reaches a server
-  assert.deepEqual(Object.fromEntries(new URLSearchParams(link.hash.slice(1))), { souvenir: '1', ref: 'AL-9NH92', nick: 'Ada', av: 'a2', fl: 'AL216', cab: 'suite' });
+  assert.equal(link.search, '?al'); // AstroLife's short flag; the pass is only after the #, which never reaches a server
+  // AL-9NH92, Ada, a2 (🛸), AL216, suite, packed (src/travel/souvenir.ts, decision 27)
+  assert.equal(link.hash, '#JZNYpEBBZGE');
 
-  await page.goto(link.href); // only the # changes: the open shell picks it up
+  await page.goto(link.href); // ?al, not ?flags=astrolife: a fresh load, and the shell opens on the souvenir
   await heading(/^Ada’s journey to Jezero Dome$/);
   assert.match(await text('#shell .al-pass'), /🛸 Ada/);
   await page.getByRole('button', { name: 'Plan your own journey' }).click();
@@ -396,7 +397,8 @@ test('AstroLife: check in, the pass’s souvenir link opens as a keepsake, and a
   assert.equal(await page.evaluate(() => location.hash), ''); // a reload won't bring the souvenir back
 
   // Markup in a link is never markup: the whole souvenir is refused, and nothing runs or appears.
-  const hostile = `${baseURL}/?flags=astrolife#souvenir=1&ref=AL-9NH92&nick=${encodeURIComponent('<img src=x onerror="window.__pwned=1">')}&av=a3&fl=AL216&cab=suite`;
+  // The pass above with the nickname <img src=x onerror="window.__pwned=1">, packed as souvenirLink would.
+  const hostile = `${baseURL}/?al#KZNYpEA8aW1nIHNyYz14IG9uZXJyb3I9IndpbmRvdy5fX3B3bmVkPTEiPg`;
   await page.goto(hostile);
   await page.reload({ waitUntil: 'domcontentloaded' });
   await heading(/Where to next/);
