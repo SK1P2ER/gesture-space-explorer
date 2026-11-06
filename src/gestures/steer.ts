@@ -4,7 +4,7 @@ import type { Vec2 } from './perception';
 // top of the gesture engine's observation (the engine itself is unchanged).
 
 /** Hand-steering sensitivity levels (the setting cycles through them): how much of the camera view spans the full range. */
-export const STEER_SENSITIVITY = { low: 0.6, normal: 1, high: 1.6 } as const;
+const STEER_SENSITIVITY = { low: 0.6, normal: 1, high: 1.6 } as const;
 export type SteerSensitivity = keyof typeof STEER_SENSITIVITY;
 export const SENSITIVITY_ORDER: readonly SteerSensitivity[] = ['low', 'normal', 'high'];
 

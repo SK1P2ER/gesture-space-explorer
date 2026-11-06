@@ -19,7 +19,7 @@ import type { HandObs } from './perception';
 export type ExtraShape = 'rock' | 'shaka';
 
 /** Which v1.2 shape a hand makes, if any. The thumb is ignored, as in the engine. */
-export function extraShape(o: HandObs): ExtraShape | null {
+function extraShape(o: HandObs): ExtraShape | null {
   const f = o.fingers;
   if (f.index && f.pinky && !f.middle && !f.ring) return 'rock';
   if (f.pinky && !f.index && !f.middle && !f.ring) return 'shaka';
@@ -32,7 +32,7 @@ export function extraShape(o: HandObs): ExtraShape | null {
  * mirrored). Measured the same way for both hands, so "right = faster" holds
  * for either.
  */
-export function handTilt(hand: Hand, aspect: number): number {
+function handTilt(hand: Hand, aspect: number): number {
   const [wx, wy] = hand.landmarks[0];
   const [mx, my] = hand.landmarks[9]; // middle-finger knuckle
   const dx = ((1 - mx) - (1 - wx)) * aspect;

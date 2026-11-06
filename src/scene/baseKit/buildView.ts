@@ -37,7 +37,7 @@ function tint(g: THREE.BufferGeometry, hex: number) {
 const lift = (g: THREE.BufferGeometry, y: number) => g.translate(0, y, 0);
 
 /** The five modules, each fitting one 0.25 cell. */
-export function moduleGeometry(kind: BuildKind): THREE.BufferGeometry {
+function moduleGeometry(kind: BuildKind): THREE.BufferGeometry {
   const parts: THREE.BufferGeometry[] = [];
   switch (kind) {
     case 'habitat': {
