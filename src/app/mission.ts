@@ -6,16 +6,17 @@ import { nextInSystem } from '../navigation';
 import { LAYOUTS } from '../scene/baseKit/showcases';
 import { padFrame, type BaseNode } from '../scene/bases';
 import { WarpStreaks } from '../scene/rocket';
-import { SEPARATE_AT, type RocketOptions } from '../scene/rocketKit';
+import type { RocketOptions } from '../scene/rocketKit';
 import { RocketStage } from './rocketStage';
 import { HorizonView, type HorizonPose } from './horizonView';
-import { APPROACH_HEIGHT, Landing, type DockAttempt } from './landing';
+import { Landing, type DockAttempt } from './landing';
+import { Flight, type Trip } from './flight';
 import { atmosphereOf, dustFor, type Atmosphere } from '../data/atmosphere';
 import type { LandingContext } from '../sim/landingReplay';
 import { stamp, type Passport } from '../sim/passport';
-import { fuelLeft, routeKm, tripFuel } from '../sim/route';
+import { fuelLeft } from '../sim/route';
 import type { MissionReadout } from '../ui/missionHud';
-import { arcBetween, bezier, bezierTangent, flightProgress, SKIP_TO, travelSeconds, warpLevel, type V3 } from '../sim/travel';
+import { flightProgress } from '../sim/travel';
 import { t, tf } from '../ui/i18n';
 import type { Mode } from './modes';
 import type { SteerSensitivity } from '../gestures/steer';
@@ -90,27 +91,9 @@ export interface MissionDeps {
 /** How the camera is driven this frame: the rig, aimed at a point; or by the mission itself (the chase view). */
 export type CameraControl = { target: THREE.Vector3 } | 'chase' | null;
 
-/** The camera shakes this long after liftoff (not with reduced motion). */
-export const SHAKE_SECONDS = 1.2;
 /** Landing dust starts this far into the descent (0–1). */
 export const DUST_FROM = 0.65;
-/** At booster separation, the camera looks back at the booster tumbling away for this long. */
-export const LOOK_BACK_SECONDS = 1.5;
-/** How much of the look-back view to use, t seconds into it: eases in and out over 0.35 s. */
-export function lookBackWeight(t: number) {
-  const ramp = 0.35;
-  const w = Math.max(0, Math.min(1, t / ramp, (LOOK_BACK_SECONDS - t) / ramp));
-  return w * w * (3 - 2 * w);
-}
-/** Push a point out to `radius` from `center` if it's inside (the chase camera must stay above ground). */
-export function keepAbove(point: THREE.Vector3, center: THREE.Vector3, radius: number) {
-  const d = point.distanceTo(center);
-  if (d < radius) point.sub(center).multiplyScalar(radius / Math.max(d, 1e-9)).add(center);
-  return point;
-}
 const UP = new THREE.Vector3(0, 1, 0);
-const v3 = (v: THREE.Vector3): V3 => [v.x, v.y, v.z];
-const vec = (a: V3) => new THREE.Vector3(...a);
 
 interface Countdown {
   count: 3 | 2 | 1;
@@ -118,22 +101,6 @@ interface Countdown {
   timer: number;
   /** Counting by itself (button, Enter) or by hand (fingers). */
   auto: boolean;
-}
-
-interface Trip {
-  from: BaseNode;
-  to: BaseNode;
-  elapsed: number;
-  seconds: number;
-  /** The real distance, km, and the share of the tank it burns. */
-  km: number;
-  fuel: number;
-  /** Lifted off as the lander alone (no booster to drop). */
-  lander: boolean;
-  /** Seconds into the look-back at the separating booster (null: none, or over). */
-  lookBack: number | null;
-  /** The camera when the rocket lifted off, to ease from it into the chase view. */
-  camStart: { position: THREE.Vector3; quaternion: THREE.Quaternion };
 }
 
 /**
@@ -149,7 +116,8 @@ export class Mission {
   /** Where the rocket will go. */
   destination: BaseNode | null = null;
   countdown: Countdown | null = null;
-  trip: Trip | null = null;
+  /** The trip between bases (Travel). */
+  private readonly flight: Flight;
   /** The landing at the end of a trip (the docking mini-game). */
   private readonly landing: Landing;
   /** The rocket and its pad dust: built when first needed, freed when you leave the bases and trips. */
@@ -175,6 +143,12 @@ export class Mission {
     this.stage = new RocketStage(d);
     this.view = new HorizonView(d.rig.camera, d.reducedMotion);
     this.landing = new Landing(this.stage, d.reducedMotion);
+    this.flight = new Flight(this.stage, this.warp, d.reducedMotion);
+  }
+
+  /** The trip under way, while in Travel. */
+  get trip(): Trip | null {
+    return this.flight.trip;
   }
 
   /** The docking mini-game's attempt, while in Docking. */
@@ -337,38 +311,16 @@ export class Mission {
     const { modes, rig } = this.d;
     if (!this.base || !this.destination || !modes.go('travel')) return;
     this.countdown = null;
-    const from = padFrame(this.base).center.clone();
-    const to = padFrame(this.destination).center.clone();
-    this.trip = {
-      from: this.base,
-      to: this.destination,
-      elapsed: 0,
-      seconds: travelSeconds(from.distanceTo(to)),
-      km: routeKm(this.base.base.body, this.destination.base.body, this.d.clock.time),
-      fuel: tripFuel(routeKm(this.base.base.body, this.destination.base.body, this.d.clock.time)),
-      camStart: { position: rig.camera.position.clone(), quaternion: rig.camera.quaternion.clone() },
-      lander: !this.stage.stacked,
-      lookBack: null,
-    };
+    this.flight.begin(this.base, this.destination, this.d.clock.time, rig.camera);
     this.d.flash(t('liftoff', this.d.state.lang));
-    this.d.liftedOff?.(this.trip.from.base.id, this.trip.to.base.id);
-  }
-
-  /** The arc as it is now (the planets move): from above the start pad to the approach point above the far one. */
-  private arc(trip: Trip) {
-    const a = padFrame(trip.from);
-    const startN = a.normal.clone();
-    const start = a.center.clone().addScaledVector(startN, a.size * 0.6);
-    const b = padFrame(trip.to);
-    const end = b.center.clone().addScaledVector(b.normal, b.size * APPROACH_HEIGHT);
-    return arcBetween(v3(start), v3(startN), v3(end), v3(b.normal));
+    this.d.liftedOff?.(this.base.base.id, this.destination.base.id);
   }
 
   /** The rocket has reached the approach point above the destination. */
   private arrive() {
     const { modes, state, rig } = this.d;
-    const trip = this.trip!;
-    this.trip = null;
+    const trip = this.flight.trip!;
+    this.flight.end();
     this.lastTripFuel = trip.fuel;
     this.base = trip.to;
     this.destination = null;
@@ -573,8 +525,7 @@ export class Mission {
 
       case 'travel':
         if (intent.type === 'select' && this.trip) {
-          this.trip.lookBack = null; // skipping skips the look-back too
-          this.trip.elapsed = Math.max(this.trip.elapsed, SKIP_TO * this.trip.seconds); // Enter / the button: skip
+          this.flight.skip(); // Enter / the button
           return true;
         }
         return false;
@@ -692,68 +643,9 @@ export class Mission {
     this.stage.dust(dt, pad ? padFrame(pad) : null, camera, emit, dust.amount, dust.color);
   }
 
-  /** Travel: the rocket along the arc, the chase camera behind it, the warp streaks. */
+  /** Travel: the rocket along the arc and the chase camera behind it, until it arrives. */
   private fly(dt: number, camera: THREE.PerspectiveCamera): CameraControl {
-    const trip = this.trip!;
-    trip.elapsed += dt;
-    const fraction = trip.elapsed / trip.seconds;
-    const rocket = this.stage.rocket;
-    // Booster separation partway out; the upper stage flies on (and will land on its own legs).
-    if (this.stage.stacked && fraction >= SEPARATE_AT) {
-      this.stage.separate();
-      if (!this.d.reducedMotion()) trip.lookBack = 0; // a look back at the booster falling away
-    }
-    rocket.setLander(trip.lander);
-    this.stage.legs(trip.lander ? Math.max(0, 1 - trip.elapsed) : 0); // a lander folds its legs in the first second
-    const arc = this.arc(trip);
-    const u = flightProgress(fraction);
-    const pos = vec(bezier(arc, u));
-    const dir = vec(bezierTangent(arc, Math.min(0.999, Math.max(0.001, u)))).normalize();
-    const size = padFrame(trip.from).size;
-    this.rocket.position.copy(pos);
-    this.rocket.quaternion.setFromUnitVectors(UP, dir);
-    this.rocket.scale.setScalar(size * 0.5);
-    // Still in the launch world's air for the first moments, then vacuum: the flame turns blue-white and spreads.
-    this.thrust(1, fraction < 0.08 ? atmosphereOf(trip.from.base.body) : 'none');
-
-    // Behind and a little above the rocket, looking past it.
-    const back = Math.max(0.6, size * 4);
-    const up = UP.clone().addScaledVector(dir, -UP.dot(dir));
-    if (up.lengthSq() < 1e-6) up.set(1, 0, 0);
-    up.normalize();
-    const chasePos = pos.clone().addScaledVector(dir, -back).addScaledVector(up, back * 0.35);
-    // Never underground: right after liftoff "behind the rocket" points into the planet.
-    for (const node of [trip.from, trip.to]) keepAbove(chasePos, node.body.mesh.getWorldPosition(new THREE.Vector3()), node.body.body.radius * node.body.tilt.scale.x * 1.06);
-    // A small shake at liftoff (none with reduced motion).
-    if (!this.d.reducedMotion() && trip.elapsed < SHAKE_SECONDS) {
-      const a = back * 0.015 * (1 - trip.elapsed / SHAKE_SECONDS);
-      chasePos.add(new THREE.Vector3(Math.sin(this.seconds * 53) * a, Math.sin(this.seconds * 47 + 1) * a, Math.cos(this.seconds * 59) * a));
-    }
-    const look = new THREE.Matrix4().lookAt(chasePos, pos.clone().addScaledVector(dir, back), up);
-    const chaseQ = new THREE.Quaternion().setFromRotationMatrix(look);
-    // Separation: beside the upper stage, looking back at the booster tumbling away, then back to the chase.
-    if (trip.lookBack !== null) {
-      trip.lookBack += dt;
-      const w = lookBackWeight(trip.lookBack);
-      if (trip.lookBack >= LOOK_BACK_SECONDS) trip.lookBack = null;
-      else if (w > 0) {
-        const booster = rocket.booster.getWorldPosition(new THREE.Vector3());
-        const side = new THREE.Vector3().crossVectors(dir, up).normalize();
-        const eye = pos.clone().addScaledVector(side, back * 0.55).addScaledVector(dir, back * 0.2).addScaledVector(up, back * 0.15);
-        for (const node of [trip.from, trip.to]) keepAbove(eye, node.body.mesh.getWorldPosition(new THREE.Vector3()), node.body.body.radius * node.body.tilt.scale.x * 1.06);
-        const lookBackQ = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(eye, booster.lerp(pos, 0.35), up));
-        chasePos.lerp(eye, w);
-        chaseQ.slerp(lookBackQ, w);
-      }
-    }
-    const blend = Math.min(1, trip.elapsed / 1.2); // ease from where the camera was
-    const k = blend * blend * (3 - 2 * blend);
-    camera.position.lerpVectors(trip.camStart.position, chasePos, k);
-    camera.quaternion.slerpQuaternions(trip.camStart.quaternion, chaseQ, k);
-    camera.updateMatrixWorld();
-    this.warp.update(camera, dir, this.d.reducedMotion() ? 0 : warpLevel(fraction), dt);
-
-    if (fraction >= 1) this.arrive();
+    if (this.flight.fly(dt, camera, this.seconds)) this.arrive();
     return 'chase';
   }
 }

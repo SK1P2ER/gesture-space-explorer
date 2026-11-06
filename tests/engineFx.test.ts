@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { DUST_FROM, SHAKE_SECONDS } from '../src/app/mission';
+import { DUST_FROM } from '../src/app/mission';
+import { SHAKE_SECONDS } from '../src/app/flight';
 import { atmosphereOf, dustFor, FLAME } from '../src/data/atmosphere';
 import type { KitDetail } from '../src/quality';
 import { DUST_PUFFS, PadDust } from '../src/scene/padDust';
@@ -127,7 +128,7 @@ describe('pad dust', () => {
 
 describe('the chase camera at liftoff', () => {
   it('is pushed out above the ground when "behind the rocket" would be inside the planet', async () => {
-    const { keepAbove } = await import('../src/app/mission');
+    const { keepAbove } = await import('../src/app/flight');
     const c = new THREE.Vector3(0, 0, 0);
     expect(keepAbove(new THREE.Vector3(0, 0.5, 0), c, 1.06).length()).toBeCloseTo(1.06, 9);
     expect(keepAbove(new THREE.Vector3(0, 2, 0), c, 1.06).y).toBe(2); // already above: untouched
@@ -136,7 +137,7 @@ describe('the chase camera at liftoff', () => {
 
 describe('the look-back at separation', () => {
   it('eases in, holds, and eases out within its ~1.5 s', async () => {
-    const { lookBackWeight, LOOK_BACK_SECONDS } = await import('../src/app/mission');
+    const { lookBackWeight, LOOK_BACK_SECONDS } = await import('../src/app/flight');
     expect(LOOK_BACK_SECONDS).toBeCloseTo(1.5, 9);
     expect(lookBackWeight(0)).toBe(0);
     expect(lookBackWeight(LOOK_BACK_SECONDS / 2)).toBe(1);
