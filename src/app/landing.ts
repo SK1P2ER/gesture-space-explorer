@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { PAD_RADIUS } from '../scene/bases';
 import { dockingParams, startDocking, stepDocking, STEER_RANGE, type DockingParams, type DockingState } from '../sim/docking';
 import type { PadFrame } from '../scene/padDust';
 import type { RocketStage } from './rocketStage';
@@ -10,8 +11,6 @@ export const LEGS_AT = 0.4;
 export const LEGS_SECONDS = 1;
 /** How far the legs are out during a landing: none before LEGS_AT of the descent, then easing out over LEGS_SECONDS. */
 export const legDeploy = (progress: number, secondsSince: number) => (progress < LEGS_AT ? 0 : Math.min(1, secondsSince / LEGS_SECONDS));
-/** Base sizes per pad radius (the pad is PAD_RADIUS of a base size), to place the docking rocket. */
-const PAD_RADIUS = 0.35;
 /** How far the arrow keys move the steering point per press (−1 … 1 across). */
 const KEY_STEP = 0.25;
 /** A moment on the ground (or off the pad) before the outcome counts, seconds. */
