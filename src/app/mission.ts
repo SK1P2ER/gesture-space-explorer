@@ -3,7 +3,6 @@ import { BASES, baseById, baseOn } from '../data/bases';
 import { BODIES, bodyById, bodyIndex, type Body, type Lang } from '../data/bodies';
 import type { Intent } from '../intents';
 import { nextInSystem } from '../navigation';
-import type { CameraRig } from '../scene/cameraRig';
 import { LAYOUTS } from '../scene/baseKit/showcases';
 import { setBaseLayer } from '../scene/baseKit/baseLighting';
 import { padFrame, type BaseNode } from '../scene/bases';
@@ -11,7 +10,6 @@ import { WarpStreaks } from '../scene/rocket';
 import { Rocket, SEPARATE_AT, type RocketOptions } from '../scene/rocketKit';
 import { DUST_PUFFS, PadDust } from '../scene/padDust';
 import { atmosphereOf, dustFor, type Atmosphere } from '../data/atmosphere';
-import type { SimClock } from '../sim/clock';
 import { dockingParams, startDocking, stepDocking, STEER_RANGE, type DockingParams, type DockingState } from '../sim/docking';
 import type { LandingContext } from '../sim/landingReplay';
 import { stamp, type Passport } from '../sim/passport';
@@ -19,8 +17,35 @@ import { fuelLeft, routeKm, tripFuel } from '../sim/route';
 import type { MissionReadout } from '../ui/missionHud';
 import { arcBetween, bezier, bezierTangent, flightProgress, SKIP_TO, travelSeconds, warpLevel, type V3 } from '../sim/travel';
 import { t, tf } from '../ui/i18n';
-import type { ModeMachine } from './modes';
+import type { Mode } from './modes';
 import type { SteerSensitivity } from '../gestures/steer';
+
+/** The app's mode, as a mission reads and changes it. */
+export interface MissionModes {
+  readonly mode: Mode;
+  canGo(to: Mode): boolean;
+  /** Moves to `to` if allowed; returns whether it did. */
+  go(to: Mode): boolean;
+}
+
+/** The camera rig, as a mission uses it: its camera, and where it frames and aims. */
+export interface MissionRig {
+  readonly camera: THREE.PerspectiveCamera;
+  focus(radius: number, extent: number, overview: boolean, instant?: boolean): void;
+  reframe(radius: number, extent: number): void;
+  setViewDirection(dir: THREE.Vector3): void;
+  /** Takes over a camera position and target (after the mission drove the camera itself). */
+  adopt(position: THREE.Vector3, target: THREE.Vector3): void;
+}
+
+/** The shown date, as a mission reads and changes it. */
+export interface MissionClock {
+  readonly time: number;
+  readonly rate: number;
+  readonly paused: boolean;
+  setRate(rate: number): void;
+  jumpTo(ms: number): void;
+}
 
 /** What a mission reads and changes of the app's state. */
 export interface MissionState {
@@ -40,9 +65,9 @@ export interface MissionDeps {
   state: MissionState;
   /** Keep the passport on the device (it changed: a new stamp). */
   savePassport: (passport: Passport) => void;
-  modes: ModeMachine;
-  rig: CameraRig;
-  clock: SimClock;
+  modes: MissionModes;
+  rig: MissionRig;
+  clock: MissionClock;
   bases: BaseNode[];
   scene: THREE.Scene;
   /** Focus a body (flies the camera there; SolarView or Focus mode). */
