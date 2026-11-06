@@ -291,6 +291,7 @@ confirmed.
 ## 20. v2.5 close-out: moving worktrees, the release path as it really is
 
 - **Date:** 2026-10-30.
+- **Superseded in part (2026-11-06, entry 25):** this repository, the upstream now, is public, so branch protection is available; it isn't set up yet. It has no `preview-smoke.yml`.
 - **Worktrees:**
   - The main checkout and three worktrees (`hand-gesture-v25`, `hand-gesture-autotier`, `hand-gesture-v2.3.1`) had been moved into one parent folder as plain folders. The links between them broke: git failed inside each worktree, and so did `tests/evidencePath.test.ts`, which runs `git check-ignore`. `git worktree repair` from the main checkout fixed all three (659 / 659 unit tests after it).
   - **Rule:** move a worktree with `git worktree move <worktree> <new path>`, never with the file manager. The main checkout can't be moved that way: after moving it, run `git worktree repair <each worktree>` from it.
@@ -374,3 +375,12 @@ confirmed.
   - **Accessibility, automated:** on a 390 × 844 phone, in English, Burmese and Japanese, every AstroLife screen that needs no booking has a dialog title and no unnamed control, the page's language follows, and nothing scrolls sideways (a smoke case). Tabs are 44 px tall.
 - **Not verified, so not claimed:** real phones (Android Chrome, iOS Safari), Firefox and Safari on a desktop, a screen reader, the camera prompt on a real device, and the 113 new Burmese strings (`docs/i18n-review-my.md`, last section).
 - **Phone check for the release** (a Vercel preview, `?flags=astrolife`, with `?debug` once to copy its report): the hub over Mars; the camera prompt appears only after Open the explorer; book Jezero, check in, scan the QR with another phone (it opens the souvenir); Begin journey, launch, land (auto-land is fine); the stamp, a postcard saved to the photo library; back to the hub; the date is back to today in free roam; in Burmese and Japanese too.
+
+## 25. This repository is the upstream
+
+- **Date:** 2026-11-06. Decided by the user.
+- **Decision:** Development continues in this repository; it is no longer a snapshot exported from a private one. Its documents and configuration describe this repository:
+  - `docs/ci.md` drops the snapshot note and what exists only in the private repository (`preview-smoke.yml`, the longer browser suites, `archive/phase8/`).
+  - The dev server no longer ignores `tests/artifacts/**` and `tests/experiments/**` (entry 9): nothing in this repository writes there.
+- **As found (2026-11-06):** the repository is public; `main` has no branch protection and no ruleset; `ci.yml` is its only workflow.
+- **Left as they are:** earlier entries keep their references to files that only the private repository has, since they record what was decided there. `.gitignore` still ignores `/tests/artifacts/generated/` and `/*-artifacts/`.
