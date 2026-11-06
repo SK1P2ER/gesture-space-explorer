@@ -60,7 +60,8 @@ import { nextSetting } from './sim/localSky';
 import { SKY_MOONS } from './data/skyMoons';
 import { SkyLabels } from './ui/skyLabels';
 import { ChromeUi } from './ui/chrome';
-import { MissionHud, type MapView } from './ui/missionHud';
+import { MissionHud } from './ui/missionHud';
+import { miniMap } from './app/miniMap';
 import { PassportPanel } from './ui/passportPanel';
 import { CountdownGesture } from './gestures/countdown';
 
@@ -432,26 +433,13 @@ bus.on((intent) => {
   if (intent.type === 'restartTracking' && !['loading', 'tracking'].includes(state.status.kind)) startHandTracking();
 });
 
-// The mission HUD's map: the planets where they are now, the bases' worlds marked, the rocket and its route.
-const MAP_BODIES = BODIES.map((b, i) => ({ b, i })).filter(({ b }) => b.kind === 'planet' || b.kind === 'dwarf');
-const MAP_RADIUS = Math.max(...MAP_BODIES.map(({ b }) => b.orbitRadius));
-const planetIndex = (bodyId: string) => {
-  const b = bodyById(bodyId);
-  return bodyIndex(b.parent ?? b.id);
-};
-const BASE_PLANETS = new Set(BASES.map((x) => planetIndex(x.body)));
-const mapPos = new THREE.Vector3();
-const flat = (v: THREE.Vector3) => ({ x: v.x, z: v.z });
-function miniMap(): MapView {
-  const here = mission.base ? planetIndex(mission.base.base.body) : -1;
-  const trip = mission.trip;
-  return {
-    bodies: MAP_BODIES.map(({ b, i }) => ({ ...flat(system.worldPosition(i, mapPos)), color: `#${b.color.toString(16).padStart(6, '0')}`, base: BASE_PLANETS.has(i), here: i === here && !trip })),
-    rocket: modes.mode === 'travel' ? flat(mission.rocket.position) : null,
-    route: trip ? [flat(system.worldPosition(planetIndex(trip.from.base.body), mapPos)), flat(system.worldPosition(planetIndex(trip.to.base.body), mapPos))] : null,
-    maxRadius: MAP_RADIUS,
-  };
-}
+/** The mission HUD's map (app/miniMap.ts), as the mission stands now. */
+const missionMap = () => miniMap({
+  position: (i, out) => system.worldPosition(i, out),
+  hereBody: mission.base?.base.body ?? null,
+  trip: mission.trip && { from: mission.trip.from.base.body, to: mission.trip.to.base.body },
+  rocket: modes.mode === 'travel' ? mission.rocket.position : null,
+});
 
 // ----------------------------------------------------------------- loop ----
 const focusPos = new THREE.Vector3();
@@ -701,7 +689,7 @@ const phases: FramePhases = {
         : null,
     }, state.lang);
     const readout = mission.readout();
-    missionHud.render(readout, readout && miniMap(), state.lang);
+    missionHud.render(readout, readout && missionMap(), state.lang);
     passportPanel.render(state.passportOpen, state.passport, state.lang, state.baseLevels);
     weightPanel.render(state.weightOpen, state.weightKg, (state.selected ?? BODIES[state.focus]).id, state.lang);
     hud.render({
