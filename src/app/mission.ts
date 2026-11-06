@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { BASES, baseById, baseOn } from '../data/bases';
-import { BODIES, bodyById, bodyIndex, type Body } from '../data/bodies';
+import { BODIES, bodyById, bodyIndex, type Body, type Lang } from '../data/bodies';
 import type { Intent } from '../intents';
 import { nextInSystem } from '../navigation';
 import type { CameraRig } from '../scene/cameraRig';
@@ -14,17 +14,32 @@ import { atmosphereOf, dustFor, type Atmosphere } from '../data/atmosphere';
 import type { SimClock } from '../sim/clock';
 import { dockingParams, startDocking, stepDocking, STEER_RANGE, type DockingParams, type DockingState } from '../sim/docking';
 import type { LandingContext } from '../sim/landingReplay';
-import { stamp } from '../sim/passport';
+import { stamp, type Passport } from '../sim/passport';
 import { fuelLeft, routeKm, tripFuel } from '../sim/route';
 import type { MissionReadout } from '../ui/missionHud';
-import { writePassport } from './settings';
 import { arcBetween, bezier, bezierTangent, flightProgress, SKIP_TO, travelSeconds, warpLevel, type V3 } from '../sim/travel';
 import { t, tf } from '../ui/i18n';
 import type { ModeMachine } from './modes';
-import type { AppState } from './state';
+import type { SteerSensitivity } from '../gestures/steer';
+
+/** What a mission reads and changes of the app's state. */
+export interface MissionState {
+  /** Index into BODIES. */
+  focus: number;
+  selected: Body | null;
+  lang: Lang;
+  autoLand: boolean;
+  passport: Passport;
+  steerSensitivity: SteerSensitivity;
+  passportOpen: boolean;
+  menuOpen: boolean;
+  weightOpen: boolean;
+}
 
 export interface MissionDeps {
-  state: AppState;
+  state: MissionState;
+  /** Keep the passport on the device (it changed: a new stamp). */
+  savePassport: (passport: Passport) => void;
   modes: ModeMachine;
   rig: CameraRig;
   clock: SimClock;
@@ -420,7 +435,7 @@ export class Mission {
     const { passport, isNew } = stamp(state.passport, b.base.id, Date.now());
     if (!isNew) return;
     state.passport = passport;
-    writePassport(passport);
+    this.d.savePassport(passport);
     // After the arrival message (the HUD shows one at a time).
     setTimeout(() => this.d.flash(tf('newStamp', state.lang, { name: b.base.name[state.lang] })), 1600);
   }

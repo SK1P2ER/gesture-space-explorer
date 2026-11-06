@@ -5,6 +5,7 @@ import { createIntentHandler, type HandlerDeps } from '../src/app/intentHandler'
 import { Mission } from '../src/app/mission';
 import { modeForFocus, ModeMachine } from '../src/app/modes';
 import { createState } from '../src/app/state';
+import { storage, writePassport } from '../src/app/settings';
 import { config } from '../src/config';
 import { BASES, surfacePoint } from '../src/data/bases';
 import { BODIES } from '../src/data/bodies';
@@ -60,12 +61,13 @@ function setup(bodyId = 'mars', rate = WEEK) {
   setFocus(at(bodyId));
   const mission = new Mission({
     state, modes, rig, clock, bases, scene, setFocus, flash, report,
+    savePassport: writePassport,
     reducedMotion: () => true,
     goldenHour: () => null,
     rocketOptions: () => ({ detail: 'low', textureSize: 32 }),
   });
   const build = new Build({
-    state, modes, enabled: false, flash,
+    state, storage, modes, enabled: false, flash,
     site: () => null, groundAt: () => null, sol: () => null,
   });
   const bus = createIntentBus();

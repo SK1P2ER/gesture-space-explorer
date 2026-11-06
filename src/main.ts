@@ -10,7 +10,7 @@ import { setupInfoSheet } from './app/infoSheet';
 import { modeForFocus, ModeMachine } from './app/modes';
 import { PhotoFlow } from './app/photoFlow';
 import { createState } from './app/state';
-import { resetIfAsked, storage } from './app/settings';
+import { resetIfAsked, storage, writePassport } from './app/settings';
 import { startTracking, type TrackingDeps, type TrackingSession } from './app/tracking';
 import { attachPageLifecycle } from './app/pageLifecycle';
 import { runFrame, type FramePhases } from './app/frameLoop';
@@ -187,6 +187,7 @@ function pickAt(x: number, y: number) {
 
 const mission = new Mission({
   state, modes, rig, clock, bases: system.bases, scene: system.scene, setFocus,
+  savePassport: writePassport,
   flash: (text) => gestureHud.flash(text),
   reducedMotion: () => reducedMotion.matches,
   goldenHour: (node) => {
@@ -264,7 +265,7 @@ showcases.operationsAt = (id) => {
 };
 const buildSite = () => (mission.base && LAYOUTS[mission.base.base.id] ? { id: mission.base.base.id, layout: LAYOUTS[mission.base.base.id] } : null);
 const build = new Build({
-  state, modes, site: buildSite,
+  state, storage, modes, site: buildSite,
   groundAt: (x, y) => (mission.base ? groundAt(mission.base.group, rig.camera, x, y) : null),
   sol: () => (buildSite() ? skyOver(mission.base!, clock.time).sol : null),
   flash: (text) => gestureHud.flash(text),

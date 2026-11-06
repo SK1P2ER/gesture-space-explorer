@@ -3,11 +3,23 @@ import type { Intent } from '../intents';
 import { best, BUILD_KINDS, BUILD_RADIUS, cellAt, cellBlocked, evaluate, History, MAX_MODULES, parsePlaced, type BaseStatus, type BuildKind, type Placed, type SolConditions } from '../sim/buildRules';
 import { t, tf, type StringKey } from '../ui/i18n';
 import type { ModeMachine } from './modes';
-import { storage } from './settings';
-import type { AppState } from './state';
+import type { Lang } from '../data/bodies';
+
+/** What Build reads and changes of the app's state. */
+export interface BuildState {
+  lang: Lang;
+  baseLevels: Record<string, 1 | 2 | 3>;
+  weightOpen: boolean;
+  passportOpen: boolean;
+  menuOpen: boolean;
+}
+
+/** Where layouts and levels are kept; null when the browser blocks storage (nothing is kept). */
+export type BuildStorage = Pick<Storage, 'getItem' | 'setItem'> | null;
 
 export interface BuildDeps {
-  state: AppState;
+  state: BuildState;
+  storage: BuildStorage;
   modes: ModeMachine;
   /** Which base (id) you're at, and its layout, if it can be built on. */
   site: () => { id: string; layout: BaseLayout } | null;
@@ -24,7 +36,7 @@ const layoutKey = (id: string) => `gse.build.${id}`;
 const LEVELS_KEY = 'gse.baseLevels';
 
 /** Sticky base levels from storage (malformed → none). */
-export function readLevels(): Record<string, 1 | 2 | 3> {
+export function readLevels(storage: BuildStorage): Record<string, 1 | 2 | 3> {
   try {
     const data = JSON.parse(storage?.getItem(LEVELS_KEY) ?? '{}');
     const out: Record<string, 1 | 2 | 3> = {};
@@ -35,7 +47,7 @@ export function readLevels(): Record<string, 1 | 2 | 3> {
   }
 }
 
-function write(key: string, value: unknown) {
+function write(storage: BuildStorage, key: string, value: unknown) {
   try {
     storage?.setItem(key, JSON.stringify(value));
   } catch {
@@ -115,7 +127,7 @@ export class Build {
     if (this.siteId !== id) {
       let saved: string | null = null;
       try {
-        saved = storage?.getItem(layoutKey(id)) ?? null;
+        saved = this.d.storage?.getItem(layoutKey(id)) ?? null;
       } catch {
         // nothing kept
       }
@@ -183,7 +195,7 @@ export class Build {
 
   private changed(id: string) {
     this.version++;
-    write(layoutKey(id), this.history!.present);
+    write(this.d.storage, layoutKey(id), this.history!.present);
     const s = this.status();
     if (!s) return;
     // Levels are kept once earned; the live status shows the rest.
@@ -191,7 +203,7 @@ export class Build {
     const kept = best(levels[id], s.level);
     if (kept !== (levels[id] ?? 1)) {
       this.d.state.baseLevels = { ...levels, [id]: kept };
-      write(LEVELS_KEY, this.d.state.baseLevels);
+      write(this.d.storage, LEVELS_KEY, this.d.state.baseLevels);
       this.d.flash(tf('levelReached', this.d.state.lang, { n: String(kept) }));
     }
   }

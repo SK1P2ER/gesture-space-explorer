@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Build, buildPointer } from '../src/app/build';
 import { ACCEPTS, ModeMachine, type Mode } from '../src/app/modes';
 import { createState } from '../src/app/state';
+import { storage } from '../src/app/settings';
 import { config } from '../src/config';
 import type { Intent } from '../src/intents';
 import { JEZERO } from '../src/data/baseLayouts/jezero';
@@ -110,7 +111,7 @@ function setup(enabled = true) {
   const state = createState();
   const flashes: string[] = [];
   const build = new Build({
-    state, modes, enabled,
+    state, storage, modes, enabled,
     site: () => ({ id: 'jezero-test', layout: JEZERO }),
     groundAt: (x, y) => [x, y],
     sol: () => SOL,

@@ -63,7 +63,7 @@ export function createState(): AppState {
     previewHidden: readFlag(KEYS.previewHidden, false),
     menuOpen: false,
     timeBarOpen: false,
-    baseLevels: readLevels(),
+    baseLevels: readLevels(storage),
     buildHintSeen: readFlag(KEYS.buildHint, false),
     weightKg: readWeight(),
     weightOpen: false,
