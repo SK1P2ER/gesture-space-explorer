@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
-import { Build } from '../src/app/build';
+import { Build, buildPointer } from '../src/app/build';
 import { ACCEPTS, ModeMachine, type Mode } from '../src/app/modes';
 import { createState } from '../src/app/state';
 import { config } from '../src/config';
+import type { Intent } from '../src/intents';
 import { JEZERO } from '../src/data/baseLayouts/jezero';
 import { keyToIntent } from '../src/input/keyboard';
 import { BuildView } from '../src/scene/baseKit/buildView';
@@ -247,5 +248,51 @@ describe('the build view', () => {
     expect(p.x).toBeCloseTo(cellCenter(...free[0])[0], 9);
     v.dispose();
     expect(MAX_MODULES).toBe(24);
+  });
+});
+
+describe('the mouse in Build mode', () => {
+  const VIEW = { width: 200, height: 100 };
+  const setup = (build: { active: boolean; cursor: [number, number] | null; chosenBefore: [number, number] | null; ghost: object | null }) => {
+    const sent: Intent[] = [];
+    const pointer = buildPointer({ ...build, ghost: () => build.ghost as never }, (i) => sent.push(i), () => VIEW);
+    return { pointer, sent, types: () => sent.map((i) => i.type) };
+  };
+
+  it('does nothing outside Build mode: the camera keeps the press and the click', () => {
+    const { pointer, sent } = setup({ active: false, cursor: [0, 0], chosenBefore: null, ghost: null });
+    expect(pointer.down(10, 10)).toBe(false);
+    expect(pointer.click(10, 10)).toBe(false);
+    expect(sent).toEqual([]);
+  });
+
+  it('moves the cursor in screen fractions, and a release drops', () => {
+    const { pointer, sent } = setup({ active: true, cursor: null, chosenBefore: null, ghost: null });
+    pointer.move(50, 25);
+    pointer.up();
+    expect(sent).toEqual([{ type: 'buildCursor', x: 0.25, y: 0.25 }, { type: 'buildDrop' }]);
+  });
+
+  it('a press on a module grabs it; on empty ground (something to place) it pans', () => {
+    const onModule = setup({ active: true, cursor: [1, 2], chosenBefore: null, ghost: null });
+    expect(onModule.pointer.down(100, 50)).toBe(true);
+    expect(onModule.sent).toEqual([{ type: 'buildCursor', x: 0.5, y: 0.5 }, { type: 'buildGrab' }]);
+    const onGround = setup({ active: true, cursor: [1, 2], chosenBefore: null, ghost: {} });
+    expect(onGround.pointer.down(100, 50)).toBe(false);
+    expect(onGround.types()).toEqual(['buildCursor']);
+    const offGrid = setup({ active: true, cursor: null, chosenBefore: null, ghost: null });
+    expect(offGrid.pointer.down(100, 50)).toBe(false);
+  });
+
+  it('a click previews; a second click on the same cell places', () => {
+    const first = setup({ active: true, cursor: [1, 2], chosenBefore: null, ghost: {} });
+    expect(first.pointer.click(100, 50)).toBe(true);
+    expect(first.types()).toEqual(['buildCursor']);
+    const again = setup({ active: true, cursor: [1, 2], chosenBefore: [1, 2], ghost: {} });
+    expect(again.pointer.click(100, 50)).toBe(true);
+    expect(again.types()).toEqual(['buildCursor', 'buildGrab', 'buildDrop']);
+    const elsewhere = setup({ active: true, cursor: [1, 2], chosenBefore: [3, 2], ghost: {} });
+    elsewhere.pointer.click(100, 50);
+    expect(elsewhere.types()).toEqual(['buildCursor']);
   });
 });

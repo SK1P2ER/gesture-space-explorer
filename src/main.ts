@@ -53,7 +53,7 @@ import { WeightPanel } from './ui/weightPanel';
 import { BasePanel } from './ui/basePanel';
 import { MissionOverlay } from './ui/missionOverlay';
 import { LAYOUTS, Showcases } from './scene/baseKit/showcases';
-import { Build } from './app/build';
+import { Build, buildPointer } from './app/build';
 import { CELL } from './sim/buildRules';
 import { skyOver, type SkyReport } from './app/baseSky';
 import { nextSetting } from './sim/localSky';
@@ -313,32 +313,9 @@ showcases.buildAt = (id) => {
     guides: build.active ? { layout: site.layout, placed, version: build.version, held: ghost?.item ?? null, cursor: build.cursor, ok: !preview?.blocked } : null,
   };
 };
-// The mouse in Build mode: hover shows what would go there; a click places it (a tap on a phone
-// previews first, a second tap on the same cell places); press on a module and drag to move it.
-const screen = (x: number, y: number) => ({ x: x / innerWidth, y: y / innerHeight });
-const buildPointer = {
-  down(x: number, y: number) {
-    if (!build.active) return false;
-    bus.emit({ type: 'buildCursor', ...screen(x, y) });
-    if (!build.cursor || build.ghost()) return false; // empty ground: a drag pans, a click places (below)
-    bus.emit({ type: 'buildGrab' });
-    return true;
-  },
-  move: (x: number, y: number) => bus.emit({ type: 'buildCursor', ...screen(x, y) }),
-  up: () => bus.emit({ type: 'buildDrop' }),
-  click(x: number, y: number) {
-    if (!build.active) return false;
-    bus.emit({ type: 'buildCursor', ...screen(x, y) });
-    const same = build.chosenBefore && build.cursor && build.chosenBefore[0] === build.cursor[0] && build.chosenBefore[1] === build.cursor[1];
-    if (same && build.ghost()) {
-      bus.emit({ type: 'buildGrab' });
-      bus.emit({ type: 'buildDrop' });
-    }
-    return true;
-  },
-};
+const buildMouse = buildPointer(build, bus.emit, () => ({ width: innerWidth, height: innerHeight }));
 canvas.addEventListener('pointermove', (e) => {
-  if (build.active && e.pointerType === 'mouse' && !e.buttons) bus.emit({ type: 'buildCursor', ...screen(e.clientX, e.clientY) });
+  if (build.active && e.pointerType === 'mouse' && !e.buttons) buildMouse.move(e.clientX, e.clientY); // hover
 });
 const chrome = new ChromeUi(bus.emit, rig, state);
 bus.on(() => chrome.input()); // any intent (a gesture too) wakes the UI
@@ -377,7 +354,7 @@ const timeBar = new TimeBar(bus.emit);
 const timeDial = new TimeDialOverlay();
 photo.toast.shareButton.addEventListener('click', () => bus.emit({ type: 'sharePhoto' }));
 photo.toast.saveButton.addEventListener('click', () => bus.emit({ type: 'savePhoto' }));
-attachKeyboardAndMouse(canvas, bus, config, pickAt, buildPointer);
+attachKeyboardAndMouse(canvas, bus, config, pickAt, buildMouse);
 
 const debugUrl = new URLSearchParams(location.search).has('debug');
 document.querySelector('#version')!.textContent = `v${__APP_VERSION__}`;
