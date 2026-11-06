@@ -96,6 +96,23 @@ export class Landing {
   }
 
   /**
+   * Behind and above the rocket, looking down at ~40° with the pad's normal as up: the
+   * rocket reads upright, the pad below it. Closes in as it comes down; eases there.
+   */
+  #watch(camera: THREE.PerspectiveCamera, pad: THREE.Vector3, n: THREE.Vector3, toward: THREE.Vector3, height: number, size: number, dt: number) {
+    const look = pad.clone().addScaledVector(n, height * 0.62);
+    const extent = size * 0.8 + height * 0.8;
+    const distance = extent / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    const goal = look.clone().addScaledVector(n.clone().multiplyScalar(0.62).addScaledVector(toward, 0.78).normalize(), distance);
+    const goalQ = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(goal, look, n));
+    const k = this.#reducedMotion() ? 1 : 1 - Math.exp(-dt * 3);
+    camera.position.lerp(goal, k);
+    camera.quaternion.slerp(goalQ, k);
+    camera.up.copy(n);
+    camera.updateMatrixWorld();
+  }
+
+  /**
    * The rocket over the pad as the sim has it (legs, lean, engines through `thrust`), and the camera
    * behind and above it.
    */
@@ -126,22 +143,5 @@ export class Landing {
     this.#stage.rocket.setLander(!this.#stage.stacked);
     thrust(s.outcome ? 0 : 0.6);
     this.#watch(camera, pad.center, n, toward, s.alt * unit, pad.size, dt);
-  }
-
-  /**
-   * Behind and above the rocket, looking down at ~40° with the pad's normal as up: the
-   * rocket reads upright, the pad below it. Closes in as it comes down; eases there.
-   */
-  #watch(camera: THREE.PerspectiveCamera, pad: THREE.Vector3, n: THREE.Vector3, toward: THREE.Vector3, height: number, size: number, dt: number) {
-    const look = pad.clone().addScaledVector(n, height * 0.62);
-    const extent = size * 0.8 + height * 0.8;
-    const distance = extent / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-    const goal = look.clone().addScaledVector(n.clone().multiplyScalar(0.62).addScaledVector(toward, 0.78).normalize(), distance);
-    const goalQ = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(goal, look, n));
-    const k = this.#reducedMotion() ? 1 : 1 - Math.exp(-dt * 3);
-    camera.position.lerp(goal, k);
-    camera.quaternion.slerp(goalQ, k);
-    camera.up.copy(n);
-    camera.updateMatrixWorld();
   }
 }
