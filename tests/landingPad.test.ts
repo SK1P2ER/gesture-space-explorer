@@ -5,7 +5,7 @@ import { LANDING_ANCHORS, landingPadParts } from '../src/scene/baseKit/landingPa
 import * as factory from '../src/scene/baseKit/landingPadParts';
 import { Rocket } from '../src/scene/rocketKit';
 import { dockingParams, startDocking, stepDocking } from '../src/sim/docking';
-import { legDeploy, LEGS_AT } from '../src/app/mission';
+import { legDeploy, LEGS_AT } from '../src/app/landing';
 
 function lowestSolid(rocket: Rocket) {
   rocket.group.updateMatrixWorld(true);

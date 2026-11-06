@@ -9,8 +9,8 @@ import { WarpStreaks } from '../scene/rocket';
 import { SEPARATE_AT, type RocketOptions } from '../scene/rocketKit';
 import { RocketStage } from './rocketStage';
 import { HorizonView, type HorizonPose } from './horizonView';
+import { APPROACH_HEIGHT, Landing, type DockAttempt } from './landing';
 import { atmosphereOf, dustFor, type Atmosphere } from '../data/atmosphere';
-import { dockingParams, startDocking, stepDocking, STEER_RANGE, type DockingParams, type DockingState } from '../sim/docking';
 import type { LandingContext } from '../sim/landingReplay';
 import { stamp, type Passport } from '../sim/passport';
 import { fuelLeft, routeKm, tripFuel } from '../sim/route';
@@ -90,11 +90,6 @@ export interface MissionDeps {
 /** How the camera is driven this frame: the rig, aimed at a point; or by the mission itself (the chase view). */
 export type CameraControl = { target: THREE.Vector3 } | 'chase' | null;
 
-/** The approach point: this many base sizes above the destination pad. */
-export const APPROACH_HEIGHT = 3;
-/** The landing legs start to open this far into the descent (0–1), and take this long. */
-export const LEGS_AT = 0.4;
-export const LEGS_SECONDS = 1;
 /** The camera shakes this long after liftoff (not with reduced motion). */
 export const SHAKE_SECONDS = 1.2;
 /** Landing dust starts this far into the descent (0–1). */
@@ -107,13 +102,6 @@ export function lookBackWeight(t: number) {
   const w = Math.max(0, Math.min(1, t / ramp, (LOOK_BACK_SECONDS - t) / ramp));
   return w * w * (3 - 2 * w);
 }
-/** How far the legs are out during a landing: none before LEGS_AT of the descent, then easing out over LEGS_SECONDS. */
-export const legDeploy = (progress: number, secondsSince: number) => (progress < LEGS_AT ? 0 : Math.min(1, secondsSince / LEGS_SECONDS));
-/** Base sizes per pad radius (the pad is PAD_RADIUS of a base size), to place the docking rocket. */
-const PAD_RADIUS = 0.35;
-/** How far the arrow keys move the steering point per press (−1 … 1 across). */
-const KEY_STEP = 0.25;
-
 /** Push a point out to `radius` from `center` if it's inside (the chase camera must stay above ground). */
 export function keepAbove(point: THREE.Vector3, center: THREE.Vector3, radius: number) {
   const d = point.distanceTo(center);
@@ -162,8 +150,8 @@ export class Mission {
   destination: BaseNode | null = null;
   countdown: Countdown | null = null;
   trip: Trip | null = null;
-  /** The docking mini-game, while in Docking. */
-  dock: { state: DockingState; params: DockingParams; steer: { x: number; y: number } | null; auto: boolean; startAlt: number; misses: number; settle: number; legT: number } | null = null;
+  /** The landing at the end of a trip (the docking mini-game). */
+  private readonly landing: Landing;
   /** The rocket and its pad dust: built when first needed, freed when you leave the bases and trips. */
   private readonly stage: RocketStage;
   /** The pad the dust is on (it settles there after the engines stop). */
@@ -186,6 +174,12 @@ export class Mission {
     d.scene.add(this.warp.lines);
     this.stage = new RocketStage(d);
     this.view = new HorizonView(d.rig.camera, d.reducedMotion);
+    this.landing = new Landing(this.stage, d.reducedMotion);
+  }
+
+  /** The docking mini-game's attempt, while in Docking. */
+  get dock(): DockAttempt | null {
+    return this.landing.attempt;
   }
 
   /** Where the horizon view stands (yaw turns round the base); null when it's off. */
@@ -384,17 +378,16 @@ export class Mission {
     this.startDock(0); // docking() drives the camera from here, easing in from the chase view
   }
 
-  /** A docking attempt from the approach height (pad radii). */
+  /** A docking attempt from the approach height, remembered for ?debug recordings. */
   private startDock(misses: number) {
     const body = bodyById(this.base!.base.body);
-    const startAlt = APPROACH_HEIGHT / PAD_RADIUS;
+    const startAlt = this.landing.start(body.gravity, misses);
     this.lastLanding = { baseId: this.base!.base.id, gravity: body.gravity, sensitivity: this.d.state.steerSensitivity, autoLand: this.d.state.autoLand, startAlt };
-    this.dock = { state: startDocking(startAlt), startAlt, params: dockingParams(body.gravity), steer: null, auto: false, misses, settle: 0, legT: 0 };
   }
 
   private land() {
     if (!this.base || !this.d.modes.go('baseView')) return;
-    this.dock = null;
+    this.landing.end();
     // Hand the camera back to the rig (world-up again) where it is now.
     const { rig } = this.d;
     rig.camera.up.set(0, 1, 0);
@@ -441,14 +434,6 @@ export class Mission {
       default:
         return null;
     }
-  }
-
-  /** Arrow keys in Docking: nudge the steering point. */
-  private nudge(dx: number, dy: number) {
-    const d = this.dock!;
-    const s = d.steer ?? { x: d.state.x / STEER_RANGE, y: d.state.z / STEER_RANGE };
-    const c = (v: number) => Math.max(-1, Math.min(1, v));
-    d.steer = { x: c(s.x + dx * KEY_STEP), y: c(s.y + dy * KEY_STEP) };
   }
 
   /**
@@ -577,12 +562,12 @@ export class Mission {
       case 'docking':
         if (!this.dock) return false;
         switch (intent.type) {
-          case 'steer': this.dock.steer = { x: intent.x, y: intent.y }; return true;
-          case 'next': this.nudge(1, 0); return true;
-          case 'prev': this.nudge(-1, 0); return true;
-          case 'zoom': this.nudge(0, intent.factor > 1 ? 1 : -1); return true; // ↓ toward you, ↑ away
-          case 'select': this.dock.auto = true; return true;
-          case 'dismiss': this.dock.auto = true; return true; // no way back up: land
+          case 'steer': this.landing.steerTo(intent.x, intent.y); return true;
+          case 'next': this.landing.nudge(1, 0); return true;
+          case 'prev': this.landing.nudge(-1, 0); return true;
+          case 'zoom': this.landing.nudge(0, intent.factor > 1 ? 1 : -1); return true; // ↓ toward you, ↑ away
+          case 'select': this.landing.landItself(); return true;
+          case 'dismiss': this.landing.landItself(); return true; // no way back up: land
           default: return false;
         }
 
@@ -668,67 +653,18 @@ export class Mission {
 
   /** Docking: the sim steps, the rocket hovers over the pad accordingly, the camera watches from above. */
   private docking(dt: number, camera: THREE.PerspectiveCamera): CameraControl {
-    const d = this.dock!;
     const pad = padFrame(this.base!);
-    const n = pad.normal;
-    // A fixed frame on the pad: 'toward' (where the camera sits, behind the rocket) and 'right'.
-    // The camera's up is the pad's normal, so the rocket always stands upright on screen,
-    // and steering right / down moves it right / down on screen.
-    const toward = UP.clone().addScaledVector(n, -UP.dot(n));
-    if (toward.lengthSq() < 1e-6) toward.set(1, 0, 0).addScaledVector(n, -n.x);
-    toward.normalize();
-    const right = new THREE.Vector3().crossVectors(n, toward).normalize();
-    if (d.settle > 0) {
-      d.settle -= dt; // a moment on the ground (or off the pad) before the outcome
-      if (d.settle <= 0) {
-        if (d.state.outcome === 'landed') this.land();
-        else {
-          this.startDock(d.misses + 1);
-          this.d.flash(t('missedPad', this.d.state.lang));
-        }
-        if (!this.dock) return { target: pad.center };
+    const outcome = this.landing.step(dt, this.d.state.autoLand);
+    if (outcome) {
+      if (outcome === 'landed') this.land();
+      else {
+        this.startDock(this.dock!.misses + 1);
+        this.d.flash(t('missedPad', this.d.state.lang));
       }
-    } else {
-      const auto = d.auto || this.d.state.autoLand;
-      const target = d.steer ? { x: d.steer.x * STEER_RANGE, z: d.steer.y * STEER_RANGE } : null;
-      d.state = stepDocking(d.state, dt, d.params, target, auto);
-      if (d.state.outcome) d.settle = 0.8;
+      if (!this.dock) return { target: pad.center };
     }
-    const s = this.dock!.state;
-    // The landing legs swing out from 40% of the way down, over a second.
-    const dock = this.dock!;
-    if (1 - s.alt / dock.startAlt >= LEGS_AT) dock.legT += dt;
-    this.stage.legs(legDeploy(1 - s.alt / dock.startAlt, dock.legT));
-    const unit = pad.size * PAD_RADIUS;
-    this.rocket.position.copy(pad.center)
-      .addScaledVector(right, s.x * unit)
-      .addScaledVector(toward, s.z * unit)
-      .addScaledVector(n, Math.max(s.alt * unit, pad.size * 0.02));
-    // Leaning into the sideways motion.
-    const lean = new THREE.Vector3().copy(n).addScaledVector(right, s.vx * 0.12).addScaledVector(toward, s.vz * 0.12).normalize();
-    this.rocket.quaternion.setFromUnitVectors(UP, lean);
-    this.rocket.scale.setScalar(pad.size * 0.5);
-    this.stage.rocket.setLander(!this.stage.stacked);
-    this.thrust(s.outcome ? 0 : 0.6, atmosphereOf(this.base!.base.body));
-    this.dockCamera(camera, pad.center, n, toward, s.alt * unit, pad.size, dt);
+    this.landing.place(dt, pad, camera, (level) => this.thrust(level, atmosphereOf(this.base!.base.body)));
     return 'chase';
-  }
-
-  /**
-   * Behind and above the rocket, looking down at ~40° with the pad's normal as up: the
-   * rocket reads upright, the pad below it. Closes in as it comes down; eases there.
-   */
-  private dockCamera(camera: THREE.PerspectiveCamera, pad: THREE.Vector3, n: THREE.Vector3, toward: THREE.Vector3, height: number, size: number, dt: number) {
-    const look = pad.clone().addScaledVector(n, height * 0.62);
-    const extent = size * 0.8 + height * 0.8;
-    const distance = extent / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-    const goal = look.clone().addScaledVector(n.clone().multiplyScalar(0.62).addScaledVector(toward, 0.78).normalize(), distance);
-    const goalQ = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(goal, look, n));
-    const k = this.d.reducedMotion() ? 1 : 1 - Math.exp(-dt * 3);
-    camera.position.lerp(goal, k);
-    camera.quaternion.slerp(goalQ, k);
-    camera.up.copy(n);
-    camera.updateMatrixWorld();
   }
 
   /**

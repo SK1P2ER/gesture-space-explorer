@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
-import { legDeploy, LEGS_AT } from '../src/app/mission';
+import { legDeploy, LEGS_AT } from '../src/app/landing';
 import { engineLayout, legPose, paintHull, Rocket, ROCKET } from '../src/scene/rocketKit';
 
 describe('the v2.2 rocket', () => {
