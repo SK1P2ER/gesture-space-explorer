@@ -127,6 +127,24 @@ describe('a hostile or broken souvenir link is ignored, whole', () => {
   }
 });
 
+it('no id on the page, and no in-page link, reads as a souvenir', () => {
+  // HTML lets an id be any text without spaces, so one could spell a souvenir: a "#" link to it would
+  // open that pass, and the pass's link would scroll to it. Nothing but this test keeps them apart.
+  const ids = new Set<string>();
+  const add = (text: string, pattern: RegExp) => { for (const m of text.matchAll(pattern)) ids.add(m[1]); };
+  const html = readFileSync('index.html', 'utf8');
+  add(html, /\sid="([^"]+)"/g);
+  add(html, /\shref="#([^"]+)"/g);
+  for (const path of readdirSync('src', { recursive: true, encoding: 'utf8' })) {
+    if (!path.endsWith('.ts')) continue;
+    const ts = readFileSync(join('src', path), 'utf8');
+    add(ts, /\.id = '([^']+)'/g); // element.id = '…'
+    add(ts, /\bh\('[\w-]+', \{[^}]*\bid: '([^']+)'/g); // the shell's h(tag, { id: '…' })
+  }
+  for (const found of ['credits', 'sky-labels', 'shell-panel']) expect(ids, 'each kind of id is found').toContain(found);
+  expect([...ids].filter((id) => parseSouvenir(`#${id}`) !== null)).toEqual([]);
+});
+
 /** Whether a fragment is base64url as souvenirLink spells it (decodes, and encodes back the same). */
 function canonical(text: string): boolean {
   try {
