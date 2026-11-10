@@ -1,50 +1,78 @@
 import type {
   PhysicsWorld,
   PhysicsWorldOptions,
-  RigidBody,
   RigidBodyDescription,
   RigidBodyState,
   LocalInertialFrame,
   PhysicsVec3,
 } from './contracts';
 
-export const PHYSICS_ABI_VERSION = 1;
-const STATE_FLOATS = 13;
-const BODY_INPUT_FLOATS = 10;
-const ABI_FUNCTIONS = [
-  '_malloc', '_free', '_gse_physics_abi_version', '_gse_world_create', '_gse_world_destroy',
-  '_gse_world_step', '_gse_body_create', '_gse_body_destroy', '_gse_body_set_linear_velocity',
-  '_gse_body_apply_force', '_gse_body_get_state',
-] as const satisfies readonly (keyof JoltWasmModule)[];
+export const PHYSICS_ABI_VERSION = 2;
 
-/** The low-level exports required from the modularized Emscripten build. */
-export interface JoltWasmModule {
-  HEAPF32: Float32Array;
-  HEAPU32: Uint32Array;
-  _malloc(size: number): number;
-  _free(pointer: number): void;
-  _gse_physics_abi_version(): number;
-  _gse_world_create(
-    gx: number, gy: number, gz: number,
-    maxBodies: number, maxBodyPairs: number, maxContactConstraints: number,
-    outWorld: number,
-  ): number;
-  _gse_world_destroy(world: number): number;
-  _gse_world_step(world: number, fixedStepSeconds: number): number;
-  _gse_body_create(
-    world: number, shape: number, motion: number, massKg: number, friction: number, restitution: number,
-    position: number, rotation: number, shapeParameters: number, outBody: number,
-  ): number;
-  _gse_body_destroy(world: number, body: number): number;
-  _gse_body_set_linear_velocity(world: number, body: number, x: number, y: number, z: number): number;
-  _gse_body_apply_force(world: number, body: number, x: number, y: number, z: number): number;
-  _gse_body_get_state(world: number, body: number, outState: number): number;
+export interface EmbindVec3 {
+  x: number;
+  y: number;
+  z: number;
+}
+
+export interface EmbindQuat extends EmbindVec3 {
+  w: number;
+}
+
+export interface EmbindBodyState {
+  positionM: EmbindVec3;
+  rotation: EmbindQuat;
+  linearVelocityMps: EmbindVec3;
+  angularVelocityRadps: EmbindVec3;
+}
+
+export interface EmbindBodyDescription {
+  shape: number;
+  motion: number;
+  massKg: number;
+  friction: number;
+  restitution: number;
+  positionM: EmbindVec3;
+  rotation: EmbindQuat;
+  shapeParametersM: EmbindVec3;
+}
+
+export interface EmbindWorldDescription {
+  gravityMps2: EmbindVec3;
+  maxBodies: number;
+  maxBodyPairs: number;
+  maxContactConstraints: number;
+}
+
+export interface EmbindRigidBody {
+  setLinearVelocity(velocityMps: EmbindVec3): void;
+  applyForce(forceN: EmbindVec3): void;
+  getState(): EmbindBodyState;
+  delete(): void;
+}
+
+export interface EmbindPhysicsWorld {
+  createBody(description: EmbindBodyDescription): EmbindRigidBody;
+  step(fixedStepSeconds: number): void;
+  delete(): void;
+}
+
+/** Shape and motion enums registered by the native Embind module. */
+export interface EmbindPhysicsEnums {
+  CollisionShape: { Sphere: number; Box: number; Capsule: number };
+  MotionType: { Static: number; Kinematic: number; Dynamic: number };
+}
+
+/** The JS-facing surface produced by the modularized Embind build. */
+export interface JoltWasmModule extends EmbindPhysicsEnums {
+  physicsAbiVersion(): number;
+  PhysicsWorld: new (description: EmbindWorldDescription) => EmbindPhysicsWorld;
 }
 
 export type JoltWasmFactory = () => Promise<JoltWasmModule>;
 
 export class PhysicsAbiError extends Error {
-  constructor(message: string, readonly status?: number) {
+  constructor(message: string) {
     super(message);
     this.name = 'PhysicsAbiError';
   }
@@ -57,20 +85,13 @@ export class PhysicsOverloadError extends Error {
   }
 }
 
-const STATUS_NAMES: Record<number, string> = {
-  1: 'invalid argument',
-  2: 'invalid handle',
-  3: 'capacity exceeded',
-  4: 'Jolt operation failed',
-};
-
 function requireFinite(value: number, label: string) {
   if (!Number.isFinite(value)) throw new TypeError(`${label} must be finite.`);
 }
 
 function requireFloat32(value: number, label: string) {
   requireFinite(value, label);
-  if (!Number.isFinite(Math.fround(value))) throw new RangeError(`${label} is outside the float32 range used by the Jolt ABI.`);
+  if (!Number.isFinite(Math.fround(value))) throw new RangeError(`${label} is outside the float32 range used by the physics engine.`);
 }
 
 function requireFiniteVector(vector: readonly number[], label: string) {
@@ -86,7 +107,7 @@ function requireVector(vector: PhysicsVec3, label: string) {
 function requirePositive(value: number, label: string) {
   requireFloat32(value, label);
   if (value <= 0) throw new RangeError(`${label} must be greater than zero.`);
-  if (Math.fround(value) === 0) throw new RangeError(`${label} is too small to represent in the float32 Jolt ABI.`);
+  if (Math.fround(value) === 0) throw new RangeError(`${label} is too small to represent as float32.`);
 }
 
 function requireCapacity(value: number, label: string) {
@@ -95,22 +116,20 @@ function requireCapacity(value: number, label: string) {
   }
 }
 
-function checkStatus(status: number, operation: string) {
-  if (status === 0) return;
-  const reason = STATUS_NAMES[status] ?? `unknown status ${status}`;
-  throw new PhysicsAbiError(`${operation} failed: ${reason}.`, status);
-}
-
-function readVec3(values: Float32Array, offset: number): PhysicsVec3 {
-  return [values[offset], values[offset + 1], values[offset + 2]];
-}
-
 function immutableVec3([x, y, z]: PhysicsVec3): PhysicsVec3 {
   return Object.freeze([x, y, z]) as PhysicsVec3;
 }
 
 function immutableQuat([x, y, z, w]: LocalInertialFrame['localToIcrf']): LocalInertialFrame['localToIcrf'] {
   return Object.freeze([x, y, z, w]) as LocalInertialFrame['localToIcrf'];
+}
+
+function toVec3([x, y, z]: PhysicsVec3): EmbindVec3 {
+  return { x, y, z };
+}
+
+function toQuat([x, y, z, w]: RigidBodyDescription['rotation']): EmbindQuat {
+  return { x, y, z, w };
 }
 
 function checkOptions(options: PhysicsWorldOptions) {
@@ -173,19 +192,63 @@ function checkDescription(description: RigidBodyDescription) {
   }
 }
 
+function embindBodyDescription(module: JoltWasmModule, description: RigidBodyDescription): EmbindBodyDescription {
+  const { shape } = description;
+  const shapeKind = shape.kind === 'sphere'
+    ? module.CollisionShape.Sphere
+    : shape.kind === 'box'
+      ? module.CollisionShape.Box
+      : module.CollisionShape.Capsule;
+  const shapeParametersM = shape.kind === 'sphere'
+    ? [shape.radiusM, 0, 0] as const
+    : shape.kind === 'box'
+      ? shape.halfExtentsM
+      : [shape.cylinderHalfHeightM, shape.radiusM, 0] as const;
+  const motion = description.motion === 'static'
+    ? module.MotionType.Static
+    : description.motion === 'kinematic'
+      ? module.MotionType.Kinematic
+      : module.MotionType.Dynamic;
+  return {
+    shape: shapeKind,
+    motion,
+    massKg: description.massKg,
+    friction: description.friction,
+    restitution: description.restitution,
+    positionM: toVec3(description.positionM),
+    rotation: toQuat(description.rotation),
+    shapeParametersM: toVec3(shapeParametersM),
+  };
+}
+
+function stateFromEmbind(state: EmbindBodyState): RigidBodyState {
+  const values = [
+    state?.positionM?.x, state?.positionM?.y, state?.positionM?.z,
+    state?.rotation?.x, state?.rotation?.y, state?.rotation?.z, state?.rotation?.w,
+    state?.linearVelocityMps?.x, state?.linearVelocityMps?.y, state?.linearVelocityMps?.z,
+    state?.angularVelocityRadps?.x, state?.angularVelocityRadps?.y, state?.angularVelocityRadps?.z,
+  ];
+  if (values.some((value) => typeof value !== 'number' || !Number.isFinite(value))) {
+    throw new PhysicsAbiError('Body state returned an invalid Embind value object.');
+  }
+  return {
+    positionM: [values[0]!, values[1]!, values[2]!],
+    rotation: [values[3]!, values[4]!, values[5]!, values[6]!],
+    linearVelocityMps: [values[7]!, values[8]!, values[9]!],
+    angularVelocityRadps: [values[10]!, values[11]!, values[12]!],
+  };
+}
+
 /**
- * Adapts the narrow C ABI exported by the Emscripten/Jolt build. This layer is
- * deliberately unaware of Three.js, ephemeris time, and scene-scale units.
+ * Adapts the project's Embind facade. Native value objects cross the boundary
+ * as named fields; this layer remains unaware of Three.js and scene-scale units.
  */
 export function createJoltWorld(module: JoltWasmModule, options: PhysicsWorldOptions): PhysicsWorld {
-  if (!module || !(module.HEAPF32 instanceof Float32Array) || !(module.HEAPU32 instanceof Uint32Array)) {
-    throw new PhysicsAbiError('The Emscripten module is missing its float32 or uint32 memory views.');
+  if (!module || typeof module.physicsAbiVersion !== 'function' || typeof module.PhysicsWorld !== 'function') {
+    throw new PhysicsAbiError('The Embind module is missing its physics facade exports.');
   }
-  for (const name of ABI_FUNCTIONS) {
-    if (typeof module[name] !== 'function') throw new PhysicsAbiError(`The Emscripten module is missing ${name}.`);
-  }
-  if (module._gse_physics_abi_version() !== PHYSICS_ABI_VERSION) {
-    throw new PhysicsAbiError(`Physics ABI mismatch; TypeScript expects version ${PHYSICS_ABI_VERSION}.`);
+  if (module.physicsAbiVersion() !== PHYSICS_ABI_VERSION) {
+    throw new PhysicsAbiError(`Physics interface mismatch; TypeScript expects version ${PHYSICS_ABI_VERSION}.`);
   }
   checkOptions(options);
   const frame: LocalInertialFrame = Object.freeze({
@@ -194,34 +257,14 @@ export function createJoltWorld(module: JoltWasmModule, options: PhysicsWorldOpt
     originVelocityKmps: immutableVec3(options.frame.originVelocityKmps),
     localToIcrf: immutableQuat(options.frame.localToIcrf),
   });
-
-  const scratchBytes = Math.max(STATE_FLOATS * Float32Array.BYTES_PER_ELEMENT, BODY_INPUT_FLOATS * Float32Array.BYTES_PER_ELEMENT);
-  const scratch = module._malloc(scratchBytes);
-  const outHandle = module._malloc(Uint32Array.BYTES_PER_ELEMENT);
-  if (!scratch || !outHandle) {
-    if (scratch) module._free(scratch);
-    if (outHandle) module._free(outHandle);
-    throw new PhysicsAbiError('Could not allocate WebAssembly bridge memory.');
-  }
-
-  let worldHandle = 0;
-  try {
-    checkStatus(module._gse_world_create(
-      ...options.gravityMps2,
-      options.maxBodies,
-      options.maxBodyPairs,
-      options.maxContactConstraints,
-      outHandle,
-    ), 'world create');
-    worldHandle = module.HEAPU32[outHandle >>> 2];
-    if (!worldHandle) throw new PhysicsAbiError('World create returned an empty handle.');
-  } catch (error) {
-    module._free(outHandle);
-    module._free(scratch);
-    throw error;
-  }
-
-  const bodies = new Set<WasmRigidBody>();
+  const nativeWorld = new module.PhysicsWorld({
+    gravityMps2: toVec3(options.gravityMps2),
+    maxBodies: options.maxBodies,
+    maxBodyPairs: options.maxBodyPairs,
+    maxContactConstraints: options.maxContactConstraints,
+  });
+  const bodies = new Set<EmbindRigidBody>();
+  const destroyedBodies = new WeakSet<EmbindRigidBody>();
   let disposed = false;
   let faulted = false;
   let accumulator = 0;
@@ -229,83 +272,47 @@ export function createJoltWorld(module: JoltWasmModule, options: PhysicsWorldOpt
   const maxSubSteps = options.maxSubSteps;
   const assertUsable = () => {
     if (disposed) throw new PhysicsAbiError('Physics world has been disposed.');
-    if (faulted) throw new PhysicsAbiError('Physics world is faulted after a failed Jolt operation; dispose it.');
+    if (faulted) throw new PhysicsAbiError('Physics world is faulted after a failed native operation; dispose it.');
   };
-  const writeFloat32 = (pointer: number, values: readonly number[]) => {
-    module.HEAPF32.set(values, pointer >>> 2);
+  const assertBodyAlive = (body: EmbindRigidBody) => {
+    if (destroyedBodies.has(body)) throw new PhysicsAbiError('Rigid body has been disposed.');
   };
-
-  class WasmRigidBody implements RigidBody {
-    private destroyed = false;
-
-    constructor(readonly handle: number) {}
-
-    setLinearVelocity(velocityMps: PhysicsVec3) {
-      assertUsable();
-      this.assertAlive();
-      requireVector(velocityMps, 'velocityMps');
-      checkStatus(module._gse_body_set_linear_velocity(worldHandle, this.handle, ...velocityMps), 'set linear velocity');
-    }
-
-    applyForce(forceN: PhysicsVec3) {
-      assertUsable();
-      this.assertAlive();
-      requireVector(forceN, 'forceN');
-      checkStatus(module._gse_body_apply_force(worldHandle, this.handle, ...forceN), 'apply force');
-    }
-
-    readState(): RigidBodyState {
-      assertUsable();
-      this.assertAlive();
-      checkStatus(module._gse_body_get_state(worldHandle, this.handle, scratch), 'read body state');
-      const state = module.HEAPF32.slice(scratch >>> 2, (scratch >>> 2) + STATE_FLOATS);
-      if (state.length !== STATE_FLOATS || state.some((value) => !Number.isFinite(value))) {
-        throw new PhysicsAbiError('Body state returned an invalid float32 buffer.');
-      }
-      return {
-        positionM: readVec3(state, 0),
-        rotation: [state[3], state[4], state[5], state[6]],
-        linearVelocityMps: readVec3(state, 7),
-        angularVelocityRadps: readVec3(state, 10),
-      };
-    }
-
-    dispose() {
-      if (this.destroyed || disposed) return;
-      assertUsable();
-      checkStatus(module._gse_body_destroy(worldHandle, this.handle), 'body destroy');
-      this.destroyed = true;
-      bodies.delete(this);
-    }
-
-    private assertAlive() {
-      if (this.destroyed) throw new PhysicsAbiError('Rigid body has been disposed.');
-    }
-  }
 
   return {
     frame,
     createBody(description) {
       assertUsable();
       checkDescription(description);
-      const shape = description.shape;
-      const shapeKind = shape.kind === 'sphere' ? 0 : shape.kind === 'box' ? 1 : 2;
-      const motion = description.motion === 'static' ? 0 : description.motion === 'kinematic' ? 1 : 2;
-      const shapeParameters = shape.kind === 'sphere'
-        ? [shape.radiusM, 0, 0]
-        : shape.kind === 'box'
-          ? [...shape.halfExtentsM]
-          : [shape.cylinderHalfHeightM, shape.radiusM, 0];
-      writeFloat32(scratch, [...description.positionM, ...description.rotation, ...shapeParameters]);
-      checkStatus(module._gse_body_create(
-        worldHandle, shapeKind, motion, description.massKg, description.friction, description.restitution,
-        scratch, scratch + 3 * Float32Array.BYTES_PER_ELEMENT, scratch + 7 * Float32Array.BYTES_PER_ELEMENT, outHandle,
-      ), 'body create');
-      const handle = module.HEAPU32[outHandle >>> 2];
-      if (!handle) throw new PhysicsAbiError('Body create returned an empty handle.');
-      const body = new WasmRigidBody(handle);
-      bodies.add(body);
-      return body;
+      const nativeBody = nativeWorld.createBody(embindBodyDescription(module, description));
+      if (!nativeBody || typeof nativeBody.delete !== 'function') {
+        throw new PhysicsAbiError('Embind createBody returned an invalid native body.');
+      }
+      bodies.add(nativeBody);
+      return {
+        setLinearVelocity(velocityMps) {
+          assertUsable();
+          assertBodyAlive(nativeBody);
+          requireVector(velocityMps, 'velocityMps');
+          nativeBody.setLinearVelocity(toVec3(velocityMps));
+        },
+        applyForce(forceN) {
+          assertUsable();
+          assertBodyAlive(nativeBody);
+          requireVector(forceN, 'forceN');
+          nativeBody.applyForce(toVec3(forceN));
+        },
+        readState() {
+          assertUsable();
+          assertBodyAlive(nativeBody);
+          return stateFromEmbind(nativeBody.getState());
+        },
+        dispose() {
+          if (destroyedBodies.has(nativeBody) || disposed) return;
+          nativeBody.delete();
+          destroyedBodies.add(nativeBody);
+          bodies.delete(nativeBody);
+        },
+      };
     },
     advance(elapsedSeconds) {
       assertUsable();
@@ -316,7 +323,7 @@ export function createJoltWorld(module: JoltWasmModule, options: PhysicsWorldOpt
       if (steps > maxSubSteps) throw new PhysicsOverloadError(steps, maxSubSteps);
       for (let i = 0; i < steps; i++) {
         try {
-          checkStatus(module._gse_world_step(worldHandle, fixedStepSeconds), 'world step');
+          nativeWorld.step(fixedStepSeconds);
         } catch (error) {
           faulted = true;
           throw error;
@@ -328,15 +335,21 @@ export function createJoltWorld(module: JoltWasmModule, options: PhysicsWorldOpt
     dispose() {
       if (disposed) return;
       let failure: unknown;
+      for (const body of bodies) {
+        try {
+          body.delete();
+          destroyedBodies.add(body);
+        } catch (error) {
+          failure ??= error;
+        }
+      }
+      bodies.clear();
       try {
-        checkStatus(module._gse_world_destroy(worldHandle), 'world destroy');
+        nativeWorld.delete();
       } catch (error) {
-        failure = error;
+        failure ??= error;
       } finally {
         disposed = true;
-        bodies.clear();
-        module._free(outHandle);
-        module._free(scratch);
       }
       if (failure) throw failure;
     },

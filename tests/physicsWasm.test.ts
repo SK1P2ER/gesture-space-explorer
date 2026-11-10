@@ -4,48 +4,92 @@ import {
   PHYSICS_ABI_VERSION,
   PhysicsAbiError,
   PhysicsOverloadError,
+  type EmbindBodyDescription,
+  type EmbindBodyState,
+  type EmbindPhysicsWorld,
+  type EmbindRigidBody,
+  type EmbindWorldDescription,
   type JoltWasmModule,
 } from '../src/physics/joltWasm';
 import type { RigidBodyDescription } from '../src/physics/contracts';
 
+const state: EmbindBodyState = {
+  positionM: { x: 1, y: 2, z: 3 },
+  rotation: { x: 0, y: 0, z: 0, w: 1 },
+  linearVelocityMps: { x: 4, y: 5, z: 6 },
+  angularVelocityRadps: { x: 7, y: 8, z: 9 },
+};
+
 function mockModule(abi = PHYSICS_ABI_VERSION) {
-  const memory = new ArrayBuffer(16 * 1024);
-  const frees: number[] = [];
   const steps: number[] = [];
-  let nextPointer = 8;
-  let stateStatus = 0;
-  const heapF32 = new Float32Array(memory);
-  const heapU32 = new Uint32Array(memory);
+  const worlds: MockWorld[] = [];
+  let stepFailure: Error | null = null;
+  let stateFailure: Error | null = null;
+  class MockWorld implements EmbindPhysicsWorld {
+    readonly bodies: MockBody[] = [];
+    deleted = false;
+
+    constructor(readonly description: EmbindWorldDescription, private readonly stepLog: number[], private readonly failStep: () => Error | null) {}
+
+    createBody(description: EmbindBodyDescription) {
+      const body = new MockBody(description, () => stateFailure);
+      this.bodies.push(body);
+      return body;
+    }
+
+    step(dt: number) {
+      const failure = this.failStep();
+      if (failure) throw failure;
+      this.stepLog.push(dt);
+    }
+
+    delete() {
+      this.deleted = true;
+    }
+  }
   const module: JoltWasmModule = {
-    get HEAPF32() { return heapF32; },
-    get HEAPU32() { return heapU32; },
-    _malloc(size) {
-      const pointer = nextPointer;
-      nextPointer += size + 8;
-      return pointer;
-    },
-    _free(pointer) { frees.push(pointer); },
-    _gse_physics_abi_version: () => abi,
-    _gse_world_create(_gx, _gy, _gz, _maxBodies, _maxPairs, _maxConstraints, out) {
-      heapU32[out >>> 2] = 11;
-      return 0;
-    },
-    _gse_world_destroy: () => 0,
-    _gse_world_step(_world, dt) { steps.push(dt); return 0; },
-    _gse_body_create(_world, _shape, _motion, _mass, _friction, _restitution, _pos, _rot, _dims, out) {
-      heapU32[out >>> 2] = 22;
-      return 0;
-    },
-    _gse_body_destroy: () => 0,
-    _gse_body_set_linear_velocity: () => 0,
-    _gse_body_apply_force: () => 0,
-    _gse_body_get_state(_world, _body, out) {
-      if (stateStatus) return stateStatus;
-      heapF32.set([1, 2, 3, 0, 0, 0, 1, 4, 5, 6, 7, 8, 9], out >>> 2);
-      return 0;
+    CollisionShape: { Sphere: 0, Box: 1, Capsule: 2 },
+    MotionType: { Static: 0, Kinematic: 1, Dynamic: 2 },
+    physicsAbiVersion: () => abi,
+    PhysicsWorld: class extends MockWorld {
+      constructor(description: EmbindWorldDescription) {
+        super(description, steps, () => stepFailure);
+        worlds.push(this);
+      }
     },
   };
-  return { module, frees, steps, failState(status: number) { stateStatus = status; } };
+  class MockBody implements EmbindRigidBody {
+    deleted = false;
+    velocities: { x: number; y: number; z: number }[] = [];
+    forces: { x: number; y: number; z: number }[] = [];
+
+    constructor(readonly description: EmbindBodyDescription, private readonly failState: () => Error | null) {}
+
+    setLinearVelocity(velocity: { x: number; y: number; z: number }) {
+      this.velocities.push(velocity);
+    }
+
+    applyForce(force: { x: number; y: number; z: number }) {
+      this.forces.push(force);
+    }
+
+    getState() {
+      const failure = this.failState();
+      if (failure) throw failure;
+      return state;
+    }
+
+    delete() {
+      this.deleted = true;
+    }
+  }
+  return {
+    module,
+    steps,
+    worlds,
+    failStep(error: Error | null) { stepFailure = error; },
+    failState(error: Error | null) { stateFailure = error; },
+  };
 }
 
 const options = {
@@ -74,10 +118,11 @@ const sphere: RigidBodyDescription = {
   rotation: [0, 0, 0, 1],
 };
 
-describe('Jolt WebAssembly contract adapter', () => {
-  it('rejects incompatible ABI versions', () => {
+describe('Embind physics adapter', () => {
+  it('rejects incompatible interface versions and incomplete modules', () => {
     const { module } = mockModule(PHYSICS_ABI_VERSION + 1);
     expect(() => createJoltWorld(module, options)).toThrow(PhysicsAbiError);
+    expect(() => createJoltWorld({} as JoltWasmModule, options)).toThrow(/missing its physics facade exports/);
   });
 
   it('uses fixed steps and refuses to silently discard excessive catch-up time', () => {
@@ -91,10 +136,27 @@ describe('Jolt WebAssembly contract adapter', () => {
     world.dispose();
   });
 
-  it('marshals body descriptions and reads the documented SI state layout', () => {
-    const { module } = mockModule();
+  it('passes named value objects and converts returned state fields', () => {
+    const { module, worlds } = mockModule();
     const world = createJoltWorld(module, options);
+    expect(worlds[0].description).toEqual({
+      gravityMps2: { x: 0, y: -9.80665, z: 0 },
+      maxBodies: 64,
+      maxBodyPairs: 256,
+      maxContactConstraints: 128,
+    });
     const body = world.createBody(sphere);
+    const nativeBody = worlds[0].bodies[0];
+    expect(nativeBody.description).toEqual({
+      shape: 0,
+      motion: 2,
+      massKg: 12,
+      friction: 0.5,
+      restitution: 0,
+      positionM: { x: 1, y: 2, z: 3 },
+      rotation: { x: 0, y: 0, z: 0, w: 1 },
+      shapeParametersM: { x: 0.5, y: 0, z: 0 },
+    });
     expect(body.readState()).toEqual({
       positionM: [1, 2, 3],
       rotation: [0, 0, 0, 1],
@@ -103,23 +165,33 @@ describe('Jolt WebAssembly contract adapter', () => {
     });
     body.setLinearVelocity([0, 1, 0]);
     body.applyForce([0, 10, 0]);
+    expect(nativeBody.velocities).toEqual([{ x: 0, y: 1, z: 0 }]);
+    expect(nativeBody.forces).toEqual([{ x: 0, y: 10, z: 0 }]);
     body.dispose();
+    expect(nativeBody.deleted).toBe(true);
     expect(() => body.readState()).toThrow(PhysicsAbiError);
     world.dispose();
   });
 
-  it('surfaces native failures and frees bridge allocations on disposal', () => {
-    const { module, frees, failState } = mockModule();
+  it('propagates native errors, faults a failed world, and releases owned objects', () => {
+    const { module, worlds, failState, failStep } = mockModule();
     const world = createJoltWorld(module, options);
     const body = world.createBody(sphere);
-    failState(4);
-    expect(() => body.readState()).toThrow(/Jolt operation failed/);
+    const stateError = new Error('native state failure');
+    failState(stateError);
+    expect(() => body.readState()).toThrow(stateError);
+    failState(null);
+    const stepError = new Error('native step failure');
+    failStep(stepError);
+    expect(() => world.advance(1 / 60)).toThrow(stepError);
+    expect(() => world.advance(1 / 60)).toThrow(/world is faulted/);
     world.dispose();
+    expect(worlds[0].bodies[0].deleted).toBe(true);
+    expect(worlds[0].deleted).toBe(true);
     world.dispose();
-    expect(frees).toHaveLength(2);
   });
 
-  it('rejects invalid units and body definitions before crossing the ABI', () => {
+  it('rejects invalid units and body definitions before crossing Embind', () => {
     const { module } = mockModule();
     expect(() => createJoltWorld(module, { ...options, fixedStepSeconds: 0 })).toThrow(RangeError);
     const world = createJoltWorld(module, options);
