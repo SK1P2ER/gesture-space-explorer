@@ -53,3 +53,25 @@ jobs:
       - run: npm run test:smoke
         env:
           SMOKE_PREVIEW: '1'
+
+  physics-wasm:
+    name: physics (Emscripten/Jolt integration)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build and test the Emscripten module
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+          git clone --depth 1 --branch 3.1.64 https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          "$RUNNER_TEMP/emsdk/emsdk" install 3.1.64
+          "$RUNNER_TEMP/emsdk/emsdk" activate 3.1.64
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          npm run physics:test
