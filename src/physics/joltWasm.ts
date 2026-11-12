@@ -7,7 +7,7 @@ import type {
   PhysicsVec3,
 } from './contracts';
 
-export const PHYSICS_ABI_VERSION = 2;
+export const PHYSICS_ABI_VERSION = 3;
 
 export interface EmbindVec3 {
   x: number;
@@ -26,9 +26,12 @@ export interface EmbindBodyState {
   angularVelocityRadps: EmbindVec3;
 }
 
+/** Embind enum values are typed wrapper objects, not their underlying integer codes. */
+export type EmbindEnumValue = object;
+
 export interface EmbindBodyDescription {
-  shape: number;
-  motion: number;
+  shape: EmbindEnumValue;
+  motion: EmbindEnumValue;
   massKg: number;
   friction: number;
   restitution: number;
@@ -59,17 +62,37 @@ export interface EmbindPhysicsWorld {
 
 /** Shape and motion enums registered by the native Embind module. */
 export interface EmbindPhysicsEnums {
-  CollisionShape: { Sphere: number; Box: number; Capsule: number };
-  MotionType: { Static: number; Kinematic: number; Dynamic: number };
+  CollisionShape: {
+    Sphere: EmbindEnumValue;
+    Box: EmbindEnumValue;
+    Capsule: EmbindEnumValue;
+  };
+  MotionType: {
+    Static: EmbindEnumValue;
+    Kinematic: EmbindEnumValue;
+    Dynamic: EmbindEnumValue;
+  };
 }
 
 /** The JS-facing surface produced by the modularized Embind build. */
 export interface JoltWasmModule extends EmbindPhysicsEnums {
   physicsAbiVersion(): number;
   PhysicsWorld: new (description: EmbindWorldDescription) => EmbindPhysicsWorld;
+  getExceptionMessage(exception: number): [string, string];
+  decrementExceptionRefcount(exception: number): void;
+  stackSave(): number;
+  stackRestore(stackPointer: number): void;
 }
 
 export type JoltWasmFactory = () => Promise<JoltWasmModule>;
+
+export interface JoltWasmModuleFactoryOptions {
+  locateFile(path: string, prefix: string): string;
+}
+
+export type JoltWasmModuleFactory = (
+  options?: JoltWasmModuleFactoryOptions,
+) => Promise<JoltWasmModule>;
 
 export class PhysicsAbiError extends Error {
   constructor(message: string) {
@@ -239,12 +262,39 @@ function stateFromEmbind(state: EmbindBodyState): RigidBodyState {
   };
 }
 
+function callNative<T>(module: JoltWasmModule, operation: () => T): T {
+  const stackPointer = module.stackSave();
+  try {
+    return operation();
+  } catch (error) {
+    if (typeof error === 'number') {
+      let details: [string, string];
+      try {
+        details = module.getExceptionMessage(error);
+      } finally {
+        module.decrementExceptionRefcount(error);
+        module.stackRestore(stackPointer);
+      }
+      const [type, message] = details;
+      if (message) throw new Error(`${type}: ${message}`);
+    } else {
+      module.stackRestore(stackPointer);
+    }
+    throw error;
+  }
+}
+
 /**
  * Adapts the project's Embind facade. Native value objects cross the boundary
  * as named fields; this layer remains unaware of Three.js and scene-scale units.
  */
 export function createJoltWorld(module: JoltWasmModule, options: PhysicsWorldOptions): PhysicsWorld {
-  if (!module || typeof module.physicsAbiVersion !== 'function' || typeof module.PhysicsWorld !== 'function') {
+  if (!module || typeof module.physicsAbiVersion !== 'function' ||
+      typeof module.PhysicsWorld !== 'function' ||
+      typeof module.getExceptionMessage !== 'function' ||
+      typeof module.decrementExceptionRefcount !== 'function' ||
+      typeof module.stackSave !== 'function' ||
+      typeof module.stackRestore !== 'function') {
     throw new PhysicsAbiError('The Embind module is missing its physics facade exports.');
   }
   if (module.physicsAbiVersion() !== PHYSICS_ABI_VERSION) {
@@ -257,12 +307,12 @@ export function createJoltWorld(module: JoltWasmModule, options: PhysicsWorldOpt
     originVelocityKmps: immutableVec3(options.frame.originVelocityKmps),
     localToIcrf: immutableQuat(options.frame.localToIcrf),
   });
-  const nativeWorld = new module.PhysicsWorld({
+  const nativeWorld = callNative(module, () => new module.PhysicsWorld({
     gravityMps2: toVec3(options.gravityMps2),
     maxBodies: options.maxBodies,
     maxBodyPairs: options.maxBodyPairs,
     maxContactConstraints: options.maxContactConstraints,
-  });
+  }));
   const bodies = new Set<EmbindRigidBody>();
   const destroyedBodies = new WeakSet<EmbindRigidBody>();
   let disposed = false;
@@ -283,7 +333,8 @@ export function createJoltWorld(module: JoltWasmModule, options: PhysicsWorldOpt
     createBody(description) {
       assertUsable();
       checkDescription(description);
-      const nativeBody = nativeWorld.createBody(embindBodyDescription(module, description));
+      const nativeBody = callNative(module, () =>
+        nativeWorld.createBody(embindBodyDescription(module, description)));
       if (!nativeBody || typeof nativeBody.delete !== 'function') {
         throw new PhysicsAbiError('Embind createBody returned an invalid native body.');
       }
@@ -293,22 +344,22 @@ export function createJoltWorld(module: JoltWasmModule, options: PhysicsWorldOpt
           assertUsable();
           assertBodyAlive(nativeBody);
           requireVector(velocityMps, 'velocityMps');
-          nativeBody.setLinearVelocity(toVec3(velocityMps));
+          callNative(module, () => nativeBody.setLinearVelocity(toVec3(velocityMps)));
         },
         applyForce(forceN) {
           assertUsable();
           assertBodyAlive(nativeBody);
           requireVector(forceN, 'forceN');
-          nativeBody.applyForce(toVec3(forceN));
+          callNative(module, () => nativeBody.applyForce(toVec3(forceN)));
         },
         readState() {
           assertUsable();
           assertBodyAlive(nativeBody);
-          return stateFromEmbind(nativeBody.getState());
+          return stateFromEmbind(callNative(module, () => nativeBody.getState()));
         },
         dispose() {
           if (destroyedBodies.has(nativeBody) || disposed) return;
-          nativeBody.delete();
+          callNative(module, () => nativeBody.delete());
           destroyedBodies.add(nativeBody);
           bodies.delete(nativeBody);
         },
@@ -323,7 +374,7 @@ export function createJoltWorld(module: JoltWasmModule, options: PhysicsWorldOpt
       if (steps > maxSubSteps) throw new PhysicsOverloadError(steps, maxSubSteps);
       for (let i = 0; i < steps; i++) {
         try {
-          nativeWorld.step(fixedStepSeconds);
+          callNative(module, () => nativeWorld.step(fixedStepSeconds));
         } catch (error) {
           faulted = true;
           throw error;
@@ -337,7 +388,7 @@ export function createJoltWorld(module: JoltWasmModule, options: PhysicsWorldOpt
       let failure: unknown;
       for (const body of bodies) {
         try {
-          body.delete();
+          callNative(module, () => body.delete());
           destroyedBodies.add(body);
         } catch (error) {
           failure ??= error;
@@ -345,7 +396,7 @@ export function createJoltWorld(module: JoltWasmModule, options: PhysicsWorldOpt
       }
       bodies.clear();
       try {
-        nativeWorld.delete();
+        callNative(module, () => nativeWorld.delete());
       } catch (error) {
         failure ??= error;
       } finally {
@@ -358,4 +409,28 @@ export function createJoltWorld(module: JoltWasmModule, options: PhysicsWorldOpt
 
 export async function loadJoltWorld(factory: JoltWasmFactory, options: PhysicsWorldOptions): Promise<PhysicsWorld> {
   return createJoltWorld(await factory(), options);
+}
+
+export async function loadJoltModule(moduleUrl: string): Promise<JoltWasmModule> {
+  const baseUrl = typeof document === 'undefined' ? 'http://localhost/' : document.baseURI;
+  const scriptUrl = new URL(moduleUrl, baseUrl);
+  const wasmUrl = new URL('gse_physics.wasm', scriptUrl);
+  const imported = await import(/* @vite-ignore */ scriptUrl.href) as {
+    default?: JoltWasmModuleFactory;
+  };
+  if (typeof imported.default !== 'function') {
+    throw new PhysicsAbiError('The physics module does not export an Emscripten module factory.');
+  }
+  return imported.default({
+    locateFile(path, prefix) {
+      return path.endsWith('.wasm') ? wasmUrl.href : new URL(path, prefix || scriptUrl.href).href;
+    },
+  });
+}
+
+export async function loadJoltWorldFromUrl(
+  moduleUrl: string,
+  options: PhysicsWorldOptions,
+): Promise<PhysicsWorld> {
+  return loadJoltWorld(() => loadJoltModule(moduleUrl), options);
 }

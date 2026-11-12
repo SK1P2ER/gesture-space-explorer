@@ -6,7 +6,7 @@
 
 namespace gse {
 
-inline constexpr std::uint32_t kPhysicsInterfaceVersion = 2;
+inline constexpr std::uint32_t kPhysicsInterfaceVersion = 3;
 
 enum class CollisionShape : std::int32_t {
   Sphere = 0,
@@ -62,6 +62,11 @@ struct BodyState {
 
 class RigidBody {
  public:
+  ~RigidBody();
+
+  RigidBody(const RigidBody&) = delete;
+  RigidBody& operator=(const RigidBody&) = delete;
+
   void setLinearVelocity(Vec3 velocityMps);
   void applyForce(Vec3 forceN);
   BodyState getState() const;
@@ -69,8 +74,8 @@ class RigidBody {
  private:
   friend class PhysicsWorld;
   struct Impl;
-  explicit RigidBody(std::shared_ptr<Impl> impl);
-  std::shared_ptr<Impl> impl_;
+  explicit RigidBody(std::unique_ptr<Impl> impl);
+  std::unique_ptr<Impl> impl_;
 };
 
 class PhysicsWorld {
@@ -81,10 +86,11 @@ class PhysicsWorld {
   PhysicsWorld(const PhysicsWorld&) = delete;
   PhysicsWorld& operator=(const PhysicsWorld&) = delete;
 
-  std::shared_ptr<RigidBody> createBody(BodyDescription description);
+  std::unique_ptr<RigidBody> createBody(BodyDescription description);
   void step(float fixedStepSeconds);
 
  private:
+  friend class RigidBody;
   struct Impl;
   std::shared_ptr<Impl> impl_;
 };

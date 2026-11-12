@@ -23,13 +23,15 @@ const state: EmbindBodyState = {
 function mockModule(abi = PHYSICS_ABI_VERSION) {
   const steps: number[] = [];
   const worlds: MockWorld[] = [];
-  let stepFailure: Error | null = null;
+  const collisionShape = { Sphere: {}, Box: {}, Capsule: {} };
+  const motionType = { Static: {}, Kinematic: {}, Dynamic: {} };
+  let stepFailure: unknown = null;
   let stateFailure: Error | null = null;
   class MockWorld implements EmbindPhysicsWorld {
     readonly bodies: MockBody[] = [];
     deleted = false;
 
-    constructor(readonly description: EmbindWorldDescription, private readonly stepLog: number[], private readonly failStep: () => Error | null) {}
+    constructor(readonly description: EmbindWorldDescription, private readonly stepLog: number[], private readonly failStep: () => unknown) {}
 
     createBody(description: EmbindBodyDescription) {
       const body = new MockBody(description, () => stateFailure);
@@ -48,9 +50,13 @@ function mockModule(abi = PHYSICS_ABI_VERSION) {
     }
   }
   const module: JoltWasmModule = {
-    CollisionShape: { Sphere: 0, Box: 1, Capsule: 2 },
-    MotionType: { Static: 0, Kinematic: 1, Dynamic: 2 },
+    CollisionShape: collisionShape,
+    MotionType: motionType,
     physicsAbiVersion: () => abi,
+    getExceptionMessage: () => ['std::runtime_error', 'native runtime error'],
+    decrementExceptionRefcount: () => {},
+    stackSave: () => 0,
+    stackRestore: () => {},
     PhysicsWorld: class extends MockWorld {
       constructor(description: EmbindWorldDescription) {
         super(description, steps, () => stepFailure);
@@ -87,7 +93,7 @@ function mockModule(abi = PHYSICS_ABI_VERSION) {
     module,
     steps,
     worlds,
-    failStep(error: Error | null) { stepFailure = error; },
+    failStep(error: unknown) { stepFailure = error; },
     failState(error: Error | null) { stateFailure = error; },
   };
 }
@@ -148,8 +154,8 @@ describe('Embind physics adapter', () => {
     const body = world.createBody(sphere);
     const nativeBody = worlds[0].bodies[0];
     expect(nativeBody.description).toEqual({
-      shape: 0,
-      motion: 2,
+      shape: module.CollisionShape.Sphere,
+      motion: module.MotionType.Dynamic,
       massKg: 12,
       friction: 0.5,
       restitution: 0,
@@ -188,6 +194,14 @@ describe('Embind physics adapter', () => {
     world.dispose();
     expect(worlds[0].bodies[0].deleted).toBe(true);
     expect(worlds[0].deleted).toBe(true);
+    world.dispose();
+  });
+
+  it('converts Emscripten exception pointers into JavaScript errors', () => {
+    const { module, failStep } = mockModule();
+    const world = createJoltWorld(module, options);
+    failStep(1234);
+    expect(() => world.advance(1 / 60)).toThrow('std::runtime_error: native runtime error');
     world.dispose();
   });
 

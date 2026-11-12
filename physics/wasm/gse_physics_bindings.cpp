@@ -48,7 +48,7 @@ EMSCRIPTEN_BINDINGS(gse_physics) {
       .field("linearVelocityMps", &gse::BodyState::linearVelocityMps)
       .field("angularVelocityRadps", &gse::BodyState::angularVelocityRadps);
 
-  class_<gse::RigidBody, std::shared_ptr<gse::RigidBody>>("RigidBody")
+  class_<gse::RigidBody>("RigidBody")
       .function("setLinearVelocity", &gse::RigidBody::setLinearVelocity)
       .function("applyForce", &gse::RigidBody::applyForce)
       .function("getState", &gse::RigidBody::getState);

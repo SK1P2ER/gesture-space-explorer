@@ -10,6 +10,9 @@
     "preview": "vite preview",
     "typecheck": "tsc",
     "test": "vitest run",
+    "physics:build": "node scripts/build-physics.mjs wasm",
+    "physics:test": "npm run physics:build && node tests/physicsWasm.integration.mjs",
+    "physics:native:test": "node scripts/build-physics.mjs native",
     "test:watch": "vitest",
     "test:smoke": "node --test --test-concurrency=1 tests/browser/smoke.test.mjs",
     "textures:build": "node scripts/build-textures.mjs .texture-sources --download"
