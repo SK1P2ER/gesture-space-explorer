@@ -144,12 +144,12 @@ export class SolarSystem {
 
     // Images stream in after the first frame; until then each body shows its base color.
     this.nodes.forEach((node, i) => {
-      if (node.body.kind !== 'moon') this.requestBase(i);
+      if (node.body.kind !== 'moon') this.requestStandard(i);
     });
     void this.sky.setSize(profile.skyTextures); // after the planets: they're what you look at first
   }
 
-  private requestBase(i: number) {
+  private requestStandard(i: number) {
     if (this.requested[i] || !this.nodes[i].body.textures.map) return; // the comet has no image
     this.requested[i] = true;
     void this.nodes[i].surface.loadStandard(this.textureSizes.standardTextures);
@@ -296,7 +296,7 @@ export class SolarSystem {
     }
     const pxPerUnitAtDist1 = viewport.height / 2 / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
     this.nodes.forEach((node, i) => {
-      if (node.body.parent === system) this.requestBase(i);
+      if (node.body.parent === system) this.requestStandard(i);
       const distance = node.mesh.getWorldPosition(tmp).distanceTo(camera.position);
       const radiusPx = ((node.body.radius * node.tilt.scale.x) / distance) * pxPerUnitAtDist1;
       setDetail(node, detailFor(radiusPx, i === focusIndex));

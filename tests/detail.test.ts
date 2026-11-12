@@ -51,7 +51,7 @@ describe('HdSwitch', () => {
     expect(sw.wanted).toBe(false);
   });
 
-  it('derives thresholds from the base texture size', () => {
+  it('derives thresholds from the standard texture size', () => {
     expect(hdSwitchConfig(2048).onPx).toBeCloseTo(652, 0);
     expect(hdSwitchConfig(1024).onPx).toBeCloseTo(326, 0);
   });

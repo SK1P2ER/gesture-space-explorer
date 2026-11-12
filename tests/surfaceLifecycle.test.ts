@@ -70,17 +70,17 @@ it('invalidates same-tier requests across recovery', async () => {
   old.resolve(stale); await first; f.surface.update(1);
   expect(f.material.map).toBe(latest); expect(release).toHaveBeenCalledTimes(1);
 });
-it('teardown invalidates pending base and HD loads and releases each owned texture once', async () => {
-  const f = fixture(), base = new THREE.Texture(), lateHd = new THREE.Texture(), hd = deferred<THREE.Texture>();
-  const release = vi.fn(), hdRelease = vi.fn(); base.addEventListener('dispose', release); lateHd.addEventListener('dispose', hdRelease);
-  load.mockResolvedValueOnce(base).mockReturnValueOnce(hd.promise);
+it('teardown invalidates pending standard and HD loads and releases each owned texture once', async () => {
+  const f = fixture(), standard = new THREE.Texture(), lateHd = new THREE.Texture(), hd = deferred<THREE.Texture>();
+  const release = vi.fn(), hdRelease = vi.fn(); standard.addEventListener('dispose', release); lateHd.addEventListener('dispose', hdRelease);
+  load.mockResolvedValueOnce(standard).mockReturnValueOnce(hd.promise);
   await f.surface.loadStandard('1k'); f.surface.update(1); f.surface.setHd('2k');
   f.dispose(); f.dispose(); hd.resolve(lateHd); await settle();
   expect(f.material.map).toBeNull(); expect(f.uniforms.mapNext.value).toBeNull();
   expect(release).toHaveBeenCalledTimes(1); expect(hdRelease).toHaveBeenCalledTimes(1);
-  const g = fixture(), request = deferred<THREE.Texture>(), lateBase = new THREE.Texture(), released = vi.fn();
-  lateBase.addEventListener('dispose', released); load.mockReturnValueOnce(request.promise);
-  const loading = g.surface.loadStandard('1k'); g.dispose(); request.resolve(lateBase); await loading;
+  const g = fixture(), request = deferred<THREE.Texture>(), lateStandard = new THREE.Texture(), released = vi.fn();
+  lateStandard.addEventListener('dispose', released); load.mockReturnValueOnce(request.promise);
+  const loading = g.surface.loadStandard('1k'); g.dispose(); request.resolve(lateStandard); await loading;
   expect(released).toHaveBeenCalledTimes(1); expect(g.material.map).toBeNull();
 });
 it('keeps procedural fallback and placeholders valid on recovery', async () => {

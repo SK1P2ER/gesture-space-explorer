@@ -15,9 +15,9 @@ describe('texture files', () => {
   for (const body of BODIES) {
     it(`${body.id}: all sizes exist`, () => {
       const missing: string[] = [];
-      for (const [base, hd] of requests) {
+      for (const [standard, hd] of requests) {
         for (const layer of bodyLayers(body)) {
-          const file = `public/textures/${layerSize(body, layer, base)}/${body.textures[layer]}`;
+          const file = `public/textures/${layerSize(body, layer, standard)}/${body.textures[layer]}`;
           if (!existsSync(file)) missing.push(file);
         }
         for (const layer of hdLayers(body, hd)) {
