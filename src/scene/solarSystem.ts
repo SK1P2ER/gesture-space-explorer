@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { ASTEROIDS, KUIPER } from '../data/belts';
-import { reachFactor, sceneDistance, type Body, type TextureTier } from '../data/bodies';
+import { reachFactor, sceneDistance, type Body, type TextureSize } from '../data/bodies';
 import { boostLevel, boostLimits, boostScale, moonOpacity } from '../data/boost';
 import { daysSinceJ2000, heliocentric, length, longitude, moonAngle, moonDirection, moonOrbitPole, orbitPath, sunCentered, type Vec3 } from '../data/ephemeris';
 import { detailFor, HdSwitch, hdSwitchConfig } from '../planets/detail';
 import { createBody, setDetail, toScene, type BodyNode } from '../planets/planet';
 import { governSpin } from '../planets/spin';
-import { TIER_WIDTH, type TextureContext } from '../planets/surface';
+import { TEXTURE_WIDTH, type TextureContext } from '../planets/surface';
 import { UploadQueue } from '../planets/textureLoader';
 import { Belt } from './belts';
 import { createBases, updateBases, type BaseNode } from './bases';
@@ -49,11 +49,11 @@ function placeSmall(p: Vec3, out: THREE.Vector3) {
   return toScene(p, out).multiplyScalar(sceneDistance(r) / r);
 }
 
-export interface TextureTiers {
-  /** Every body loads this tier up front… */
-  baseTier: TextureTier;
+export interface TextureSizes {
+  /** Every body loads this size up front… */
+  standardTextures: TextureSize;
   /** …and the focused one switches to this one up close. */
-  hdTier: TextureTier;
+  hdTextures: TextureSize;
 }
 
 export interface BeltCounts {
@@ -61,8 +61,8 @@ export interface BeltCounts {
   kuiper: number;
 }
 
-export interface SkyTier {
-  skyTier: TextureTier;
+export interface SkyTextures {
+  skyTextures: TextureSize;
 }
 
 /** Rocks allocated per belt: the most any quality draws. */
@@ -80,10 +80,10 @@ export class SolarSystem {
   readonly scene = new THREE.Scene();
   readonly nodes: BodyNode[] = [];
 
-  private tiers: TextureTiers;
+  private textureSizes: TextureSizes;
   private cloudDrift = 0;
   private readonly hdSwitches: HdSwitch[] = [];
-  /** Whose base textures have been asked for: moons wait until their planet is visited (they're specks until then). */
+  /** Whose standard textures have been asked for: moons wait until their planet is visited (they're specks until then). */
   private readonly requested: boolean[] = [];
   private readonly moons: MoonLink[] = [];
   private readonly boostLimit: Map<string, number>;
@@ -101,8 +101,8 @@ export class SolarSystem {
   /** The comet's state from update(), for its tails in updateView(): where it heads, and its real distance. */
   private readonly comet = { node: null as BodyNode | null, motion: new THREE.Vector3(), rAU: Infinity };
 
-  constructor(bodies: Body[], renderer: THREE.WebGLRenderer, tiers: TextureTiers & BeltCounts & SkyTier) {
-    this.tiers = tiers;
+  constructor(bodies: Body[], renderer: THREE.WebGLRenderer, profile: TextureSizes & BeltCounts & SkyTextures) {
+    this.textureSizes = profile;
     this.boostLimit = boostLimits(bodies);
     this.scene.background = new THREE.Color(0x02030a);
     const ambient = new THREE.AmbientLight(0xffffff, 0.06); // keeps night sides barely visible
@@ -111,7 +111,7 @@ export class SolarSystem {
     this.scene.add(new THREE.PointLight(0xfff4e0, 3.2, 0, 0)); // the Sun: day side lit, night side dark
     this.scene.add(makeStarfield());
     this.scene.add(this.asteroids.mesh, this.kuiper.mesh, this.tails.group, this.shootingStars.mesh);
-    this.setBeltCounts(tiers);
+    this.setBeltCounts(profile);
 
     this.uploads = new UploadQueue(renderer);
     const textures: TextureContext = {
@@ -127,7 +127,7 @@ export class SolarSystem {
       if (isSmallBody(body)) this.scene.add(makePathLine(body, body.kind === 'comet' ? 0x4f6a88 : 0x445566, 0.3));
       if (body.kind === 'comet') this.comet.node = node;
       this.nodes.push(node);
-      this.hdSwitches.push(new HdSwitch(hdSwitchConfig(TIER_WIDTH[tiers.baseTier])));
+      this.hdSwitches.push(new HdSwitch(hdSwitchConfig(TEXTURE_WIDTH[profile.standardTextures])));
       this.requested.push(false);
     }
     for (const node of this.nodes) {
@@ -144,15 +144,15 @@ export class SolarSystem {
 
     // Images stream in after the first frame; until then each body shows its base color.
     this.nodes.forEach((node, i) => {
-      if (node.body.kind !== 'moon') this.requestBase(i);
+      if (node.body.kind !== 'moon') this.requestStandard(i);
     });
-    void this.sky.setTier(tiers.skyTier); // after the planets: they're what you look at first
+    void this.sky.setSize(profile.skyTextures); // after the planets: they're what you look at first
   }
 
-  private requestBase(i: number) {
+  private requestStandard(i: number) {
     if (this.requested[i] || !this.nodes[i].body.textures.map) return; // the comet has no image
     this.requested[i] = true;
-    void this.nodes[i].surface.loadBase(this.tiers.baseTier);
+    void this.nodes[i].surface.loadStandard(this.textureSizes.standardTextures);
   }
 
   /** After a WebGL context loss and restore: reload every image texture. */
@@ -170,8 +170,8 @@ export class SolarSystem {
   }
 
   /** The Milky Way's resolution (quality). */
-  setSkyTier(tier: TextureTier) {
-    void this.sky.setTier(tier);
+  setSkyTextures(size: TextureSize) {
+    void this.sky.setSize(size);
   }
 
   /** How many rocks each belt draws (quality). */
@@ -180,13 +180,13 @@ export class SolarSystem {
     this.kuiper.setCount(counts.kuiper);
   }
 
-  /** Quality change: every body cross-fades to the new base textures; up-close textures start over. */
-  setTiers(tiers: TextureTiers) {
-    this.tiers = tiers;
+  /** Quality change: every body cross-fades to the new standard textures; up-close textures start over. */
+  setTextureSizes(sizes: TextureSizes) {
+    this.textureSizes = sizes;
     this.nodes.forEach((node, i) => {
-      this.hdSwitches[i].reset(hdSwitchConfig(TIER_WIDTH[tiers.baseTier]));
+      this.hdSwitches[i].reset(hdSwitchConfig(TEXTURE_WIDTH[sizes.standardTextures]));
       node.surface.setHd(null);
-      if (this.requested[i]) void node.surface.loadBase(tiers.baseTier);
+      if (this.requested[i]) void node.surface.loadStandard(sizes.standardTextures);
     });
   }
 
@@ -296,14 +296,14 @@ export class SolarSystem {
     }
     const pxPerUnitAtDist1 = viewport.height / 2 / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
     this.nodes.forEach((node, i) => {
-      if (node.body.parent === system) this.requestBase(i);
+      if (node.body.parent === system) this.requestStandard(i);
       const distance = node.mesh.getWorldPosition(tmp).distanceTo(camera.position);
       const radiusPx = ((node.body.radius * node.tilt.scale.x) / distance) * pxPerUnitAtDist1;
       setDetail(node, detailFor(radiusPx, i === focusIndex));
 
       const hd = this.hdSwitches[i];
       if (hd.update(dt, i === focusIndex, 2 * radiusPx * viewport.pixelRatio)) {
-        node.surface.setHd(hd.wanted ? this.tiers.hdTier : null);
+        node.surface.setHd(hd.wanted ? this.textureSizes.hdTextures : null);
       }
       node.surface.update(dt);
     });
@@ -326,7 +326,7 @@ export class SolarSystem {
   get textureStatus(): TextureStatus {
     const requested = this.nodes.filter((_, i) => this.requested[i]);
     return {
-      loaded: requested.filter((n) => n.surface.baseState !== 'loading').length,
+      loaded: requested.filter((n) => n.surface.standardState !== 'loading').length,
       total: requested.length,
       hd: this.nodes.some((n) => n.surface.hdLoading),
     };

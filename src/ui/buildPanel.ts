@@ -6,7 +6,7 @@ import { t, tf, type StringKey } from './i18n';
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 
-export const KIND_ICON: Record<BuildKind, string> = { habitat: '🏠', solar: '🔆', battery: '🔋', oxygen: 'O₂', greenhouse: '🌱' };
+const KIND_ICON: Record<BuildKind, string> = { habitat: '🏠', solar: '🔆', battery: '🔋', oxygen: 'O₂', greenhouse: '🌱' };
 
 export interface BuildPanelView {
   kind: BuildKind;
@@ -24,7 +24,7 @@ export interface BuildPanelView {
 }
 
 /** "20:00–05:00" ranges from the hours the power runs out. */
-export function hourRanges(hours: readonly number[]): string[] {
+function hourRanges(hours: readonly number[]): string[] {
   if (!hours.length) return [];
   const set = new Set(hours);
   const starts = hours.filter((h) => !set.has((h + 23) % 24));

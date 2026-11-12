@@ -1,4 +1,4 @@
-import { BODIES, type Body } from '../data/bodies';
+import { bodyById, type Body } from '../data/bodies';
 import { cross, dot, heliocentric, moonAngle, moonDirection, primeMeridian, spinFrame, type Vec3 } from '../data/ephemeris';
 import type { SkyMoon } from '../data/skyMoons';
 
@@ -16,7 +16,6 @@ const add = (a: Vec3, b: Vec3, k = 1): Vec3 => [a[0] + b[0] * k, a[1] + b[1] * k
 const scale = (a: Vec3, k: number): Vec3 => [a[0] * k, a[1] * k, a[2] * k];
 const deg = (r: number) => (r * 180) / Math.PI;
 const rad = (d: number) => (d * Math.PI) / 180;
-const byId = (id: string) => BODIES.find((b) => b.id === id)!;
 
 /** Up, east and north at a site, and its world's pole (ecliptic unit vectors). */
 export interface SiteFrame {
@@ -47,7 +46,7 @@ export function skyPosition(frame: SiteFrame, dir: Vec3): { elevation: number; a
 
 /** The Sun's direction from a body (its planet's, for a moon). */
 export function sunDirection(body: Body, ms: number): Vec3 {
-  const planet = body.parent ? byId(body.parent) : body;
+  const planet = body.parent ? bodyById(body.parent) : body;
   return norm(scale(heliocentric(planet.orbit!, ms), -1));
 }
 

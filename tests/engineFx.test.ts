@@ -2,10 +2,11 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { DUST_FROM, SHAKE_SECONDS } from '../src/app/mission';
 import { atmosphereOf, dustFor, FLAME } from '../src/data/atmosphere';
+import type { KitDetail } from '../src/quality';
 import { DUST_PUFFS, PadDust } from '../src/scene/padDust';
 import { Rocket, ROCKET, SEPARATE_AT } from '../src/scene/rocketKit';
 
-const rocket = (quality: 'low' | 'high' = 'high') => new Rocket({ textureSize: 32, quality });
+const rocket = (detail: KitDetail = 'high') => new Rocket({ textureSize: 32, detail });
 const flame = (r: Rocket, name: string) => r.group.getObjectByName(name) as THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
 
 describe('air and dust per world', () => {

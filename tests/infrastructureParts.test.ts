@@ -20,8 +20,8 @@ const bounds = (parts: UtilityPart[]) => {
 const count = (parts: UtilityPart[]) => parts.reduce((sum, [, g]) => sum + (g.index?.count ?? g.getAttribute('position').count) / 3, 0);
 
 describe('Mars utility factories and ownership', () => {
-  it.each(['low', 'high'] as const)('%s garage preserves its envelope and original door clearance', (quality) => {
-    const parts = garageParts(quality);
+  it.each(['low', 'high'] as const)('%s garage preserves its envelope and original door clearance', (detail) => {
+    const parts = garageParts(detail);
     try {
       const box = bounds(parts);
       expect(box.min.x).toBeGreaterThanOrEqual(-0.130001); expect(box.max.x).toBeLessThanOrEqual(0.130001);
@@ -31,8 +31,8 @@ describe('Mars utility factories and ownership', () => {
     } finally { release(parts); }
   });
 
-  it.each(['low', 'high'] as const)('%s rover still fits its .08 by .064 swept-path envelope', (quality) => {
-    const parts = roverParts(quality);
+  it.each(['low', 'high'] as const)('%s rover still fits its .08 by .064 swept-path envelope', (detail) => {
+    const parts = roverParts(detail);
     try {
       const box = bounds(parts);
       expect(box.getSize(new THREE.Vector3()).x).toBeCloseTo(0.08, 6);
@@ -47,10 +47,10 @@ describe('Mars utility factories and ownership', () => {
     } finally { release(parts); }
   });
 
-  it.each(['low', 'high'] as const)('%s solar geometry fits the old plate and power housing stays in the row gap', (quality) => {
-    const panel = solarPanelGeometry(quality), post = solarSupportGeometry(quality);
+  it.each(['low', 'high'] as const)('%s solar geometry fits the old plate and power housing stays in the row gap', (detail) => {
+    const panel = solarPanelGeometry(detail), post = solarSupportGeometry(detail);
     const field = JEZERO.modules.find((m) => m.id === 'solar')!;
-    const power = solarArrayParts(field, quality);
+    const power = solarArrayParts(field, detail);
     try {
       panel.computeBoundingBox();
       expect(panel.boundingBox!.getSize(new THREE.Vector3()).toArray()).toEqual(expect.arrayContaining([expect.closeTo(0.12, 6), expect.closeTo(0.006, 6), expect.closeTo(0.08, 6)]));
@@ -63,8 +63,8 @@ describe('Mars utility factories and ownership', () => {
     } finally { panel.dispose(); post.dispose(); release(power); }
   });
 
-  it.each(['low', 'high'] as const)('%s communications keeps the dish orientation and mast height', (quality) => {
-    const parts = communicationsParts(quality);
+  it.each(['low', 'high'] as const)('%s communications keeps the dish orientation and mast height', (detail) => {
+    const parts = communicationsParts(detail);
     try {
       // The old tilted dish rises above the .41 beacon: keep its analytic rim envelope.
       expect(bounds(parts).max.y).toBeLessThanOrEqual(0.38 + 0.025 * Math.cos(0.7) + 0.08 * Math.sin(0.7) + 1e-6);
@@ -124,15 +124,15 @@ describe('Mars utility factories and ownership', () => {
       vi.spyOn(solarFactory, 'solarArrayParts').mockImplementation((m, q) => watch(originalPower(m, q))),
     ];
     const originalRover = garageFactory.roverParts;
-    const roverSpy = vi.spyOn(garageFactory, 'roverParts').mockImplementation((quality) => {
-      const parts = originalRover(quality);
+    const roverSpy = vi.spyOn(garageFactory, 'roverParts').mockImplementation((detail) => {
+      const parts = originalRover(detail);
       for (const [, g] of parts) instanceSources.push(vi.spyOn(g, 'dispose'));
       return parts;
     });
     const borrowed = new THREE.Texture(), borrowedReleased = vi.spyOn(borrowed, 'dispose');
     try {
       for (let cycle = 0; cycle < 3; cycle++) {
-        const view = new Showcase(JEZERO, { quality: cycle % 2 ? 'low' : 'high', textureSize: 16, R: 5.6, site });
+        const view = new Showcase(JEZERO, { detail: cycle % 2 ? 'low' : 'high', textureSize: 16, R: 5.6, site });
         view.syncMap(borrowed); view.setEnvironment(borrowed);
         for (const spy of staticSources) expect(spy).toHaveBeenCalledTimes(1);
         const liveInstances = instanceSources.slice(-2);
@@ -146,7 +146,7 @@ describe('Mars utility factories and ownership', () => {
   });
 
   it('preserves semantic transforms, instance identities and the existing daylight tracker without allocating new geometry', () => {
-    const view = new Showcase(JEZERO, { quality: 'high', textureSize: 16, R: 5.6, site });
+    const view = new Showcase(JEZERO, { detail: 'high', textureSize: 16, R: 5.6, site });
     try {
       expect([...view.infrastructureAnchors.keys()]).toEqual(['PWR-01', 'ROV-01', 'COM-01']);
       for (const anchor of view.infrastructureAnchors.values()) {

@@ -7,12 +7,12 @@ export type Lang = 'en' | 'my' | 'ja';
 /** The order `L` cycles through. */
 export const LANGS: Lang[] = ['en', 'my', 'ja'];
 
-export type TextureTier = '1k' | '2k' | '4k';
+export type TextureSize = '1k' | '2k' | '4k';
 
 /**
- * Image files in public/textures/<tier>/, built by scripts/build-textures.mjs
+ * Image files in public/textures/<size>/, built by scripts/build-textures.mjs
  * from Solar System Scope (CC BY 4.0). Maps that only exist up to 2K say so
- * in planets/surface.ts; `maxTier` caps the rest.
+ * in planets/surface.ts; `maxSize` caps the rest.
  */
 export interface BodyTextures {
   map: string;
@@ -28,7 +28,7 @@ export interface BodyTextures {
   ring?: string;
   /** Color to multiply a grayscale map by (the USGS mosaics of Europa, Callisto and Titan are gray). */
   tint?: number;
-  maxTier: TextureTier;
+  maxSize: TextureSize;
 }
 
 // Sources for the orbit and rotation data below:
@@ -140,7 +140,7 @@ const DATA: BodyData[] = [
     kind: 'star',
     name: { my: 'နေ', en: 'Sun', ja: '太陽' },
     color: 0xffc845,
-    textures: { map: 'sun.jpg', maxTier: '4k' },
+    textures: { map: 'sun.jpg', maxSize: '4k' },
     orbitAU: 0,
     pole: { ra: 286.13, dec: 63.87 },
     spin: { w0: 84.176, degPerDay: 14.1844 },
@@ -158,7 +158,7 @@ const DATA: BodyData[] = [
     kind: 'planet',
     name: { my: 'ဗုဒ္ဓဟူး', en: 'Mercury', ja: '水星' },
     color: 0x9e9a94,
-    textures: { map: 'mercury.jpg', maxTier: '4k' },
+    textures: { map: 'mercury.jpg', maxSize: '4k' },
     orbitAU: 0.387,
     orbit: {
       a: [0.38709927, 0.00000037], e: [0.20563593, 0.00001906], i: [7.00497902, -0.00594749],
@@ -176,7 +176,7 @@ const DATA: BodyData[] = [
     kind: 'planet',
     name: { my: 'သောကြာ', en: 'Venus', ja: '金星' },
     color: 0xe3c07b,
-    textures: { map: 'venus.jpg', maxTier: '4k' },
+    textures: { map: 'venus.jpg', maxSize: '4k' },
     orbitAU: 0.723,
     orbit: {
       a: [0.72333566, 0.0000039], e: [0.00677672, -0.00004107], i: [3.39467605, -0.0007889],
@@ -204,7 +204,7 @@ const DATA: BodyData[] = [
       night: 'earth_night.jpg',
       clouds: 'earth_clouds.jpg',
       roughness: 'earth_roughness.jpg',
-      maxTier: '4k',
+      maxSize: '4k',
     },
     orbitAU: 1.0,
     orbit: {
@@ -225,7 +225,7 @@ const DATA: BodyData[] = [
     parent: 'earth',
     name: { en: 'Moon', my: 'လ', ja: '月' },
     color: 0x9a9a9a,
-    textures: { map: 'moon.jpg', maxTier: '4k' },
+    textures: { map: 'moon.jpg', maxSize: '4k' },
     orbitAU: 1.0,
     moon: { aKm: 384_400, model: 'lunar', n: 13.176358 },
     pole: { ra: 269.9949, dec: 66.5392 },
@@ -244,7 +244,7 @@ const DATA: BodyData[] = [
     kind: 'planet',
     name: { my: 'အင်္ဂါ', en: 'Mars', ja: '火星' },
     color: 0xc1440e,
-    textures: { map: 'mars.jpg', bump: 'mars_bump.jpg', maxTier: '4k' },
+    textures: { map: 'mars.jpg', bump: 'mars_bump.jpg', maxSize: '4k' },
     orbitAU: 1.524,
     orbit: {
       a: [1.52371034, 0.00001847], e: [0.0933941, 0.00007882], i: [1.84969142, -0.00813131],
@@ -266,7 +266,7 @@ const DATA: BodyData[] = [
     kind: 'planet',
     name: { my: 'ကြာသပတေး', en: 'Jupiter', ja: '木星' },
     color: 0xd8a878,
-    textures: { map: 'jupiter.jpg', maxTier: '4k' },
+    textures: { map: 'jupiter.jpg', maxSize: '4k' },
     orbitAU: 5.203,
     orbit: {
       a: [5.202887, -0.00011607], e: [0.04838624, -0.00013253], i: [1.30439695, -0.00183714],
@@ -286,7 +286,7 @@ const DATA: BodyData[] = [
     parent: 'jupiter',
     name: { en: 'Io', my: 'အိုင်အို', ja: 'イオ' },
     color: 0xd8c060,
-    textures: { map: 'io.jpg', maxTier: '4k' },
+    textures: { map: 'io.jpg', maxSize: '4k' },
     orbitAU: 5.203,
     moon: { aKm: 421_800, model: 'equator', L0: 19.98, n: 203.4889554 },
     pole: { ra: 268.05, dec: 64.5 },
@@ -306,7 +306,7 @@ const DATA: BodyData[] = [
     parent: 'jupiter',
     name: { en: 'Europa', my: 'ယူရိုပါ', ja: 'エウロパ' },
     color: 0xd9cbb0,
-    textures: { map: 'europa.jpg', tint: 0xf2e4c8, maxTier: '4k' },
+    textures: { map: 'europa.jpg', tint: 0xf2e4c8, maxSize: '4k' },
     orbitAU: 5.203,
     moon: { aKm: 671_100, model: 'equator', L0: 214.51, n: 101.3747246 },
     pole: { ra: 268.08, dec: 64.51 },
@@ -326,7 +326,7 @@ const DATA: BodyData[] = [
     parent: 'jupiter',
     name: { en: 'Ganymede', my: 'ဂန်နီမိဒ်', ja: 'ガニメデ' },
     color: 0x9a8f80,
-    textures: { map: 'ganymede.jpg', maxTier: '4k' },
+    textures: { map: 'ganymede.jpg', maxSize: '4k' },
     orbitAU: 5.203,
     moon: { aKm: 1_070_400, model: 'equator', L0: 221.77, n: 50.3176092 },
     pole: { ra: 268.2, dec: 64.57 },
@@ -346,7 +346,7 @@ const DATA: BodyData[] = [
     parent: 'jupiter',
     name: { en: 'Callisto', my: 'ကယ်လစ်စတို', ja: 'カリスト' },
     color: 0x6f655a,
-    textures: { map: 'callisto.jpg', tint: 0xd2c2aa, maxTier: '4k' },
+    textures: { map: 'callisto.jpg', tint: 0xd2c2aa, maxSize: '4k' },
     orbitAU: 5.203,
     moon: { aKm: 1_882_700, model: 'equator', L0: 80.99, n: 21.571071 },
     pole: { ra: 268.72, dec: 64.83 },
@@ -365,7 +365,7 @@ const DATA: BodyData[] = [
     kind: 'planet',
     name: { my: 'စနေ', en: 'Saturn', ja: '土星' },
     color: 0xe8d29a,
-    textures: { map: 'saturn.jpg', ring: 'saturn_ring.png', maxTier: '4k' },
+    textures: { map: 'saturn.jpg', ring: 'saturn_ring.png', maxSize: '4k' },
     orbitAU: 9.537,
     orbit: {
       a: [9.53667594, -0.0012506], e: [0.05386179, -0.00050991], i: [2.48599187, 0.00193609],
@@ -386,7 +386,7 @@ const DATA: BodyData[] = [
     parent: 'saturn',
     name: { en: 'Titan', my: 'တိုက်တန်', ja: 'タイタン' },
     color: 0xd99a40,
-    textures: { map: 'titan.jpg', tint: 0xf0b060, maxTier: '2k' },
+    textures: { map: 'titan.jpg', tint: 0xf0b060, maxSize: '2k' },
     orbitAU: 9.537,
     moon: { aKm: 1_221_900, model: 'equator', L0: 7.57, n: 22.576975, center: { amplitude: 3.3, peri0: 204, periRate: 0.52 } },
     pole: { ra: 39.4827, dec: 83.4279 },
@@ -406,7 +406,7 @@ const DATA: BodyData[] = [
     kind: 'planet',
     name: { my: 'ယူရေးနပ်စ်', en: 'Uranus', ja: '天王星' },
     color: 0x9fd8e0,
-    textures: { map: 'uranus.jpg', maxTier: '2k' },
+    textures: { map: 'uranus.jpg', maxSize: '2k' },
     orbitAU: 19.19,
     orbit: {
       a: [19.18916464, -0.00196176], e: [0.04725744, -0.00004397], i: [0.77263783, -0.00242939],
@@ -425,7 +425,7 @@ const DATA: BodyData[] = [
     kind: 'planet',
     name: { my: 'နက်ပကျွန်း', en: 'Neptune', ja: '海王星' },
     color: 0x3d5fd6,
-    textures: { map: 'neptune.jpg', maxTier: '2k' },
+    textures: { map: 'neptune.jpg', maxSize: '2k' },
     orbitAU: 30.07,
     orbit: {
       a: [30.06992276, 0.00026291], e: [0.00859048, 0.00005105], i: [1.77004347, 0.00035372],
@@ -444,7 +444,7 @@ const DATA: BodyData[] = [
     kind: 'dwarf',
     name: { en: 'Pluto', my: 'ပလူတို', ja: '冥王星' },
     color: 0xc8b49a,
-    textures: { map: 'pluto.jpg', tint: 0xecd8c0, maxTier: '4k' },
+    textures: { map: 'pluto.jpg', tint: 0xecd8c0, maxSize: '4k' },
     orbitAU: 39.48,
     orbit: {
       a: [39.48211675, -0.00031596], e: [0.2488273, 0.0000517], i: [17.14001206, 0.00004818],
@@ -467,7 +467,7 @@ const DATA: BodyData[] = [
     name: { en: 'Halley’s Comet', my: 'ဟေလီ ကြယ်တံခွန်', ja: 'ハレー彗星' },
     color: 0x4a4540,
     // An 11 km nucleus is a dark speck: no image, just its color. What you see is the coma and tails (scene/comet.ts).
-    textures: { map: '', tint: 0x4a4540, maxTier: '1k' },
+    textures: { map: '', tint: 0x4a4540, maxSize: '1k' },
     orbitAU: 17.86,
     comet: { q: 0.59, periodDays: 27_563.8, i: 162.1905300, node: 59.0989472, peri: 112.2414315, tp: 2_446_469.9736 },
     pole: { ra: 0, dec: 90 },
@@ -533,3 +533,8 @@ export function sceneDistance(au: number): number {
 export const moonsOf = (id: string) => BODIES.filter((b) => b.parent === id).sort((a, b) => a.orbitRadius - b.orbitRadius);
 
 export const BODIES: Body[] = placeInScene(DATA);
+
+/** The body with this id; ids come from the data, so it exists (like baseById). */
+export const bodyById = (id: string) => BODIES.find((b) => b.id === id)!;
+/** Its index in BODIES (the focus), or -1 for an unknown id. */
+export const bodyIndex = (id: string) => BODIES.findIndex((b) => b.id === id);

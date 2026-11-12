@@ -1,5 +1,5 @@
 import { baseById } from '../data/bases';
-import { BODIES, type Lang } from '../data/bodies';
+import { bodyById, type Lang } from '../data/bodies';
 import { AVATARS, departureById, type Booking } from '../travel/booking';
 import { arrivalAt, wrapLines } from '../travel/memories';
 import { LOCALE } from '../ui/i18n';
@@ -82,7 +82,7 @@ export function drawPostcard(scene: HTMLCanvasElement, b: Booking, lang: Lang): 
   ctx.textBaseline = 'alphabetic';
   text(stf('postcard.from', lang, { place: baseById(b.to).name[lang] }), '700 46px', INK, 58);
   y += 18;
-  text(BODIES.find((body) => body.id === baseById(b.to).body)!.name[lang], '600 24px', ACCENT, 48, 1);
+  text(bodyById(baseById(b.to).body).name[lang], '600 24px', ACCENT, 48, 1);
   y += 6;
   text(stf('postcard.flew', lang, { nick: `${AVATARS[b.traveller.avatar]} ${b.traveller.name}`, route: route(b, lang) }), '400 26px', INK, 38);
   text(stf('postcard.departed', lang, {

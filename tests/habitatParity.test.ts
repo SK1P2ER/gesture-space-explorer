@@ -29,7 +29,7 @@ describe('habitat architectural parity (captured before extraction)', () => {
 
   it.each([0, 90])('keeps module-local shell bounds and curvature placement at %s degrees', (rot) => {
     const module: Module = { id: 'habA', kind: 'habitat', x: -0.75, z: -0.25, rot };
-    const view = new Showcase(single(module), { quality: 'low', R, site });
+    const view = new Showcase(single(module), { detail: 'low', R, site });
     try {
       const { y, up } = onSphere(module.x, module.z, R);
       const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(...up));
@@ -51,7 +51,7 @@ describe('habitat architectural parity (captured before extraction)', () => {
   });
 
   it('classifies shells, metal and glowing window panes into shared material batches', () => {
-    const view = new Showcase(single({ id: 'habA', kind: 'habitat', x: 0, z: 0 }), { quality: 'low', R, site });
+    const view = new Showcase(single({ id: 'habA', kind: 'habitat', x: 0, z: 0 }), { detail: 'low', R, site });
     try {
       expect(mesh(view, 'hull').material).toBeInstanceOf(THREE.MeshStandardMaterial);
       expect(mesh(view, 'dark').material).toBeInstanceOf(THREE.MeshStandardMaterial);
@@ -77,7 +77,7 @@ describe('habitat architectural parity (captured before extraction)', () => {
   });
 
   it('gives each showcase independent owned outputs and releases habitat batches on teardown', () => {
-    const make = () => new Showcase(single({ id: 'habA', kind: 'habitat', x: 0, z: 0 }), { quality: 'low', R, site });
+    const make = () => new Showcase(single({ id: 'habA', kind: 'habitat', x: 0, z: 0 }), { detail: 'low', R, site });
     const first = make(), second = make();
     try {
       const owned = ['hull', 'dark', 'window'].map((slot) => {

@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export type UtilityQuality = 'low' | 'high';
 export type UtilitySlot = 'hull' | 'hullFlat' | 'dark' | 'window' | 'red' | 'safety' | 'solar';
 export type UtilityPart = [UtilitySlot, THREE.BufferGeometry];
 /** Box with its base at y, matching Showcase's original construction convention. */

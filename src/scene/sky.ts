@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { seeded } from '../data/belts';
-import type { TextureTier } from '../data/bodies';
+import type { TextureSize } from '../data/bodies';
 import { SCENE_TO_EQUATORIAL, ShootingStarTimer } from '../data/sky';
 import { patchShader, replaceOnce } from '../planets/shaderPatch';
 import { combineTextureSignals, disposeTexture, loadTexture, solidTexture, type UploadQueue } from '../planets/textureLoader';
@@ -20,7 +20,7 @@ export class Sky {
   readonly mesh: THREE.Mesh;
   private readonly material: THREE.MeshBasicMaterial;
   private readonly placeholder = solidTexture([0, 0, 0, 255], 'color');
-  private tier: TextureTier | null = null;
+  private size: TextureSize | null = null;
   private texture: THREE.Texture | null = null;
   private generation = 0;
   private request: AbortController | null = null;
@@ -54,17 +54,17 @@ export class Sky {
     this.mesh.frustumCulled = false;
   }
 
-  /** Loads the map at this tier (4K on High, 2K on Low), off the main thread and in slices. */
-  async setTier(tier: TextureTier) {
-    if (this.disposed || tier === this.tier) return;
+  /** Loads the map at this size (4K on High, 2K on Low), off the main thread and in slices. */
+  async setSize(size: TextureSize) {
+    if (this.disposed || size === this.size) return;
     const generation = ++this.generation;
     this.request?.abort();
     const request = this.request = new AbortController();
     const cancellation = combineTextureSignals(request.signal, this.uploads.signal);
     const { signal } = cancellation;
-    this.tier = tier;
+    this.size = size;
     try {
-      const decoded = await loadTexture('sky.jpg', tier, 'color', 1, signal);
+      const decoded = await loadTexture('sky.jpg', size, 'color', 1, signal);
       if (signal.aborted || this.disposed || generation !== this.generation) return disposeTexture(decoded);
       decoded.wrapS = THREE.RepeatWrapping; // the seam at RA 12h blends across
       // upload owns decoded from this point, including on rejection.
@@ -85,16 +85,16 @@ export class Sky {
   /** After a WebGL context loss: load the map again. */
   reload() {
     if (this.disposed) return;
-    const tier = this.tier;
+    const size = this.size;
     ++this.generation;
     this.request?.abort();
     this.request = null;
-    this.tier = null;
+    this.size = null;
     const old = this.texture;
     this.texture = null;
     this.material.map = this.placeholder;
     if (old) disposeTexture(old);
-    if (tier) void this.setTier(tier);
+    if (size) void this.setSize(size);
   }
 
   /** Keeps the sky centered on the camera (it's infinitely far away). */
@@ -110,7 +110,7 @@ export class Sky {
     ++this.generation;
     this.request?.abort();
     this.request = null;
-    this.tier = null;
+    this.size = null;
     this.mesh.removeFromParent();
     this.material.map = null;
     const texture = this.texture;

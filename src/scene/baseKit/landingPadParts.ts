@@ -1,8 +1,8 @@
 import * as THREE from 'three';
+import type { KitDetail } from '../../quality';
 
 export type LandingSlot = 'metal' | 'dark' | 'safety' | 'guidance';
 export type LandingPart = [LandingSlot, THREE.BufferGeometry];
-export type LandingQuality = 'low' | 'high';
 
 /** Base-local datum, not the top of the deck: Mission owns the .02 rocket offset. */
 export const LANDING_ANCHORS = Object.freeze({
@@ -44,8 +44,8 @@ function stencil() {
  * below the rocket's existing parked/docking envelope. No raised clamps.
  * Every geometry is caller-owned and consumed by LandingPad's material batching.
  */
-export function landingPadParts(quality: LandingQuality): LandingPart[] {
-  const rich = quality === 'high';
+export function landingPadParts(detail: KitDetail): LandingPart[] {
+  const rich = detail === 'high';
   const segments = rich ? 64 : 32;
   const parts: LandingPart[] = [
     ['metal', ring(0.322, 0.349, segments, 0.016)],

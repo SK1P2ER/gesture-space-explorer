@@ -10,7 +10,7 @@ import { landingBases } from './helpers/landingBase';
 const insets = { top: 0, right: 0, bottom: 0, left: 0 };
 function fixture() {
   const bases = landingBases(), base = bases.jezero;
-  const owner = new Showcase(JEZERO, { quality: 'high', textureSize: 16, R: 5.6,
+  const owner = new Showcase(JEZERO, { detail: 'high', textureSize: 16, R: 5.6,
     site: { point: new THREE.Vector3(0, 1, 0), quaternion: new THREE.Quaternion(), scale: 1 / 5.6 } });
   const landing = new LandingPad('high'); base.group.add(owner.group, landing.group);
   base.group.updateWorldMatrix(true, false);
@@ -18,7 +18,7 @@ function fixture() {
   camera.position.copy(base.group.localToWorld(new THREE.Vector3(2, 3, 4)));
   camera.lookAt(base.group.localToWorld(new THREE.Vector3())); camera.updateMatrixWorld();
   const director = new MarsCinematicDirector(camera);
-  const context: CinematicContext = { base, owner, landing, mode: 'baseView', horizon: false, quality: 'high' };
+  const context: CinematicContext = { base, owner, landing, mode: 'baseView', horizon: false, qualityTier: 'high' };
   return { base, owner, landing, camera, director, context, dispose() { director.dispose(); owner.dispose(); landing.dispose(); bases.dispose(); } };
 }
 const tick = (d: MarsCinematicDirector, count = 100, reduced = false) => {
@@ -125,7 +125,7 @@ describe('exclusive Mars cinematic camera lease', () => {
   it('cancels on quality, owner retirement and destination changes', () => {
     const f = fixture();
     try {
-      for (const context of [{ ...f.context, quality: 'low' }, null]) {
+      for (const context of [{ ...f.context, qualityTier: 'low' as const }, null]) {
         f.director.start('overview', f.context, false); tick(f.director, 2);
         f.director.validate(context); expect(f.director.active).toBe(false);
       }

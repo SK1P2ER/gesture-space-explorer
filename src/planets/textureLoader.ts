@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { TextureTier } from '../data/bodies';
+import type { TextureSize } from '../data/bodies';
 
 const ROOT = `${import.meta.env.BASE_URL}textures/`;
 
@@ -45,12 +45,12 @@ export function combineTextureSignals(...signals: (AbortSignal | undefined)[]): 
 
 export async function loadTexture(
   file: string,
-  tier: TextureTier,
+  size: TextureSize,
   role: TextureRole,
   anisotropy: number,
   signal?: AbortSignal,
 ): Promise<THREE.Texture> {
-  const url = `${ROOT}${tier}/${file}`;
+  const url = `${ROOT}${size}/${file}`;
   let texture: THREE.Texture | undefined;
   let bitmap: ImageBitmap | undefined;
   try {

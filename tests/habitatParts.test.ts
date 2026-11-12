@@ -12,7 +12,7 @@ const triangles = (parts: ReturnType<typeof habitatParts>) => parts.reduce((n, [
 
 describe('modular habitat details', () => {
   it('keeps identifiers dark against an off-white roof rather than hiding white lettering in the dome', () => {
-    const parts = habitatParts({ quality: 'high', identifier: 'CMD-01', ports: [] });
+    const parts = habitatParts({ detail: 'high', identifier: 'CMD-01', ports: [] });
     try {
       expect(parts.find(([, geometry]) => geometry.userData.feature === 'identifier')![0]).toBe('dark');
     } finally { disposeParts(parts); }
@@ -28,7 +28,7 @@ describe('modular habitat details', () => {
     });
     let view: Showcase | undefined;
     try {
-      view = new Showcase(JEZERO, { quality: 'high', textureSize: 16, R: 5.6, site });
+      view = new Showcase(JEZERO, { detail: 'high', textureSize: 16, R: 5.6, site });
       expect(factory).toHaveBeenCalledTimes(3);
       expect(released.length).toBeGreaterThan(0);
       for (const disposed of released) expect(disposed).toHaveBeenCalledTimes(1);
@@ -37,8 +37,8 @@ describe('modular habitat details', () => {
     } finally { view?.dispose(); factory.mockRestore(); }
   });
 
-  it.each(['low', 'high'] as const)('%s detail stays inside the existing outer band and height envelope', (quality) => {
-    const parts = habitatParts({ quality, identifier: 'HAB-01', ports: [0, Math.PI / 2] });
+  it.each(['low', 'high'] as const)('%s detail stays inside the existing outer band and height envelope', (detail) => {
+    const parts = habitatParts({ detail, identifier: 'HAB-01', ports: [0, Math.PI / 2] });
     try {
       expect(new Set(parts.map(([, geometry]) => geometry)).size).toBe(parts.length);
       for (const [, geometry] of parts) {
@@ -57,8 +57,8 @@ describe('modular habitat details', () => {
   });
 
   it('uses richer High detail while Low retains cheaper geometry and existing material batches', () => {
-    const low = habitatParts({ quality: 'low', identifier: 'HAB-01', ports: [0] });
-    const high = habitatParts({ quality: 'high', identifier: 'HAB-01', ports: [0] });
+    const low = habitatParts({ detail: 'low', identifier: 'HAB-01', ports: [0] });
+    const high = habitatParts({ detail: 'high', identifier: 'HAB-01', ports: [0] });
     try {
       expect(triangles(high)).toBeGreaterThan(triangles(low));
       expect(low.some(([slot]) => slot === 'safety')).toBe(false);
@@ -67,9 +67,9 @@ describe('modular habitat details', () => {
     } finally { disposeParts(low); disposeParts(high); }
   });
 
-  it.each(['low', 'high'] as const)('%s corridor collars retain tube clearance and endpoints', (quality) => {
+  it.each(['low', 'high'] as const)('%s corridor collars retain tube clearance and endpoints', (detail) => {
     const length = 0.5;
-    const parts = corridorParts(length, quality);
+    const parts = corridorParts(length, detail);
     try {
       for (const [, geometry] of parts) {
         const p = geometry.getAttribute('position');
@@ -83,7 +83,7 @@ describe('modular habitat details', () => {
   });
 
   it('exposes stable semantic IDs, roles and module-local inspection bounds without serializing new layout fields', () => {
-    const view = new Showcase(JEZERO, { quality: 'low', R: 5.6, site });
+    const view = new Showcase(JEZERO, { detail: 'low', R: 5.6, site });
     try {
       expect([...view.habitatAnchors.keys()]).toEqual(['habA', 'habB', 'habC']);
       for (const m of JEZERO.modules.filter((m) => m.kind === 'habitat')) {
@@ -109,7 +109,7 @@ describe('modular habitat details', () => {
     const borrowedDisposed = vi.spyOn(borrowed, 'dispose');
     try {
       for (let cycle = 0; cycle < 3; cycle++) {
-        const view = new Showcase(JEZERO, { quality: cycle % 2 ? 'low' : 'high', textureSize: 16, R: cycle === 2 ? 1e6 : 5.6, site });
+        const view = new Showcase(JEZERO, { detail: cycle % 2 ? 'low' : 'high', textureSize: 16, R: cycle === 2 ? 1e6 : 5.6, site });
         view.syncMap(borrowed); view.setEnvironment(borrowed);
         const owned = new Set<THREE.BufferGeometry | THREE.Material | THREE.Texture>();
         view.group.traverse((o) => {

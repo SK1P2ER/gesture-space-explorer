@@ -7,12 +7,13 @@ import { Showcases } from '../src/scene/baseKit/showcases';
 import { LandingPad } from '../src/scene/baseKit/landingPad';
 import { garageParts } from '../src/scene/baseKit/roverGarageParts';
 import { landingBases } from './helpers/landingBase';
+import type { KitDetail } from '../src/quality';
 
 const tick = (controller: MarsBaseOperationsController, count = 100, state: 'active' | 'standby' = 'active') => {
   for (let n = 0; n < count; n++) controller.update(0.1, state, false, false, 1, 0.1, 0);
 };
-const make = (quality: 'high' | 'low' = 'high', operations = true) => new Showcase(JEZERO, {
-  quality, operations, textureSize: 16, R: 5.6,
+const make = (detail: KitDetail = 'high', operations = true) => new Showcase(JEZERO, {
+  detail, operations, textureSize: 16, R: 5.6,
   site: { point: new THREE.Vector3(0, 1, 0), quaternion: new THREE.Quaternion(), scale: 1 / 5.6 },
 });
 
@@ -73,10 +74,10 @@ describe('entry-owned Mars operations', () => {
   });
 
   it('keeps the original default/Low batches and fits the unchanged experimental High caps', () => {
-    for (const [quality, operations, meshes, triangles] of [
+    for (const [detail, operations, meshes, triangles] of [
       ['low', true, 16, 6646], ['high', false, 18, 16898], ['high', true, 21, 16934],
     ] as const) {
-      const view = make(quality, operations);
+      const view = make(detail, operations);
       try { expect(view.stats()).toEqual({ meshes, triangles }); }
       finally { view.dispose(); }
     }
@@ -223,8 +224,8 @@ describe('entry-owned Mars operations', () => {
     manager.operationsEnabled = true; manager.textureSize = 16; manager.operationsAt = () => 'active';
     fixture.jezero.group.visible = true;
     const renderer = {} as THREE.WebGLRenderer;
-    const frame = (quality: 'high' | 'low', seconds: number, want = true, horizon: string | null = null) =>
-      manager.update(id => want && id === 'jezero', quality, seconds, new THREE.PerspectiveCamera(), false,
+    const frame = (detail: KitDetail, seconds: number, want = true, horizon: string | null = null) =>
+      manager.update(id => want && id === 'jezero', detail, seconds, new THREE.PerspectiveCamera(), false,
         horizon, () => null, new THREE.Vector3(), renderer);
     try {
       expect(manager.hasEntries).toBe(false);

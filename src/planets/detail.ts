@@ -21,7 +21,7 @@ export interface HdSwitchConfig {
 }
 
 /**
- * Thresholds for a base map `texels` wide: it covers the visible half of the
+ * Thresholds for standard textures `texels` wide: it covers the visible half of the
  * sphere, so ~texels/π of them span the disk — beyond that it's magnified.
  * (2K: switch at ~650 px; 1K on Low quality: ~325 px.)
  */

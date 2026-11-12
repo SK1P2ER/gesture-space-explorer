@@ -1,8 +1,9 @@
 import * as THREE from 'three';
-import { utilityBox as box, utilityStencil, type UtilityPart, type UtilityQuality } from './utilityGeometry';
+import { utilityBox as box, utilityStencil, type UtilityPart } from './utilityGeometry';
+import type { KitDetail } from '../../quality';
 
-export function communicationsParts(quality: UtilityQuality): UtilityPart[] {
-  const rich = quality === 'high';
+export function communicationsParts(detail: KitDetail): UtilityPart[] {
+  const rich = detail === 'high';
   const dish = new THREE.LatheGeometry(Array.from({ length: rich ? 9 : 5 }, (_, n) => {
     const t = n / (rich ? 8 : 4);
     return new THREE.Vector2(0.08 * t, 0.025 * t * t);

@@ -117,3 +117,24 @@ export function padFrame(b: BaseNode, center = new THREE.Vector3(), normal = new
   normal.copy(center).sub(b.body.mesh.getWorldPosition(tmp)).normalize();
   return { center, normal, size: baseSize(b.body.body.radius) * b.body.tilt.scale.x };
 }
+
+const ray = new THREE.Raycaster();
+/** A screen point (0–1) → a base's ground there, in base units (the curved ground, to within a hair). */
+export function groundAt(group: THREE.Object3D, camera: THREE.Camera, x: number, y: number): [number, number] | null {
+  group.updateWorldMatrix(true, false);
+  ray.setFromCamera(new THREE.Vector2(x * 2 - 1, -(y * 2 - 1)), camera);
+  const inv = group.matrixWorld.clone().invert();
+  const o = ray.ray.origin.clone().applyMatrix4(inv);
+  const d = ray.ray.direction.clone().transformDirection(inv);
+  const R = 1 / group.scale.x;
+  let h = 0;
+  for (let k = 0; k < 3; k++) {
+    if (Math.abs(d.y) < 1e-6) return null;
+    const s = (h - o.y) / d.y;
+    if (s <= 0) return null;
+    const [px, pz] = [o.x + d.x * s, o.z + d.z * s];
+    h = Math.sqrt(Math.max(0, R * R - px * px - pz * pz)) - R; // the ground curves away
+    if (k === 2) return [px, pz];
+  }
+  return null;
+}

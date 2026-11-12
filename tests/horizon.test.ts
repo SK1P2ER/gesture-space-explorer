@@ -12,7 +12,7 @@ const site = { point: new THREE.Vector3(0, 1, 0), quaternion: new THREE.Quaterni
 
 describe('day and night at the showcase base', () => {
   it('windows light up and the greenhouse glows brighter as it gets dark', () => {
-    const s = new Showcase(JEZERO, { quality: 'low', R, site });
+    const s = new Showcase(JEZERO, { detail: 'low', R, site });
     const window = (s.group.getObjectByName('kit:window') as THREE.Mesh).material as THREE.MeshBasicMaterial;
     s.setDaylight(0, new THREE.Vector3(0, 1, 0), 1);
     const day = window.color.getHSL({ h: 0, s: 0, l: 0 }).l;
@@ -21,7 +21,7 @@ describe('day and night at the showcase base', () => {
   });
 
   it('solar panels track the Sun east to west, within their limit, and stow flat at night', () => {
-    const s = new Showcase(JEZERO, { quality: 'low', R, site });
+    const s = new Showcase(JEZERO, { detail: 'low', R, site });
     s.setDaylight(0, new THREE.Vector3(1, 1, 0).normalize(), 1); // morning: Sun in the east, 45° up
     expect(s.tilt).toBeCloseTo(Math.PI / 4, 6);
     s.setDaylight(0, new THREE.Vector3(-1, 0.05, 0).normalize(), 1); // low in the west
@@ -34,7 +34,7 @@ describe('day and night at the showcase base', () => {
   });
 
   it('a flat build (the horizon view) stands on level ground', () => {
-    const flat = new Showcase(JEZERO, { quality: 'low', R: 1e6, site });
+    const flat = new Showcase(JEZERO, { detail: 'low', R: 1e6, site });
     const box = new THREE.Box3().setFromObject(flat.group.getObjectByName('kit:hull')!);
     expect(box.min.y).toBeGreaterThan(-0.001);
   });

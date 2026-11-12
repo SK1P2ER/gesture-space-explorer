@@ -59,13 +59,13 @@ function inEcliptic(a: number, e: number, E: number, argPeri: number, asc: numbe
 const JD_UNIX_EPOCH = 2_440_587.5;
 
 /** A comet's semi-major axis (AU) and eccentricity, from its perihelion distance and period. */
-export function cometShape(c: CometElements) {
+function cometShape(c: CometElements) {
   const a = (c.periodDays / 365.25) ** (2 / 3);
   return { a, e: 1 - c.q / a };
 }
 
 /** Heliocentric position of a comet, in AU. */
-export function cometPosition(c: CometElements, ms: number): Vec3 {
+function cometPosition(c: CometElements, ms: number): Vec3 {
   const { a, e } = cometShape(c);
   const sinceTp = ms / DAY_MS + JD_UNIX_EPOCH - c.tp;
   const M = (((sinceTp / c.periodDays) % 1) + 1.5) % 1 - 0.5; // (-½, ½] of an orbit

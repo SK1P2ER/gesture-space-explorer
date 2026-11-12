@@ -1,5 +1,6 @@
 // Wiring and the frame loop. What the app does lives in src/app/: the mode
-// machine (modes.ts), intent handling (intentHandler.ts), photos, tracking,
+// machine (modes.ts), intent handling (intentHandler.ts), the Quality setting
+// and tier (qualityControl.ts), ?flags= features (flags.ts), photos, tracking,
 // debug tools, settings and the phone info sheet.
 import * as THREE from 'three';
 import { createIntentHandler } from './app/intentHandler';
@@ -15,7 +16,7 @@ import { attachPageLifecycle } from './app/pageLifecycle';
 import { runFrame, type FramePhases } from './app/frameLoop';
 import { boardClock, journeyOngoing, restoreClock, type Journey, type SavedTime } from './app/journey';
 import { config } from './config';
-import { BODIES, reachFactor } from './data/bodies';
+import { BODIES, bodyById, bodyIndex, reachFactor } from './data/bodies';
 import { BASES, baseById } from './data/bases';
 import { GestureEngine } from './gestures/engine';
 import { ExtraGestures } from './gestures/extras';
@@ -23,14 +24,16 @@ import { attachKeyboardAndMouse } from './input/keyboard';
 import { steerFromPalm } from './gestures/steer';
 import { createIntentBus, type Intent } from './intents';
 import { pickable } from './navigation';
-import {
-  AutoTier, autoStartTier, currentDevice, isMobile, nextQualitySetting, PROFILES, readAutoMemory, renderPixelRatio,
-  ResolutionGovernor, saveQuality, UltraGuard, writeAutoMemory, type Quality, type QualitySetting,
-} from './quality';
+import { currentDevice, PROFILES } from './quality';
+import { QualityControl } from './app/qualityControl';
 import { CameraRig } from './scene/cameraRig';
-import type { CinematicContext, CinematicRequest, MarsCinematicDirector } from './scene/marsCinematicDirector';
-import type { CinematicControls } from './ui/cinematicControls';
+import type { CinematicContext, CinematicRequest } from './scene/marsCinematicDirector';
+import {
+  type Director, idleBuildGrab, idleBuildPanel, idleCinematicControls, idleDirector, loadFlaggedCode, needsFlaggedCode,
+  NO_FLAGGED_CODE, parseFlags,
+} from './app/flags';
 import { pickBody } from './scene/picking';
+import { groundAt } from './scene/bases';
 import { ScenePipeline } from './scene/postprocessing';
 import { SolarSystem } from './scene/solarSystem';
 import { MAX_TIME, MIN_TIME, SimClock } from './sim/clock';
@@ -49,16 +52,15 @@ import { WeightPanel } from './ui/weightPanel';
 import { BasePanel } from './ui/basePanel';
 import { MissionOverlay } from './ui/missionOverlay';
 import { LAYOUTS, Showcases } from './scene/baseKit/showcases';
-import { Build } from './app/build';
-import type { BuildPanel } from './ui/buildPanel';
-import type { BuildGrab } from './gestures/buildGrab';
+import { Build, buildPointer } from './app/build';
 import { CELL } from './sim/buildRules';
 import { skyOver, type SkyReport } from './app/baseSky';
 import { nextSetting } from './sim/localSky';
 import { SKY_MOONS } from './data/skyMoons';
 import { SkyLabels } from './ui/skyLabels';
 import { ChromeUi } from './ui/chrome';
-import { MissionHud, type MapView } from './ui/missionHud';
+import { MissionHud } from './ui/missionHud';
+import { miniMap } from './app/miniMap';
 import { PassportPanel } from './ui/passportPanel';
 import { CountdownGesture } from './gestures/countdown';
 
@@ -70,20 +72,24 @@ const modes = new ModeMachine();
 
 // ---------------------------------------------------------------- scene ----
 const canvas = document.querySelector<HTMLCanvasElement>('#scene')!;
-// v2.4 auto-quality: under the chosen tier's pixel-ratio cap, render resolution follows the frame
-// rate (quality.ts ResolutionGovernor). Texture detail is chosen for the full ratio, so a step
-// never loads or drops a texture.
-const device = currentDevice();
-const mobileDevice = isMobile(device);
-const governor = new ResolutionGovernor();
-// v2.4 Auto (quality.ts AutoTier): capable devices get High, weak ones stay on Low, learned per device.
-const newAutoTier = () => new AutoTier(autoStartTier(device), readAutoMemory(storage), { version: __APP_VERSION__, now: Date.now, remember: (m) => writeAutoMemory(m, storage) });
-let autoTier = state.qualitySetting === 'auto' ? newAutoTier() : null;
-if (autoTier) state.quality = autoTier.tier; // what this device learned on an earlier visit
-const fullPixelRatio = () => Math.min(devicePixelRatio, PROFILES[state.quality].pixelRatio);
-const pixelRatio = () => renderPixelRatio(devicePixelRatio, PROFILES[state.quality].pixelRatio, governor.scale, mobileDevice);
+// The Quality setting, the tier in effect, Auto and resolution scaling (app/qualityControl.ts).
+const quality = new QualityControl({
+  state, storage, device: currentDevice(), version: __APP_VERSION__, now: Date.now,
+  devicePixelRatio: () => devicePixelRatio,
+  // Low: 1K→2K textures, no bloom, pixel ratio 1. High: 2K→4K textures, bloom, pixel ratio ≤ 2, 4× MSAA. Ultra (desktop): pixel ratio ≤ 3, 8× MSAA.
+  applyTier(tier) {
+    pipeline.bloomEnabled = PROFILES[tier].bloom;
+    pipeline.setSamples(PROFILES[tier].msaa);
+    applyBaseLighting();
+    resize();
+    system.setTextureSizes(PROFILES[tier]);
+    system.setBeltCounts(PROFILES[tier]);
+    system.setSkyTextures(PROFILES[tier].skyTextures);
+  },
+  resize,
+});
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(pixelRatio());
+renderer.setPixelRatio(quality.pixelRatio());
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = config.render.exposure;
@@ -91,7 +97,7 @@ renderer.toneMappingExposure = config.render.exposure;
 // (~25 ms on the first bloom frame, measured). three.js recommends them for development only.
 renderer.debug.checkShaderErrors = import.meta.env.DEV;
 
-const system = new SolarSystem(BODIES, renderer, PROFILES[state.quality]);
+const system = new SolarSystem(BODIES, renderer, PROFILES[state.qualityTier]);
 // The shown date: starts now, at a week per second (see sim/clock.ts).
 const clock = new SimClock(Date.now());
 const rig = new CameraRig(innerWidth / innerHeight);
@@ -103,12 +109,11 @@ rig.reducedMotion = system.shootingStars.reducedMotion = reducedMotion.matches; 
 reducedMotion.addEventListener('change', (e) => (rig.reducedMotion = system.shootingStars.reducedMotion = e.matches));
 focusCamera(0, true);
 const pipeline = new ScenePipeline(renderer, system.scene, rig.camera, config.render);
-pipeline.bloomEnabled = PROFILES[state.quality].bloom;
-pipeline.setSamples(PROFILES[state.quality].msaa);
-const ultraGuard = new UltraGuard();
+pipeline.bloomEnabled = PROFILES[state.qualityTier].bloom;
+pipeline.setSamples(PROFILES[state.qualityTier].msaa);
 
 function resize() {
-  renderer.setPixelRatio(pixelRatio());
+  renderer.setPixelRatio(quality.pixelRatio());
   renderer.setSize(innerWidth, innerHeight, false);
   pipeline.setSize(innerWidth, innerHeight);
   rig.resize(innerWidth / innerHeight);
@@ -118,34 +123,10 @@ resize();
 canvas.addEventListener('webglcontextlost', () => system.suspendTextureUploads());
 canvas.addEventListener('webglcontextrestored', () => system.reloadTextures());
 
-/** Low: 1K→2K textures, no bloom, pixel ratio 1. High: 2K→4K textures, bloom, pixel ratio ≤ 2, 4× MSAA. Ultra (desktop): pixel ratio ≤ 3, 8× MSAA. */
-let prewarmPending = false;
-/** The Quality button (and Ultra giving way to High): a fixed tier, or Auto. */
-function setQualitySetting(setting: QualitySetting) {
-  state.qualitySetting = setting;
-  saveQuality(setting, storage);
-  autoTier = setting === 'auto' ? newAutoTier() : null;
-  setQuality(autoTier ? autoTier.tier : (setting as Quality));
-}
-/** The tier in effect, from the setting or from Auto. */
-function setQuality(quality: Quality) {
-  state.quality = quality;
-  pipeline.bloomEnabled = PROFILES[quality].bloom;
-  pipeline.setSamples(PROFILES[quality].msaa);
-  if (quality === 'ultra') ultraGuard.rearm();
-  governor.reset(); // a new tier starts at its full resolution
-  applyBaseLighting?.();
-  resize();
-  system.setTiers(PROFILES[quality]);
-  system.setBeltCounts(PROFILES[quality]);
-  system.setSkyTier(PROFILES[quality].skyTier);
-  prewarmPending = true; // compile only after this frame replaces retired scene owners
-}
-
 // While the browser is idle after startup, compile the shaders the other quality needs, so switching
 // never stalls. (Safari has no requestIdleCallback: a short delay instead.)
-if ('requestIdleCallback' in window) requestIdleCallback(() => { prewarmPending = true; }, { timeout: 4000 });
-else setTimeout(() => { prewarmPending = true; }, 1500);
+if ('requestIdleCallback' in window) requestIdleCallback(() => quality.requestPrewarm(), { timeout: 4000 });
+else setTimeout(() => quality.requestPrewarm(), 1500);
 
 /** Focus a body: fly there, in SolarView (the Sun) or Focus mode. */
 function setFocus(index: number, instant = false) {
@@ -184,7 +165,7 @@ const photo = new PhotoFlow(
 );
 
 // Dev builds only: a handle for poking at the scene from the console or test scripts.
-if (import.meta.env.DEV) Object.assign(window, { __app: { renderer, system, pipeline, config, rig, clock, extras, modes, governor, get autoTier() { return autoTier; }, get mission() { return mission; }, get showcases() { return showcases; }, get build() { return build; }, bus } });
+if (import.meta.env.DEV) Object.assign(window, { __app: { renderer, system, pipeline, config, rig, clock, extras, modes, governor: quality.governor, get autoTier() { return quality.autoTier; }, get mission() { return mission; }, get showcases() { return showcases; }, get build() { return build; }, bus } });
 const labels = new PlanetLabels();
 
 // Mouse hover → name label (only while not dragging).
@@ -212,7 +193,7 @@ const mission = new Mission({
     const ms = nextSetting(node.body.body, node.base.lat, node.base.lon, clock.time);
     return ms === null ? null : { ms, sun: skyOver(node, ms).local.sun };
   },
-  rocketOptions: () => ({ engines: 5, textureSize: PROFILES[state.quality].kitTexture, quality: state.quality === 'low' ? 'low' : 'high' }),
+  rocketOptions: () => ({ engines: 5, textureSize: PROFILES[state.qualityTier].kitTextureSize, detail: PROFILES[state.qualityTier].kitDetail }),
   report: (message) => overlay.report(message),
   // AstroLife counts a booked journey's lift-off and landing (only with ?flags=astrolife).
   liftedOff: (from, to) => shell?.liftedOff(from, to),
@@ -227,9 +208,9 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.shadowMap.autoUpdate = false;
 const applyBaseLighting = () => {
-  const q = state.quality;
+  const q = state.qualityTier;
   showcases.lighting = { shadows: q !== 'low', shadowSize: q === 'ultra' ? 4096 : 2048, envSize: q === 'ultra' ? 128 : 64 };
-  showcases.textureSize = PROFILES[q].kitTexture;
+  showcases.textureSize = PROFILES[q].kitTextureSize;
   mission.baseShadows = q !== 'low';
 };
 applyBaseLighting();
@@ -242,38 +223,25 @@ const skies = new Map<string, SkyReport>();
 const skyLabels = new SkyLabels();
 
 // ------------------------------------------------------------ building (?flags=build) ----
-const FLAGS = new Set((new URLSearchParams(location.search).get('flags') ?? '').split(',').filter(Boolean));
-// Code that only a ?flags= feature uses loads only with its flag (v2.5): visitors never download it.
-// Without the flag, a stand-in does what the real object does until that feature is used: nothing.
-// (Without a flag nothing is awaited: startup runs straight through, as before.)
-const [cinematicCode, buildCode, shellCode] = FLAGS.has('cinematic') || FLAGS.has('build') || FLAGS.has('astrolife') ? await Promise.all([
-  FLAGS.has('cinematic') ? Promise.all([import('./scene/marsCinematicDirector'), import('./ui/cinematicControls')]) : null,
-  FLAGS.has('build') ? Promise.all([import('./ui/buildPanel'), import('./gestures/buildGrab')]) : null,
-  FLAGS.has('astrolife') ? import('./shell/shell') : null,
-]) : [null, null, null];
-type Director = Pick<MarsCinematicDirector, 'active' | 'animating' | 'selected' | 'eye' | 'validate' | 'start' | 'update' | 'cancel' | 'dispose'>;
-/** Never started, so never active: what the real director is without ?flags=cinematic. */
-const idleDirector: Director = {
-  active: false, animating: false, selected: null, eye: new THREE.Vector3(),
-  validate() {}, start: () => false, update: () => false, cancel() {}, dispose() {},
-};
+const FLAGS = parseFlags(location.search);
+// Flagged code and its stand-ins: app/flags.ts. (Without a flag nothing is awaited: startup runs
+// straight through, as before.)
+const [cinematicCode, buildCode, shellCode] = needsFlaggedCode(FLAGS) ? await loadFlaggedCode(FLAGS) : NO_FLAGGED_CODE;
 const cinematic: Director = cinematicCode ? new cinematicCode[0].MarsCinematicDirector(rig.camera) : idleDirector;
 let cinematicRequest: CinematicRequest | null = null;
 const cinematicContext = (): CinematicContext | null => {
   const base = mission.base, owner = showcases.get('jezero'), landing = showcases.landingAt('jezero');
   return base?.base.id === 'jezero' && modes.mode === 'baseView' && owner && landing
-    ? { base, owner, landing, mode: modes.mode, horizon: !!mission.horizon, quality: state.quality } : null;
+    ? { base, owner, landing, mode: modes.mode, horizon: !!mission.horizon, qualityTier: state.qualityTier } : null;
 };
 const cancelCinematic = () => { cinematicRequest = null; cinematic.cancel(); };
-/** Without the flag the panel is never shown (cinematicAvailable), so it needn't exist. */
-const noControls: Pick<CinematicControls, 'root' | 'render' | 'dispose'> = { root: document.createElement('details'), render() {}, dispose() {} };
 const cinematicControls = cinematicCode ? new cinematicCode[1].CinematicControls((request) => {
   if (!FLAGS.has('cinematic') || !cinematicContext()) return;
   cancelCinematic();
   if (request === 'panorama') mission.goToGoldenHour();
   else if (mission.horizon) mission.exitHorizon();
   cinematicRequest = request;
-}, cancelCinematic) : noControls;
+}, cancelCinematic) : idleCinematicControls();
 mission.baseCamera = (dt) => {
   const owned = cinematic.update(dt, reducedMotion.matches, clock.paused, rig.viewInsets);
   if (owned && mission.horizon) mission.horizonEye.copy(cinematic.eye);
@@ -295,37 +263,14 @@ showcases.operationsAt = (id) => {
   return modes.mode === 'build' ? 'maintenance' : modes.mode === 'baseView' ? 'active' : 'standby';
 };
 const buildSite = () => (mission.base && LAYOUTS[mission.base.base.id] ? { id: mission.base.base.id, layout: LAYOUTS[mission.base.base.id] } : null);
-const ray = new THREE.Raycaster();
-/** A screen point (0–1) → the base's ground there, in base units (the curved ground, to within a hair). */
-function groundAt(x: number, y: number): [number, number] | null {
-  const b = mission.base;
-  if (!b) return null;
-  const g = b.group;
-  g.updateWorldMatrix(true, false);
-  ray.setFromCamera(new THREE.Vector2(x * 2 - 1, -(y * 2 - 1)), rig.camera);
-  const inv = g.matrixWorld.clone().invert();
-  const o = ray.ray.origin.clone().applyMatrix4(inv);
-  const d = ray.ray.direction.clone().transformDirection(inv);
-  const R = 1 / g.scale.x;
-  let h = 0;
-  for (let k = 0; k < 3; k++) {
-    if (Math.abs(d.y) < 1e-6) return null;
-    const s = (h - o.y) / d.y;
-    if (s <= 0) return null;
-    const [px, pz] = [o.x + d.x * s, o.z + d.z * s];
-    h = Math.sqrt(Math.max(0, R * R - px * px - pz * pz)) - R; // the ground curves away
-    if (k === 2) return [px, pz];
-  }
-  return null;
-}
 const build = new Build({
-  state, modes, site: buildSite, groundAt,
+  state, modes, site: buildSite,
+  groundAt: (x, y) => (mission.base ? groundAt(mission.base.group, rig.camera, x, y) : null),
   sol: () => (buildSite() ? skyOver(mission.base!, clock.time).sol : null),
   flash: (text) => gestureHud.flash(text),
   enabled: FLAGS.has('build'),
 });
-// Without ?flags=build, Build mode can't start: its panel stays hidden and nothing is ever grabbed.
-const buildPanel: Pick<BuildPanel, 'render'> = buildCode ? new buildCode[0].BuildPanel(bus.emit) : { render() {} };
+const buildPanel = buildCode ? new buildCode[0].BuildPanel(bus.emit) : idleBuildPanel;
 // The panel's size frames the Build camera. Observed rather than measured in the loop, where reading
 // it straight after the panels' DOM writes forced a synchronous layout every frame.
 let buildPanelSize = { width: 0, height: 0 };
@@ -334,7 +279,7 @@ new ResizeObserver(([entry]) => {
   buildPanelSize = { width: box.inlineSize, height: box.blockSize };
 }).observe(document.querySelector('#build-panel')!);
 const coarsePointer = matchMedia('(pointer: coarse)');
-const buildGrab: Pick<BuildGrab, 'update' | 'reset'> = buildCode ? new buildCode[1].BuildGrab() : { update: () => [], reset() {} };
+const buildGrab = buildCode ? new buildCode[1].BuildGrab() : idleBuildGrab;
 showcases.buildAt = (id) => {
   const site = buildSite();
   if (!site || site.id !== id) return null;
@@ -346,32 +291,9 @@ showcases.buildAt = (id) => {
     guides: build.active ? { layout: site.layout, placed, version: build.version, held: ghost?.item ?? null, cursor: build.cursor, ok: !preview?.blocked } : null,
   };
 };
-// The mouse in Build mode: hover shows what would go there; a click places it (a tap on a phone
-// previews first, a second tap on the same cell places); press on a module and drag to move it.
-const screen = (x: number, y: number) => ({ x: x / innerWidth, y: y / innerHeight });
-const buildPointer = {
-  down(x: number, y: number) {
-    if (!build.active) return false;
-    bus.emit({ type: 'buildCursor', ...screen(x, y) });
-    if (!build.cursor || build.ghost()) return false; // empty ground: a drag pans, a click places (below)
-    bus.emit({ type: 'buildGrab' });
-    return true;
-  },
-  move: (x: number, y: number) => bus.emit({ type: 'buildCursor', ...screen(x, y) }),
-  up: () => bus.emit({ type: 'buildDrop' }),
-  click(x: number, y: number) {
-    if (!build.active) return false;
-    bus.emit({ type: 'buildCursor', ...screen(x, y) });
-    const same = build.chosenBefore && build.cursor && build.chosenBefore[0] === build.cursor[0] && build.chosenBefore[1] === build.cursor[1];
-    if (same && build.ghost()) {
-      bus.emit({ type: 'buildGrab' });
-      bus.emit({ type: 'buildDrop' });
-    }
-    return true;
-  },
-};
+const buildMouse = buildPointer(build, bus.emit, () => ({ width: innerWidth, height: innerHeight }));
 canvas.addEventListener('pointermove', (e) => {
-  if (build.active && e.pointerType === 'mouse' && !e.buttons) bus.emit({ type: 'buildCursor', ...screen(e.clientX, e.clientY) });
+  if (build.active && e.pointerType === 'mouse' && !e.buttons) buildMouse.move(e.clientX, e.clientY); // hover
 });
 const chrome = new ChromeUi(bus.emit, rig, state);
 bus.on(() => chrome.input()); // any intent (a gesture too) wakes the UI
@@ -402,7 +324,7 @@ for (const [id, intent] of [
   });
 }
 document.querySelector<HTMLButtonElement>('#quality')!.addEventListener('click', (e) => {
-  setQualitySetting(nextQualitySetting(state.qualitySetting, mobileDevice));
+  quality.cycleSetting();
   (e.currentTarget as HTMLElement).blur(); // keep Space / Enter for the scene
 });
 
@@ -410,7 +332,7 @@ const timeBar = new TimeBar(bus.emit);
 const timeDial = new TimeDialOverlay();
 photo.toast.shareButton.addEventListener('click', () => bus.emit({ type: 'sharePhoto' }));
 photo.toast.saveButton.addEventListener('click', () => bus.emit({ type: 'savePhoto' }));
-attachKeyboardAndMouse(canvas, bus, config, pickAt, buildPointer);
+attachKeyboardAndMouse(canvas, bus, config, pickAt, buildMouse);
 
 const debugUrl = new URLSearchParams(location.search).has('debug');
 document.querySelector('#version')!.textContent = `v${__APP_VERSION__}`;
@@ -466,32 +388,17 @@ bus.on((intent) => {
   if (intent.type === 'restartTracking' && !['loading', 'tracking'].includes(state.status.kind)) startHandTracking();
 });
 
-// The mission HUD's map: the planets where they are now, the bases' worlds marked, the rocket and its route.
-const MAP_BODIES = BODIES.map((b, i) => ({ b, i })).filter(({ b }) => b.kind === 'planet' || b.kind === 'dwarf');
-const MAP_RADIUS = Math.max(...MAP_BODIES.map(({ b }) => b.orbitRadius));
-const planetIndex = (bodyId: string) => {
-  const b = BODIES.find((x) => x.id === bodyId)!;
-  return BODIES.findIndex((x) => x.id === (b.parent ?? b.id));
-};
-const BASE_PLANETS = new Set(BASES.map((x) => planetIndex(x.body)));
-const mapPos = new THREE.Vector3();
-const flat = (v: THREE.Vector3) => ({ x: v.x, z: v.z });
-function miniMap(): MapView {
-  const here = mission.base ? planetIndex(mission.base.base.body) : -1;
-  const trip = mission.trip;
-  return {
-    bodies: MAP_BODIES.map(({ b, i }) => ({ ...flat(system.worldPosition(i, mapPos)), color: `#${b.color.toString(16).padStart(6, '0')}`, base: BASE_PLANETS.has(i), here: i === here && !trip })),
-    rocket: modes.mode === 'travel' ? flat(mission.rocket.position) : null,
-    route: trip ? [flat(system.worldPosition(planetIndex(trip.from.base.body), mapPos)), flat(system.worldPosition(planetIndex(trip.to.base.body), mapPos))] : null,
-    maxRadius: MAP_RADIUS,
-  };
-}
+/** The mission HUD's map (app/miniMap.ts), as the mission stands now. */
+const missionMap = () => miniMap({
+  position: (i, out) => system.worldPosition(i, out),
+  hereBody: mission.base?.base.body ?? null,
+  trip: mission.trip && { from: mission.trip.from.base.body, to: mission.trip.to.base.body },
+  rocket: modes.mode === 'travel' ? mission.rocket.position : null,
+});
 
 // ----------------------------------------------------------------- loop ----
 const focusPos = new THREE.Vector3();
 let lastNow = performance.now();
-/** The previous frame's own CPU time (this callback), for Auto's headroom check. */
-let lastCpuMs = 0;
 
 // ------------------------------------------------------------- deep links (v2.4, app/deepLink.ts) ----
 const link = parseDeepLink(location.search, {
@@ -508,7 +415,7 @@ if (link.time !== undefined) {
 /** The body, base and view need the planets where the date puts them: applied on the first frame. */
 let pendingLink = link.body !== undefined;
 function applyLink() {
-  setFocus(BODIES.findIndex((b) => b.id === link.body), true); // a link cuts there: no fly-in
+  setFocus(bodyIndex(link.body!), true); // a link cuts there: no fly-in
   if (link.base) bus.emit({ type: 'enterBase', baseId: link.base });
   if (link.view === 'horizon') bus.emit({ type: 'toggleHorizon' });
 }
@@ -547,7 +454,7 @@ const shell = shellCode ? new shellCode.Shell({
     if (mission.base) mission.leave();
   },
   show(bodyId) {
-    const index = BODIES.findIndex((b) => b.id === bodyId);
+    const index = bodyIndex(bodyId);
     if (index >= 0 && index !== state.focus) setFocus(index);
   },
   journey({ from, to, at }) {
@@ -587,13 +494,7 @@ const phases: FramePhases = {
     frame.now = now;
     frame.cpuStart = performance.now();
     // Ultra that can't keep up gives way to High (once; choosing Ultra again re-arms it).
-    if (ultraGuard.frame(now - lastNow, state.quality)) {
-      setQualitySetting('high');
-      gestureHud.flash(t('ultraTooSlow', state.lang));
-    }
-    if (governor.frame(now - lastNow)) resize();
-    const autoSwitch = autoTier?.frame(now - lastNow, lastCpuMs, governor.targetMs, canSwitchTier());
-    if (autoSwitch && autoSwitch !== state.quality) setQuality(autoSwitch);
+    if (quality.frame(now - lastNow, canSwitchTier)) gestureHud.flash(t('ultraTooSlow', state.lang));
     frame.dt = Math.min((now - lastNow) / 1000, 0.1); // avoid jumps after tab switches
     lastNow = now;
   },
@@ -631,7 +532,7 @@ const phases: FramePhases = {
     showcases.operationsPaused = clock.paused;
     showcases.update(
       (id) => mission.base?.base.id === id || mission.trip?.to.base.id === id || baseById(id).body === BODIES[state.focus].id,
-      state.quality === 'low' ? 'low' : 'high', now / 1000, rig.camera, reducedMotion.matches,
+      PROFILES[state.qualityTier].kitDetail, now / 1000, rig.camera, reducedMotion.matches,
       mission.horizon ? mission.base?.base.id ?? null : null,
       (id) => skyFor(id).local,
       mission.horizonEye,
@@ -640,7 +541,7 @@ const phases: FramePhases = {
     cinematic.validate(cinematicContext()); // rebuilds may have retired the owner in this frame
     pipeline.baseOn = showcases.drawing;
     // Pass 2 walks only the base's planet (whose surface holds the base) and the rocket with its dust.
-    pipeline.baseRoots = showcases.drawing && mission.base ? [system.nodes[BODIES.findIndex((b) => b.id === mission.base!.base.body)].pivot, ...mission.baseRoots()] : [];
+    pipeline.baseRoots = showcases.drawing && mission.base ? [system.nodes[bodyIndex(mission.base!.base.body)].pivot, ...mission.baseRoots()] : [];
     if (view !== 'chase') {
       rig.setTarget(view?.target ?? system.worldPosition(state.focus, focusPos));
       rig.update(dt);
@@ -654,20 +555,15 @@ const phases: FramePhases = {
     }
     system.setHorizon(mission.horizon ? state.focus : null);
     document.body.classList.toggle('horizon', mission.horizon !== null);
-    system.updateView(rig.camera, state.focus, { height: innerHeight, pixelRatio: fullPixelRatio() }, dt, rig.zoomDistance, state.trueScale);
+    system.updateView(rig.camera, state.focus, { height: innerHeight, pixelRatio: quality.fullPixelRatio() }, dt, rig.zoomDistance, state.trueScale);
     showcases.syncMaps(); // updateView can finish a fade and close the previously borrowed image.
-    // A photo gets every pixel the tier allows; auto-quality measures afresh afterwards.
-    if (photo.pending && governor.scale < 1) {
-      governor.reset();
-      resize();
-    }
+    if (photo.pending) quality.fullResolution();
   },
 
   render() {
     if (overlay.enabled) {
-      const target = governor.targetMs;
-      overlay.resolutionInfo = `${Math.round(governor.scale * 100)}% · ${renderer.getPixelRatio().toFixed(2)}x · holds ${target ? Math.round(1000 / target) : '—'} fps`;
-      overlay.tierInfo = autoTier ? `Auto: ${autoTier.describe()}` : `${state.qualitySetting} (fixed)`;
+      overlay.resolutionInfo = quality.describeResolution(renderer.getPixelRatio());
+      overlay.tierInfo = quality.describeTier();
     }
     debug.frameStats?.beginGpu();
     pipeline.render();
@@ -695,7 +591,7 @@ const phases: FramePhases = {
     const horizonSky = mission.horizon && mission.base ? showcases.sky(mission.base.base.id) : null;
     skyLabels.render(
       horizonSky
-        ? horizonSky.labelPoints().map(({ id, world }) => ({ id, world, text: (SKY_MOONS.find((m) => m.id === id)?.name ?? BODIES.find((b) => b.id === id)!.name)[state.lang] }))
+        ? horizonSky.labelPoints().map(({ id, world }) => ({ id, world, text: (SKY_MOONS.find((m) => m.id === id)?.name ?? bodyById(id).name)[state.lang] }))
         : [],
       rig.camera,
     );
@@ -735,7 +631,7 @@ const phases: FramePhases = {
         : null,
     }, state.lang);
     const readout = mission.readout();
-    missionHud.render(readout, readout && miniMap(), state.lang);
+    missionHud.render(readout, readout && missionMap(), state.lang);
     passportPanel.render(state.passportOpen, state.passport, state.lang, state.baseLevels);
     weightPanel.render(state.weightOpen, state.weightKg, (state.selected ?? BODIES[state.focus]).id, state.lang);
     hud.render({
@@ -744,7 +640,7 @@ const phases: FramePhases = {
       selected: state.selected,
       status: state.status,
       textures: system.textureStatus,
-      quality: state.quality,
+      qualityTier: state.qualityTier,
       qualitySetting: state.qualitySetting,
       watermark: state.watermark,
       trueScale: state.trueScale,
@@ -758,14 +654,11 @@ const phases: FramePhases = {
   },
 
   end() {
-    // Optional warm-up must not retain programs belonging to replaceable base or
-    // mission owners. Defer until navigation returns to the persistent scene.
-    if (prewarmPending && !showcases.hasEntries && (modes.mode === 'focus' || modes.mode === 'solarView')) {
-      prewarmPending = false; // coalesce rapid quality requests
-      void pipeline.prewarm();
-    }
-    lastCpuMs = performance.now() - frame.cpuStart;
-    debug.frameStats?.frame(frame.now, lastCpuMs);
+    // The persistent scene: no base or mission owners whose programs a warm-up would retain.
+    if (quality.takePrewarm(!showcases.hasEntries && (modes.mode === 'focus' || modes.mode === 'solarView'))) void pipeline.prewarm();
+    const cpuMs = performance.now() - frame.cpuStart;
+    quality.endFrame(cpuMs);
+    debug.frameStats?.frame(frame.now, cpuMs);
   },
 };
 

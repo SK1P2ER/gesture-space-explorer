@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BODIES, type Lang } from '../data/bodies';
+import { bodyById, type Lang } from '../data/bodies';
 import { heliocentric, type Vec3 } from '../data/ephemeris';
 import { SKY_MOONS } from '../data/skyMoons';
 import type { SkyObject } from '../scene/baseKit/horizon';
@@ -19,7 +19,7 @@ export interface SkyReport {
   sol: SolConditions;
 }
 
-const earth = BODIES.find((b) => b.id === 'earth')!;
+const earth = bodyById('earth');
 const q = new THREE.Quaternion();
 
 /** From the ephemeris at `ms`: the Sun, the sky moons and Earth over a base, turned into the base's frame. */
@@ -49,7 +49,7 @@ export function skyOver(node: BaseNode, ms: number): SkyReport {
     if (elevation > 0) up.push({ id: 'earth', name: earth.name, elevation });
   }
   const sol = { ...sunPath(frame, sun), dust: body.id === 'mars' ? dustFactor(solarLongitude(body, ms)) : 1 };
-  const planet = body.parent ? BODIES.find((b) => b.id === body.parent)! : body;
+  const planet = body.parent ? bodyById(body.parent) : body;
   const rAU = Math.hypot(...heliocentric(planet.orbit!, ms));
   return { local: { sun: toBase(sun), sunElevation: day.elevation, night: nightness(day.elevation), objects, rAU, dust: sol.dust }, day, up, sol };
 }

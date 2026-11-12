@@ -5,7 +5,7 @@ type Patch = (shader: THREE.WebGLProgramParametersWithUniforms) => void;
 const INCLUDE = /^[ \t]*#include +<([\w\d./]+)>/gm;
 
 /** Inlines three's `#include <chunk>` directives so patches can edit any line. */
-export function resolveIncludes(source: string): string {
+function resolveIncludes(source: string): string {
   return source.replace(INCLUDE, (_, name: string) => {
     const chunk = THREE.ShaderChunk[name as keyof typeof THREE.ShaderChunk];
     if (chunk === undefined) throw new Error(`Unknown shader chunk: ${name}`);
