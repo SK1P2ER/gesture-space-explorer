@@ -27,6 +27,7 @@ export interface TrackingDeps {
   frameMode: () => string;
   /** On-screen confirmation for a discrete gesture event (after it's applied), if any. */
   gestureMessage: (intent: Intent) => string | null;
+  timing?: (t:number,detectMs:number,processingMs:number,hands:number,intents:number)=>void;
 }
 
 const sessions = new WeakMap<HTMLVideoElement, TrackingSession>();
@@ -143,6 +144,7 @@ export class TrackingSession {
   }
 
   private onFrame(frame: HandFrame, detectMs: number, aspect: number) {
+    const started=performance.now();
     if (!this.current()) return;
     if (!this.camera?.isLive()) { this.dispose('err.disconnected'); return; }
     const { bus, gestures, extras, overlay, recorder, gestureHud, gestureMessage, more, frameMode, keep } = this.deps;
@@ -162,6 +164,7 @@ export class TrackingSession {
     const { pose, action, progress } = gestures.ui;
     overlay.gestureInfo = pose ? `${pose} → ${action ?? '—'}${progress ? ` ${Math.round(progress * 100)}%` : ''}` : '—';
     if (overlay.enabled) logGestureFrame(gestures, extras, intents);
+    this.deps.timing?.(frame.t,detectMs,performance.now()-started,frame.hands.length,intents.length);
   }
 }
 

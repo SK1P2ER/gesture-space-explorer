@@ -138,6 +138,25 @@ export class CameraRig {
   /** Borrowed framing measurements for an exclusive temporary camera owner. */
   get viewInsets(): Readonly<Insets> { return this.insets; }
 
+  /** Fit an externally positioned landing view into the space left by its controls. */
+  applyLandingInsets() {
+    const { top, right, bottom, left } = this.insets;
+    const aspect = this.camera.aspect;
+    const width = 1000 * aspect, height = 1000;
+    const scale = Math.min(1 - left - right, 1 - top - bottom);
+    const fullWidth = width * scale, fullHeight = height * scale;
+    const offsetX = (fullWidth - width) / 2 + (right - left) * width / 2;
+    const offsetY = (fullHeight - height) / 2 + (bottom - top) * height / 2;
+    const view = this.camera.view;
+    if (view?.enabled && view.fullWidth === fullWidth && view.fullHeight === fullHeight
+      && view.offsetX === offsetX && view.offsetY === offsetY && view.width === width && view.height === height) return;
+    // A smaller virtual frame widens the visible frustum without moving the
+    // mission camera or changing its zoom. The offset centers it in the free area.
+    this.camera.setViewOffset(fullWidth, fullHeight, offsetX, offsetY, width, height);
+    this.camera.aspect = aspect; // avoid accumulating round-off from the virtual frame's ratio
+    this.camera.updateProjectionMatrix();
+  }
+
   /**
    * Look at the target from this direction (a world vector from the target toward the
    * camera), easing there; called every frame it follows a turning planet without a

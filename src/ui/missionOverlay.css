@@ -1,0 +1,159 @@
+/* Mission controls use their own quiet deck, leaving the rocket unobstructed. */
+.active-vehicle-label { position:fixed; transform:translate(-50%,24px); z-index:8; padding:4px 9px; border:1px solid #71cfcb; border-radius:20px; color:#b4fff0; background:#102c36e8; pointer-events:none; font-size:.7rem; }
+.japan-view-controls { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
+.spaceport-view-caption { flex-basis:100%; margin:0 0 6px; color:#b7c7d4; font-size:.75rem; line-height:1.5; }
+#local-spaceport { position:fixed; inset:0; z-index:1; }
+#local-spaceport[hidden] { display:none; }
+#spaceport-ground-canvas { width:100%; height:100%; display:block; touch-action:none; cursor:grab; }
+body.local-spaceport-view .hud,body.local-spaceport-view #base-panel { z-index:3; }
+body.local-spaceport-view #scene { visibility:hidden; }
+body.local-spaceport-view :is(#labels,#sky-labels,#focus,#loading) { visibility:hidden; }
+.spaceport-navigation { position:fixed; top:calc(var(--header-bottom,90px) + 12px); right:16px; z-index:15; width:min(185px,calc(50vw - 24px)); }
+.spaceport-navigation button { min-height:44px; width:100%; white-space:normal; }
+body.photo-mode .spaceport-navigation { visibility:hidden; }
+.japan-view-controls button { flex:1 1 120px; min-width:0; min-height:44px; white-space:normal; line-height:1.5; }
+.japan-site-marker { position:fixed; z-index:8; transform:translate(-50%,-50%); max-width:calc(100vw - 32px); padding:9px 14px; border:1px solid #c0c9cf; border-radius:20px; color:#eef4f5; background:#152531ef; font-size:.75rem; cursor:pointer; }
+.japan-site-marker::before {content:'●';color:#e4bf8d;margin-right:7px;}
+body.clean-view .japan-site-marker,body.photo-mode .japan-site-marker { visibility:hidden; }
+body.clean-view .active-vehicle-label, body.photo-mode .active-vehicle-label, body.photo-mode .mission-resume { visibility:hidden; }
+.mission-resume { position:fixed; left:16px; bottom:100px; z-index:35; width:min(340px,calc(100vw - 64px)); padding:16px; border:1px solid #71cfcb88; border-radius:16px; color:#ecf1f8; background:#101d2cf5; box-shadow:0 8px 30px #0006; }
+.mission-resume p { font-size:.85rem; line-height:1.6; margin:0 0 12px; }
+.mission-resume button { margin:4px; min-height:44px; }
+#mission-overlay {
+  top: auto;
+  bottom: calc(100px + var(--sab, 0px));
+  width: min(440px, calc(100vw - 40px));
+  text-shadow: none;
+  pointer-events: none;
+  color: var(--fg, #ecf1f8);
+}
+/* The horizon view's sky card is opaque and sits over header controls: it takes its own taps. */
+#mission-overlay.horizon { pointer-events: auto; }
+#mission-overlay .mission-card {
+  padding: 20px;
+  border: 1px solid rgba(172, 193, 222, .18);
+  border-radius: 20px;
+  background: rgba(11, 20, 35, .96);
+  box-shadow: 0 12px 40px #0004;
+  pointer-events: auto;
+}
+#mission-overlay .mission-eyebrow {
+  margin: 0 0 6px;
+  color: #9fb3cd;
+  font-size: .66rem;
+  font-weight: 650;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+#mission-overlay .mission-title { margin: 0; font-size: 1.3rem; line-height: 1.35; font-weight: 600; }
+#mission-overlay.is-landing { inset: 0; width: 100%; transform: none; }
+#mission-overlay.is-landing .mission-actions {
+  position: absolute;
+  top: max(calc(24px + var(--sat, 0px)), calc(var(--header-bottom, 0px) + 12px));
+  right: calc(24px + var(--sar, 0px));
+  left: auto;
+  bottom: auto;
+  transform: none;
+  width: min(320px, calc(100vw - 48px - var(--sal, 0px) - var(--sar, 0px)));
+  max-height: calc(100dvh - 48px - var(--sat, 0px) - var(--sab, 0px));
+  padding: 14px;
+  text-align: left;
+  pointer-events: none;
+}
+#mission-overlay.is-landing .landing-heading { min-height: 44px; padding-inline-end: 7rem; margin: 0 0 8px; font-size: .95rem; line-height: 1.5; overflow-wrap: anywhere; }
+#mission-overlay .altitude-label { display: flex; justify-content: space-between; gap: 8px; color: #b4c3d5; font-size: .75rem; margin: 0 0 6px; }
+#mission-overlay .altitude-value { color: #ecf1f8; font-variant-numeric: tabular-nums; }
+#mission-overlay .landing-telemetry { margin:8px 0; font-size:.7rem; line-height:1.5; color:#b4c3d5; font-variant-numeric:tabular-nums; }
+#mission-overlay .landing-alignment { margin:8px 0; font-size:.8rem; line-height:1.5; color:#8fe0cc; overflow-wrap:anywhere; }
+#mission-overlay .landing-alignment:empty { display: none; }
+#mission-overlay [data-alignment='correct'], #mission-overlay [data-alignment='missed'] { color:#ffc58f; }
+#mission-overlay .altitude { width: 100%; height: 5px; margin: 0 0 10px; border-radius: 8px; background: #c4d6ed1c; }
+#mission-overlay .altitude .fill { background: #71cfcb; border-radius: inherit; }
+#mission-overlay .buttons { display: grid; grid-template-columns: 1fr; gap: 8px; }
+#mission-overlay.is-landing .buttons { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+#mission-overlay button.chip {
+  min-height: 44px;
+  padding: 11px 16px;
+  color: #e7edf6;
+  background: #203048;
+  border: 1px solid #a3badb24;
+  border-radius: 11px;
+  font: inherit;
+  font-size: .8rem;
+  font-weight: 550;
+  cursor: pointer;
+}
+#mission-overlay button.chip:hover { background: #2b3d57; }
+#mission-overlay button.chip:focus-visible { outline: 2px solid #88ddd7; outline-offset: 3px; }
+#mission-overlay button.auto-land { color: #161a23; background: var(--action, #f28c57); border-color: var(--action, #f28c57); font-weight: 700; }
+#mission-overlay button.auto-land:hover { background: #ffc58f; }
+#mission-overlay button.auto-land[aria-pressed="true"] { color: #e5fffb; background: #19433f; border-color: #6bbeb052; }
+#mission-overlay.is-landing button.chip { min-width: 0; padding: 8px 10px; border-radius: 24px; line-height: 1.5; white-space: normal; overflow-wrap: anywhere; }
+#mission-overlay.is-landing :is(button, summary) { pointer-events: auto; }
+#mission-overlay .landing-help > summary {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: max-content;
+  max-width: 7rem;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 10px 8px;
+  border: 1px solid #a3badb24;
+  border-radius: 22px;
+  color: #d3e1ef;
+  font-size: .78rem;
+  line-height: 1.5;
+  text-align: center;
+  list-style-position: inside;
+  cursor: pointer;
+}
+#mission-overlay .landing-help > summary:focus-visible { outline: 2px solid #88ddd7; outline-offset: 3px; }
+#mission-overlay .landing-help[open] > summary { background: #203048; }
+#mission-overlay .landing-help-content { max-height: 24dvh; overflow-y: auto; overscroll-behavior: contain; margin-top: 12px; padding-top: 8px; border-top: 1px solid #a3badb24; pointer-events: auto; }
+#mission-overlay .landing-help-content .hint { margin-top: 8px; }
+#mission-overlay .hint { margin: 14px 0 0; color: #9eafc5; font-size: .72rem; line-height: 1.6; }
+#mission-overlay .flying { margin: 10px 0 18px; font-size: 1.1rem; font-weight: 550; line-height: 1.45; }
+#mission-overlay .skip { min-width: 140px; }
+/* Flying: one compact line above the rocket, beside the mission HUD. Only Skip takes input; drags reach the scene. */
+#mission-overlay.is-flight { top: max(16%, calc(12px + var(--sat, 0px))); bottom: auto; width: max-content; max-width: calc(100vw - 384px - var(--sal, 0px) - var(--sar, 0px)); }
+#mission-overlay.is-flight .flight-card { display: flex; align-items: center; gap: 12px; padding: 5px 5px 5px 16px; border-radius: 27px; background: rgba(11, 20, 35, .72); box-shadow: none; pointer-events: none; text-align: left; }
+#mission-overlay.is-flight .flying { margin: 0; font-size: .95rem; line-height: 1.35; overflow-wrap: anywhere; }
+#mission-overlay.is-flight .skip { flex: none; min-width: 0; border-radius: 22px; }
+#mission-overlay.is-countdown { top: 26%; bottom: auto; }
+#mission-overlay.is-countdown .count { color: #ffb46f; font-weight: 550; text-shadow: 0 4px 30px #0009; }
+#mission-overlay.is-countdown .hint { color: #e2e9f3; text-shadow: 0 2px 8px #000; }
+#mission-overlay.horizon { top: calc(80px + var(--sat, 0px)); bottom: auto; background: rgba(11, 20, 35, .96); border-radius: 18px; }
+
+@media (max-width: 640px) {
+  #mission-overlay.is-landing {
+    inset: 0;
+    width: 100%;
+    transform: none;
+  }
+  #mission-overlay .mission-title { font-size: 1rem; }
+  #mission-overlay.is-landing .mission-actions {
+    position: absolute;
+    top: auto;
+    left: calc(16px + var(--sal, 0px));
+    right: calc(16px + var(--sar, 0px));
+    bottom: calc(var(--footer-h, 0px) + 16px + var(--sab, 0px));
+    width: auto;
+    transform: none;
+    padding: 12px;
+  }
+  #mission-overlay.is-landing .hint { font-size: .71rem; }
+  #mission-overlay.is-flight { top: auto; bottom: calc(20px + var(--sab, 0px)); max-width: calc(100vw - 32px - var(--sal, 0px) - var(--sar, 0px)); } /* the HUD holds the top left: below the rocket here */
+  #mission-overlay.is-countdown { top: 25%; bottom: auto; }
+  #mission-overlay.is-countdown .count { font-size: 5rem; }
+}
+
+@media (max-height: 500px) and (min-width: 641px) {
+  #mission-overlay.is-landing .mission-actions { top: calc(16px + var(--sat, 0px)); bottom: auto; left: auto; right: calc(16px + var(--sar, 0px)); transform: none; width: min(300px, 42vw); max-height: calc(100dvh - 32px - var(--sat, 0px) - var(--sab, 0px)); padding: 12px; }
+  #mission-overlay.is-landing .mission-eyebrow { display: none; }
+  #mission-overlay.is-landing .mission-title { font-size: 1rem; }
+  #mission-overlay.is-landing .buttons { grid-template-columns: 1fr 1fr; }
+  #mission-overlay.is-landing button.chip { min-height: 44px; font-size: .78rem; padding: 8px; }
+  #mission-overlay.is-landing .hint { font-size: .65rem; margin-top: 8px; }
+  #mission-overlay .altitude { margin-bottom: 10px; }
+}

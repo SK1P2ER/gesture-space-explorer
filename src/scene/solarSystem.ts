@@ -12,6 +12,7 @@ import { Belt } from './belts';
 import { createBases, updateBases, type BaseNode } from './bases';
 import { CometTails } from './comet';
 import { ShootingStars, Sky } from './sky';
+import {EarthMapMoon} from './earthMapMoon';
 
 const UP = new THREE.Vector3(0, 1, 0);
 const orbitTurn = new THREE.Quaternion();
@@ -86,9 +87,12 @@ export class SolarSystem {
   /** Whose base textures have been asked for: moons wait until their planet is visited (they're specks until then). */
   private readonly requested: boolean[] = [];
   private readonly moons: MoonLink[] = [];
+  private readonly orbitGuides: THREE.Line[] = [];
+  private cleanView = false;
   private readonly boostLimit: Map<string, number>;
   /** Overview boost, 0 (true size) → 1, as shown (eased, so the True scale toggle doesn't jump). */
   private boost = 0;
+  private readonly earthMapMoon:EarthMapMoon|null;
   private readonly asteroids = new Belt(ASTEROIDS, MAX_BELT.asteroids, 0x8a7f72, 11);
   private readonly kuiper = new Belt(KUIPER, MAX_BELT.kuiper, 0x6f7788, 23);
   private readonly tails = new CometTails();
@@ -123,8 +127,13 @@ export class SolarSystem {
     for (const body of bodies) {
       const node = createBody(body, textures);
       this.scene.add(node.pivot);
-      if (body.kind === 'planet') this.scene.add(makeOrbitLine(body.orbitRadius, 0x334466, 0.35));
-      if (isSmallBody(body)) this.scene.add(makePathLine(body, body.kind === 'comet' ? 0x4f6a88 : 0x445566, 0.3));
+      if (body.kind === 'planet' || isSmallBody(body)) {
+        const guide = body.kind === 'planet'
+          ? makeOrbitLine(body.orbitRadius, 0x334466, 0.24)
+          : makePathLine(body, body.kind === 'comet' ? 0x4f6a88 : 0x445566, 0.2);
+        this.orbitGuides.push(guide);
+        this.scene.add(guide);
+      }
       if (body.kind === 'comet') this.comet.node = node;
       this.nodes.push(node);
       this.hdSwitches.push(new HdSwitch(hdSwitchConfig(TIER_WIDTH[tiers.baseTier])));
@@ -140,6 +149,9 @@ export class SolarSystem {
       this.moons.push({ node, parent, cap: (MOON_ORBIT_CAP * node.body.moon.n) / fastest, orbitLine });
     }
 
+    const lunarNode=this.nodes.find(node=>node.body.id==='moon');
+    this.earthMapMoon=lunarNode?new EarthMapMoon(lunarNode):null;
+    if(this.earthMapMoon)this.scene.add(this.earthMapMoon.mesh);
     this.bases = createBases(this.nodes);
 
     // Images stream in after the first frame; until then each body shows its base color.
@@ -268,6 +280,11 @@ export class SolarSystem {
     this.applyHorizon();
   }
 
+  /** Keep geometric navigation guides out of the unobstructed scene view. */
+  setCleanView(active: boolean) {
+    this.cleanView = active;
+  }
+
   private horizon: number | null = null;
   private readonly hidden = new Map<THREE.Object3D, boolean>();
 
@@ -283,12 +300,13 @@ export class SolarSystem {
     for (const o of node.tilt.children) if (o !== node.mesh) hide(o); // its halo and clouds
   }
 
-  updateView(camera: THREE.PerspectiveCamera, focusIndex: number, viewport: Viewport, dt: number, zoomDistance: number, trueScale: boolean) {
+  updateView(camera: THREE.PerspectiveCamera, focusIndex: number, viewport: Viewport, dt: number, zoomDistance: number, trueScale: boolean,earthMap=false) {
     const focused = this.nodes[focusIndex].body;
     const system = focused.parent ?? focused.id;
     // Overview boost (data/boost.ts): smooth in the zoom distance, eased only so the True scale toggle glides.
     const goal = trueScale ? 0 : boostLevel(zoomDistance);
-    this.boost += (goal - this.boost) * Math.min(1, dt * 8);
+    // An exclusive Earth map has a fixed scale, independent of its entry route.
+    this.boost=earthMap?0:this.boost+(goal-this.boost)*Math.min(1,dt*8);
     const fade = moonOpacity(this.boost);
     for (const node of this.nodes) {
       node.tilt.scale.setScalar(boostScale(this.boostLimit.get(node.body.id)!, this.boost));
@@ -307,6 +325,8 @@ export class SolarSystem {
       }
       node.surface.update(dt);
     });
+    this.earthMapMoon?.update(camera,earthMap);
+    if(earthMap){const moon=this.nodes.find(node=>node.body.id==='moon');if(moon)moon.anchor.visible=false;}
 
     if (this.comet.node) this.tails.update(this.comet.node.anchor.position, this.comet.motion, this.comet.rAU, camera);
     this.sky.update(camera);
@@ -318,8 +338,9 @@ export class SolarSystem {
     for (const { node, orbitLine } of this.moons) {
       const material = orbitLine.material as THREE.LineBasicMaterial;
       material.opacity += ((node.body.parent === system ? 0.5 * fade : 0) - material.opacity) * k;
-      orbitLine.visible = material.opacity > 0.01;
+      orbitLine.visible = !earthMap && !this.cleanView && material.opacity > 0.01;
     }
+    for (const guide of this.orbitGuides) guide.visible = !this.cleanView;
     this.applyHorizon();
   }
 

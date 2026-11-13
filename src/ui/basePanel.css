@@ -1,0 +1,84 @@
+#base-panel.panel {
+  top: max(calc(88px + var(--sat, 0px)), calc(var(--header-bottom, 70px) + 16px));
+  right: calc(24px + var(--sar, 0px));
+  width: min(330px, calc(100vw - 48px));
+  padding: 22px;
+  border-radius: 20px;
+  border: 1px solid #829ab52e;
+  background: linear-gradient(155deg, #142134f5, #0b1422f7);
+  box-shadow: 0 18px 60px #0005;
+  backdrop-filter: none;
+  max-height: calc(100dvh - var(--header-bottom, 70px) - var(--footer-h, 72px) - 50px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #61738b55 transparent;
+}
+#base-panel .base-heading { padding-right: 24px; }
+.spaceport-entry { margin-top:16px; }
+#base-panel .spaceport-entry button { width:100%; padding:12px; border:1px solid #e9b57680; border-radius:10px; background:#60462b38; color:#ffe2bb; text-align:left; white-space:normal; }
+#base-panel .base-eyebrow { color: #90a9c3; font-size: .64rem; font-weight: 650; letter-spacing: .15em; text-transform: uppercase; margin: 0 0 9px; }
+#base-panel .base-heading h2 { padding: 0; font-size: 1.35rem; line-height: 1.3; letter-spacing: -.025em; color: #f4f7fb; margin-bottom: 9px; }
+#base-panel .base-heading .kind { margin: 0; font-size: .76rem; line-height: 1.5; color: #a3b4c8; }
+#base-panel > .close { top: 18px; right: 15px; color: #a3b4c8; border-color: #a3b4c826; }
+#base-panel .base-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: #080f1b8c; border: 1px solid #829ab51a; border-radius: 11px; padding: 4px; margin: 20px 0; }
+#base-panel .base-tab { min-height: 36px; font: inherit; font-size: .82rem; font-weight: 600; border: 0; border-radius: 7px; color: #94a7be; background: transparent; cursor: pointer; }
+#base-panel .base-tab[aria-selected='true'] { color: #f0f5fb; background: #28394e; box-shadow: 0 1px 4px #0003; }
+#base-panel :is(button):focus-visible { outline: 2px solid #e9b576; outline-offset: 3px; }
+#base-panel .base-content[hidden], #base-panel [role='tabpanel'][hidden] { display: none; }
+#base-panel .base-description { color: #d2dce8; font-size: .86rem; line-height: 1.75; margin-bottom: 20px; }
+#base-panel dl { font-size: .78rem; line-height: 1.55; gap: 9px 12px; border-top: 1px solid #829ab526; padding-top: 16px; }
+#base-panel dt { color: #8ca2bb; }
+#base-panel dd { color: #dce5ef; overflow-wrap: anywhere; }
+#base-panel .base-view-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+#base-panel .base-view-actions .chip { padding: 9px 12px; border-radius: 9px; color: #d6e2ef; border: 1px solid #829ab536; background: #21324a55; font-size: .76rem; }
+#base-panel .base-view-actions .chip:hover { border-color: #9cb8d577; background: #2b405e88; }
+#base-panel .base-travel > .kind { font-size: .72rem; margin: 0 0 10px; text-transform: uppercase; letter-spacing: .06em; }
+#base-panel .base-travel .destinations { display: grid; grid-template-columns: 1fr; gap: 7px; margin: 0; }
+#base-panel .destinations .chip { text-align: left; width: 100%; min-height: 42px; padding: 11px 13px; border-radius: 10px; font-size: .8rem; color: #d4deeb; border: 1px solid #829ab52e; background: #152237; white-space: normal; line-height: 1.4; }
+#base-panel .destinations .chip:hover { background: #20344e; border-color: #a7bed355; }
+#base-panel .destinations .chip[aria-pressed='true'] { color: #ffe1bc; background: #5b39242e; border-color: #eaa05a; box-shadow: inset 3px 0 #eaa05a; }
+#base-panel .base-selection { display: grid; gap: 5px; margin: 19px 0 12px; font-size: .83rem; line-height: 1.4; }
+#base-panel .selection-label { font-size: .72rem; color: #90a6bd; }
+#base-panel .base-selection strong { color: #f1e3cf; font-weight: 550; }
+#base-panel .base-travel .launch { width: 100%; min-height: 45px; padding: 11px 16px; border: 1px solid #f7bd7b; border-radius: 11px; background: #edaa65; color: #251a10; font-size: .94rem; font-weight: 700; box-shadow: 0 4px 18px #ec9c3520; }
+#base-panel .base-travel .launch:hover:not(:disabled) { background: #ffc283; }
+#base-panel .base-travel .launch:disabled { color: #8a9ab0; background: #29374b; border-color: #829ab528; opacity: 1; box-shadow: none; }
+#base-panel .base-travel .hint { font-size: .7rem; line-height: 1.6; color: #8197b0; margin-top: 12px; }
+#base-panel .base-sheet-handle { display: none; }
+
+@media (max-width: 640px), (max-height: 500px) {
+  #base-panel.panel {
+    top: auto;
+    bottom: calc(var(--footer-h, 64px) + 13px + var(--sab, 0px));
+    left: calc(12px + var(--sal, 0px));
+    right: calc(12px + var(--sar, 0px));
+    width: auto;
+    max-height: min(53dvh, calc(100dvh - var(--header-bottom, 70px) - var(--footer-h, 64px) - 32px));
+    border-radius: 20px;
+    padding: 4px 18px 18px;
+    z-index: 8;
+    -webkit-overflow-scrolling: touch;
+  }
+  #base-panel .base-sheet-handle { display: block; width: 100%; height: 22px; padding: 0; border: 0; background: transparent; cursor: pointer; touch-action: manipulation; }
+  #base-panel .base-sheet-handle::before { content: ''; display: block; width: 36px; height: 4px; background: #71869b88; border-radius: 8px; margin: auto; }
+  #base-panel .base-heading { padding-right: 23px; }
+  #base-panel .base-heading h2 { font-size: 1.12rem; margin-bottom: 5px; }
+  #base-panel .base-heading .kind { font-size: .7rem; }
+  #base-panel .base-eyebrow { display: none; }
+  #base-panel > .close { top: 25px; right: 15px; }
+  #base-panel .base-tabs { margin: 14px 0; }
+  #base-panel .base-description { font-size: .79rem; line-height: 1.65; margin-bottom: 14px; }
+  #base-panel dl { font-size: .73rem; gap: 6px 10px; padding-top: 12px; }
+  #base-panel .base-view-actions { margin-top: 14px; }
+  #base-panel .base-travel .destinations { grid-template-columns: 1fr 1fr; }
+  #base-panel .destinations .chip { font-size: .72rem; padding: 8px 10px; }
+  #base-panel .base-selection { margin: 13px 0 10px; }
+  #base-panel .base-travel .hint { font-size: .66rem; }
+  #base-panel[data-collapsed='true'] { padding-bottom: 15px; }
+}
+
+@media (max-height: 500px) and (min-width: 641px) {
+  #base-panel.panel { left: auto; width: min(340px, 43vw); bottom: calc(var(--footer-h, 56px) + 12px + var(--sab, 0px)); max-height: calc(100dvh - var(--header-bottom, 65px) - var(--footer-h, 56px) - 24px); }
+  #base-panel .base-travel .destinations { grid-template-columns: 1fr; }
+}

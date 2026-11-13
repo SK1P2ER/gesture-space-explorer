@@ -2,6 +2,20 @@ import type { Lang } from '../data/bodies';
 import { describeRate, HOUR } from '../sim/clock';
 import { LOCALE, numberFormat, t, tf, type StringKey } from './i18n';
 
+// Date labels are requested at render rate. Reuse immutable Intl formatters,
+// with bounded storage for callers that supply different time zones.
+const dateFormats = new Map<string, Intl.DateTimeFormat>();
+function dateFormat(locale: string, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const key = JSON.stringify([locale, options]);
+  let formatter = dateFormats.get(key);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(locale, options);
+    if (dateFormats.size >= 16) dateFormats.delete(dateFormats.keys().next().value!);
+    dateFormats.set(key, formatter);
+  }
+  return formatter;
+}
+
 /** "+1 week/s", "−3.5 days/s", "+1× (real time)", or "⏸" when stopped or paused. */
 export function speedLabel(rate: number, paused: boolean, lang: Lang): string {
   const d = describeRate(paused ? 0 : rate);
@@ -16,7 +30,7 @@ export function speedLabel(rate: number, paused: boolean, lang: Lang): string {
 export function dateLabel(timeMs: number, rate: number, lang: Lang, timeZone?: string): string {
   const withTime = Math.abs(rate) <= HOUR;
   if (lang === 'my') return burmeseDate(timeMs, withTime, timeZone);
-  return new Intl.DateTimeFormat(LOCALE[lang], {
+  return dateFormat(LOCALE[lang], {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -33,7 +47,7 @@ const MY_MONTHS = ['ဇန်', 'ဖေ', 'မတ်', 'ဧ', 'မေ', 'ဇွ�
  * Burmese locale data and would show an English date.
  */
 function burmeseDate(timeMs: number, withTime: boolean, timeZone?: string): string {
-  const parts = new Intl.DateTimeFormat('en-US', {
+  const parts = dateFormat('en-US', {
     year: 'numeric',
     month: 'numeric',
     day: 'numeric',
@@ -53,11 +67,11 @@ function burmeseDate(timeMs: number, withTime: boolean, timeZone?: string): stri
 /** "Jul 2061", "2061年7月", "၂၀၆၁ ဇူ" (Burmese by hand, like dateLabel). */
 export function monthLabel(timeMs: number, lang: Lang, timeZone?: string): string {
   if (lang === 'my') {
-    const parts = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'numeric', timeZone }).formatToParts(timeMs);
+    const parts = dateFormat('en-US', { year: 'numeric', month: 'numeric', timeZone }).formatToParts(timeMs);
     const part = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)!.value);
     return `${numberFormat('my', { useGrouping: false }).format(part('year'))} ${MY_MONTHS[part('month') - 1]}`;
   }
-  return new Intl.DateTimeFormat(LOCALE[lang], { year: 'numeric', month: 'short', timeZone }).format(timeMs);
+  return dateFormat(LOCALE[lang], { year: 'numeric', month: 'short', timeZone }).format(timeMs);
 }
 
 /** A light travel time: "8 min 19 s", or "4 h 10 min" from an hour up. */

@@ -109,14 +109,17 @@ export class GpuTimer {
 export class FrameStatsReadout {
   readonly dom = document.createElement('pre');
   private readonly cpu = new FrameTimes();
-  private readonly gpu = new FrameTimes();
-  private readonly timer: GpuTimer | null;
+  private gpu = new FrameTimes();
+  private timer: GpuTimer | null;
+  private context:WebGL2RenderingContext;
   private shownAt = -Infinity;
 
   constructor(gl: WebGL2RenderingContext) {
+    this.context=gl;
     this.timer = GpuTimer.create(gl);
     this.dom.id = 'frame-times';
   }
+  setContext(gl:WebGL2RenderingContext){if(gl===this.context)return;this.timer?.dispose();this.context=gl;this.timer=GpuTimer.create(gl);this.gpu=new FrameTimes();}
 
   beginGpu() {
     this.timer?.begin();

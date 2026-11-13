@@ -1,0 +1,22 @@
+{
+  "source": "ASTROLIFE_Tanegashima_M03_Launch.blend",
+  "batches": 58,
+  "animated_roots": [
+    "CTRL | Shuttle ascent",
+    "CTRL | Service arm 1",
+    "CTRL | Service arm 2"
+  ],
+  "jets": 10,
+  "tree_count": 8,
+  "shrub_count": 9,
+  "fps": 24,
+  "frames": 480,
+  "file_bytes": 4349740,
+  "source_sha256": "2a2b9e9a91a17e56a982d0f4714f2b4cbd62628f36846e43b7d7139dff178fef",
+  "source_samples": 68,
+  "nozzle_alignment_error_m": 3.0517578125e-05,
+  "source_checks": "passed",
+  "asset_sha256": "2d1ea04e720d3ea901543025799a970ba552d138a498fdd678a2273b23b5d451",
+  "authoring_sha256": "1145d09c6babd4fe64b53a9943544622101994185f82703f801a14a9e7e68fde",
+  "site_sha256": "f7e0012c4b9dc50ef15c0a782224f44c762ca81c52a514b5ff65824e26a70560"
+}

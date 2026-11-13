@@ -14,12 +14,11 @@ const STRINGS = {
   'cinematic.flyover': { en: 'Start flyover', my: 'အပေါ်မှ လှည့်လည်ကြည့်ရန်', ja: 'フライオーバー開始' },
   'cinematic.skip': { en: 'Skip animation', my: 'လှုပ်ရှားမှုကို ကျော်ရန်', ja: 'アニメーションをスキップ' },
   'cinematic.exit': { en: 'Exit cinematic mode', my: 'ကင်မရာမြင်ကွင်းမုဒ်မှ ထွက်ရန်', ja: 'シネマモードを終了' },
-  'cinematic.active': { en: 'Camera view active — use Manual camera to return.', my: 'ကင်မရာမြင်ကွင်း ဖွင့်ထားပါတယ်။ ပြန်ထွက်ဖို့ ကိုယ်တိုင်ထိန်းချုပ်မှုကို ရွေးပါ။', ja: 'カメラビュー表示中。「手動カメラ」で戻ります。' },
+  'cinematic.active': { en: 'Camera view active — use Manual camera to return.', my: 'ကင်မရာမြင်ကွင်း ဖွင့်ထားသည်။ ပြန်ထွက်ရန် ကိုယ်တိုင်ထိန်းချုပ်မှုကို ရွေးပါ။', ja: 'カメラビュー表示中。「手動カメラ」で戻ります。' },
   loading: { en: 'Loading hand tracking…', my: 'Hand tracking ဖွင့်နေပါတယ်…', ja: 'ハンドトラッキングを読み込み中…' },
   loadingTextures: { en: 'Loading textures', my: 'Texture ဖွင့်နေပါတယ်', ja: 'テクスチャを読み込み中' },
   loadingHd: { en: 'Loading HD textures…', my: 'HD texture ဖွင့်နေပါတယ်…', ja: 'HDテクスチャを読み込み中…' },
   tracking: { en: 'Hand control on', my: 'လက်ဟန် ထိန်းချုပ်မှု ဖွင့်ထားပါတယ်', ja: 'ハンド操作オン' },
-  handControlPaused: { en: 'Hand control paused', my: 'လက်ဟန် ထိန်းချုပ်မှု ခဏရပ်ထားပါတယ်', ja: 'ハンド操作を一時停止中' },
   handControlStart: { en: 'Turn on hand control', my: 'လက်ဟန် ထိန်းချုပ်မှု ဖွင့်ရန်', ja: 'ハンド操作をオンにする' },
   keyboardOnly: { en: 'Keyboard mode', my: 'Keyboard mode', ja: 'キーボード操作' },
   'err.denied': { en: 'Camera permission denied', my: 'Camera ခွင့်ပြုချက် မရပါ', ja: 'カメラの使用が許可されていません' },
@@ -58,7 +57,7 @@ const STRINGS = {
   },
   quality: { en: 'Quality', my: 'အရည်အသွေး', ja: '画質' },
   qualityUltra: { en: 'Ultra', my: 'အမြင့်ဆုံး', ja: '最高' },
-  ultraTooSlow: { en: 'Ultra was too slow here: back to High', my: 'Ultra က ဒီမှာ နှေးလွန်းလို့ High ကို ပြန်ပြောင်းပါပြီ', ja: 'ここでは最高画質が重すぎるため、高に戻しました' },
+  ultraTooSlow: { en: 'Ultra was too slow here: back to High', my: 'Ultra သည် ဤနေရာတွင် နှေးလွန်းသဖြင့် High သို့ ပြန်ပြောင်းပါပြီ', ja: 'ここでは最高画質が重すぎるため、高に戻しました' },
   qualityAuto: { en: 'Auto', my: 'အလိုအလျောက်', ja: '自動' },
   qualityHigh: { en: 'High', my: 'မြင့်', ja: '高' },
   qualityLow: { en: 'Low', my: 'နိမ့်', ja: '低' },
@@ -152,10 +151,10 @@ const STRINGS = {
   countdownByHand: { en: 'Now 2 fingers, then 1 · Esc aborts', my: 'အခု လက်ချောင်း ၂ ချောင်း၊ ပြီးရင် ၁ ချောင်း · Esc ဖျက်ရန်', ja: '次は指2本、そして1本 · Escで中止' },
   countdownAbort: { en: 'Esc aborts', my: 'Esc ဖျက်ရန်', ja: 'Escで中止' },
   launchAborted: { en: 'Launch aborted', my: 'လွှတ်တင်မှု ဖျက်လိုက်ပါပြီ', ja: '打ち上げを中止しました' },
-  liftoff: { en: '🚀 Liftoff!', my: '🚀 လွှတ်တင်ပါပြီ!', ja: '🚀 リフトオフ！' },
+  liftoff: { en: '🚀 Liftoff!', my: '🚀 လွှတ်တင်ပြီ!', ja: '🚀 リフトオフ！' },
   flyingTo: { en: 'Flying to {name}', my: '{name} ကို ပျံသန်းနေပါတယ်', ja: '{name}へ飛行中' },
   skip: { en: 'Skip ⏭', my: 'ကျော်ရန် ⏭', ja: 'スキップ ⏭' },
-  dockHint: { en: 'Steer onto the pad: move your hand, the mouse, or ← → ↑ ↓ · Enter: land for me', my: 'ဆင်းသက်ကွင်းပေါ်ကို ထိန်းပါ- လက်၊ မောက်စ် ဒါမှမဟုတ် ← → ↑ ↓ · Enter: အလိုအလျောက် ဆင်းရန်', ja: 'パッドへ誘導：手・マウス・← → ↑ ↓ で操作 · Enter：自動着陸' },
+  dockHint: { en: 'Steer onto the pad: move your hand, the mouse, or ← → ↑ ↓ · Enter: land for me', my: 'ပြင်ပေါ်သို့ ထိန်းပါ- လက်၊ မောက်စ် သို့မဟုတ် ← → ↑ ↓ · Enter: အလိုအလျောက် ဆင်းရန်', ja: 'パッドへ誘導：手・マウス・← → ↑ ↓ で操作 · Enter：自動着陸' },
   currentBase: { en: 'Base', my: 'စခန်း', ja: '基地' },
   fuel: { en: 'Fuel', my: 'လောင်စာ', ja: '燃料' },
   distance: { en: 'Distance', my: 'အကွာအဝေး', ja: '距離' },
@@ -163,7 +162,7 @@ const STRINGS = {
   miniMap: { en: 'Map of the Solar System', my: 'နေအဖွဲ့အစည်း မြေပုံ', ja: '太陽系の地図' },
   passport: { en: 'Passport', my: 'ပတ်စ်ပို့', ja: 'パスポート' },
   notYet: { en: 'Not yet visited', my: 'မရောက်ဖူးသေး', ja: '未訪問' },
-  passportCount: { en: '{n} of {total} bases visited', my: 'စခန်း {total} ခုအနက် {n} ခု ရောက်ဖူးပါပြီ', ja: '{total}基地中{n}基地を訪問' },
+  passportCount: { en: '{n} of {total} bases visited', my: 'စခန်း {total} ခုအနက် {n} ခု ရောက်ဖူးပြီ', ja: '{total}基地中{n}基地を訪問' },
   newStamp: { en: '🛂 New passport stamp: {name}!', my: '🛂 ပတ်စ်ပို့ တံဆိပ်အသစ်- {name}!', ja: '🛂 新しいスタンプ：{name}！' },
   steerSensitivity: { en: 'Hand steering', my: 'လက်ဖြင့် ထိန်းမှု', ja: '手の操作感度' },
   'sens.low': { en: 'Low', my: 'နိမ့်', ja: '低' },
@@ -176,7 +175,7 @@ const STRINGS = {
   inTheSky: { en: 'In the sky', my: 'ကောင်းကင်မှာ', ja: '空に見えるもの' },
   buildTouchHint: { en: 'Tap to preview, tap again to place, drag to move', my: 'ကြိုကြည့်ရန် နှိပ်ပါ၊ ချရန် ထပ်နှိပ်ပါ၊ ရွှေ့ရန် ဆွဲပါ', ja: 'タップでプレビュー、もう一度タップで設置、ドラッグで移動' },
   modelNote: { en: 'Simplified game model', my: 'ရိုးရှင်းစေထားသော ဂိမ်း မော်ဒယ်', ja: '簡略化したゲームのモデル' },
-  modelNoteDetail: { en: 'The power, storage and oxygen numbers are chosen to make a fair puzzle, not engineering values. The Sun\'s daily path, the seasons and the dust season are real.', my: 'လျှပ်စစ်၊ သိုလှောင်မှုနဲ့ အောက်ဆီဂျင် ကိန်းဂဏန်းတွေက ဂိမ်းအတွက် ရွေးထားတာဖြစ်ပြီး အင်ဂျင်နီယာ တန်ဖိုးတွေ မဟုတ်ပါဘူး။ နေရဲ့ နေ့စဉ်လမ်းကြောင်း၊ ရာသီတွေနဲ့ ဖုန်ရာသီကတော့ အမှန်ပါ။', ja: '電力・蓄電・酸素の数値はパズルとして公平になるよう選んだもので、工学的な値ではありません。太陽の一日の動き、季節、砂ぼこりの季節は実際のものです。' },
+  modelNoteDetail: { en: 'The power, storage and oxygen numbers are chosen to make a fair puzzle, not engineering values. The Sun\'s daily path, the seasons and the dust season are real.', my: 'လျှပ်စစ်၊ သိုလှောင်မှုနှင့် အောက်ဆီဂျင် ကိန်းဂဏန်းများသည် ဂိမ်းအတွက် ရွေးထားခြင်းဖြစ်ပြီး အင်ဂျင်နီယာ တန်ဖိုးများ မဟုတ်ပါ။ နေ၏ နေ့စဉ်လမ်းကြောင်း၊ ရာသီများနှင့် ဖုန်ရာသီမှာ အမှန်ဖြစ်သည်။', ja: '電力・蓄電・酸素の数値はパズルとして公平になるよう選んだもので、工学的な値ではありません。太陽の一日の動き、季節、砂ぼこりの季節は実際のものです。' },
   build: { en: 'Build', my: 'တည်ဆောက်ရန်', ja: '建設' },
   buildTitle: { en: 'Build (prototype)', my: 'တည်ဆောက်ခြင်း (စမ်းသပ်ဗားရှင်း)', ja: '建設（試作版）' },
   buildHint: { en: 'Tap a cell to preview, tap again to place (or pinch and hold) · drag a module to move it · drag the ground to pan · Q/E turn · Del remove', my: 'ကွက်ကို နှိပ်ပြီး ကြိုကြည့်ပါ၊ ထပ်နှိပ်ပြီး ချပါ (သို့) ညှပ်ပြီး ကိုင်ထားပါ · ရွှေ့ရန် module ကို ဆွဲပါ · မြေပြင်ကို ဆွဲပြီး ရွှေ့ကြည့်ပါ · Q/E လှည့် · Del ဖယ်', ja: 'マスをタップでプレビュー、もう一度で設置（またはつまんで長押し）· モジュールをドラッグで移動 · 地面をドラッグで移動 · Q/E 回転 · Del 削除' },
@@ -185,11 +184,11 @@ const STRINGS = {
   'build.battery': { en: 'Battery', my: 'ဘက်ထရီ', ja: 'バッテリー' },
   'build.oxygen': { en: 'Oxygen plant', my: 'အောက်ဆီဂျင် စက်ရုံ', ja: '酸素プラント' },
   'build.greenhouse': { en: 'Greenhouse', my: 'ဖန်လုံအိမ်', ja: '温室' },
-  'buildInfo.habitat': { en: 'Home for the crew: uses 1 kW and 1 O₂.', my: 'အဖွဲ့သားတွေ နေထိုင်ရာ- 1 kW နဲ့ O₂ 1 သုံးပါတယ်။', ja: '乗組員の住まい：1 kW と O₂ 1 を使います。' },
-  'buildInfo.solar': { en: 'Up to 4 kW in full sunlight; none at night, less in dusty weather.', my: 'နေရောင်အပြည့်မှာ 4 kW အထိ ရပါတယ်၊ ညမှာ မရပါဘူး၊ ဖုန်ထူချိန်မှာ လျော့ပါတယ်။', ja: '日差しが強いと最大 4 kW、夜はゼロ、砂ぼこりの季節は少なめ。' },
-  'buildInfo.battery': { en: 'Stores 20 kWh of daytime power for the night.', my: 'နေ့ဘက် လျှပ်စစ် 20 kWh ကို ညအတွက် သိုလှောင်ပါတယ်။', ja: '昼の電力を 20 kWh、夜のために蓄えます。' },
-  'buildInfo.oxygen': { en: 'Makes 2 O₂ from the CO₂ air (like MOXIE): uses 1.5 kW.', my: 'CO₂ လေထုကနေ O₂ 2 ထုတ်ပါတယ် (MOXIE လိုမျိုး)- 1.5 kW သုံးပါတယ်။', ja: 'CO₂ の大気から O₂ を 2 つくります（MOXIE のように）：1.5 kW を使います。' },
-  'buildInfo.greenhouse': { en: 'Grows food and makes 1 O₂ with a habitat within 2 cells: uses 0.5 kW.', my: 'ကွက် ၂ ကွက်အတွင်းမှာ နေထိုင်ရာ ရှိရင် အစားအစာ စိုက်ပြီး O₂ 1 ထုတ်ပါတယ်- 0.5 kW သုံးပါတယ်။', ja: '2 マス以内に居住棟があれば食料を育て O₂ を 1 つくります：0.5 kW を使います。' },
+  'buildInfo.habitat': { en: 'Home for the crew: uses 1 kW and 1 O₂.', my: 'အဖွဲ့သားများ နေထိုင်ရာ- 1 kW နှင့် O₂ 1 သုံးသည်။', ja: '乗組員の住まい：1 kW と O₂ 1 を使います。' },
+  'buildInfo.solar': { en: 'Up to 4 kW in full sunlight; none at night, less in dusty weather.', my: 'နေရောင်အပြည့်တွင် 4 kW အထိ၊ ညတွင် မရ၊ ဖုန်ထူချိန် လျော့သည်။', ja: '日差しが強いと最大 4 kW、夜はゼロ、砂ぼこりの季節は少なめ。' },
+  'buildInfo.battery': { en: 'Stores 20 kWh of daytime power for the night.', my: 'နေ့ဘက် လျှပ်စစ် 20 kWh ကို ညအတွက် သိုလှောင်သည်။', ja: '昼の電力を 20 kWh、夜のために蓄えます。' },
+  'buildInfo.oxygen': { en: 'Makes 2 O₂ from the CO₂ air (like MOXIE): uses 1.5 kW.', my: 'CO₂ လေထုမှ O₂ 2 ထုတ်သည် (MOXIE ကဲ့သို့)- 1.5 kW သုံးသည်။', ja: 'CO₂ の大気から O₂ を 2 つくります（MOXIE のように）：1.5 kW を使います。' },
+  'buildInfo.greenhouse': { en: 'Grows food and makes 1 O₂ with a habitat within 2 cells: uses 0.5 kW.', my: 'ကွက် ၂ ကွက်အတွင်း နေထိုင်ရာ ရှိလျှင် အစားအစာ စိုက်ပြီး O₂ 1 ထုတ်သည်- 0.5 kW သုံးသည်။', ja: '2 マス以内に居住棟があれば食料を育て O₂ を 1 つくります：0.5 kW を使います。' },
   turn: { en: 'Turn', my: 'လှည့်ရန်', ja: '回転' },
   remove: { en: 'Remove', my: 'ဖယ်ရှားရန်', ja: '削除' },
   undo: { en: 'Undo', my: 'နောက်ပြန်', ja: '元に戻す' },
@@ -197,21 +196,21 @@ const STRINGS = {
   reset: { en: 'Reset', my: 'အစမှ ပြန်စ', ja: 'リセット' },
   done: { en: 'Done', my: 'ပြီးပြီ', ja: '完了' },
   power: { en: 'Power', my: 'လျှပ်စစ်', ja: '電力' },
-  poweredAllSol: { en: '✅ Powered all sol', my: '✅ တစ်ရက်လုံး လျှပ်စစ် ရှိပါတယ်', ja: '✅ 一日中電力が足ります' },
-  powerShort: { en: '⚠️ Power runs out {hours}', my: '⚠️ {hours} မှာ လျှပ်စစ် ကုန်ပါတယ်', ja: '⚠️ {hours} に電力が切れます' },
-  oxygenOk: { en: '✅ +{n} to spare', my: '✅ +{n} ပိုပါတယ်', ja: '✅ +{n} の余裕' },
+  poweredAllSol: { en: '✅ Powered all sol', my: '✅ တစ်ရက်လုံး လျှပ်စစ် ရှိသည်', ja: '✅ 一日中電力が足ります' },
+  powerShort: { en: '⚠️ Power runs out {hours}', my: '⚠️ {hours} တွင် လျှပ်စစ် ကုန်သည်', ja: '⚠️ {hours} に電力が切れます' },
+  oxygenOk: { en: '✅ +{n} to spare', my: '✅ +{n} ပိုသည်', ja: '✅ +{n} の余裕' },
   oxygenShort: { en: '⚠️ Not enough ({n})', my: '⚠️ မလုံလောက်ပါ ({n})', ja: '⚠️ 足りません（{n}）' },
-  greenhouseIdle: { en: '⚠️ A greenhouse needs a habitat within 2 cells', my: '⚠️ ဖန်လုံအိမ်က ကွက် ၂ ကွက်အတွင်းမှာ နေထိုင်ရာ လိုပါတယ်', ja: '⚠️ 温室には 2 マス以内に居住棟が必要です' },
+  greenhouseIdle: { en: '⚠️ A greenhouse needs a habitat within 2 cells', my: '⚠️ ဖန်လုံအိမ်သည် ကွက် ၂ ကွက်အတွင်း နေထိုင်ရာ လိုသည်', ja: '⚠️ 温室には 2 マス以内に居住棟が必要です' },
   levelLabel: { en: 'Level', my: 'အဆင့်', ja: 'レベル' },
   levelNow: { en: '{now} now · {best} kept', my: 'ယခု {now} · သိမ်းထား {best}', ja: '現在 {now} · 記録 {best}' },
-  levelReached: { en: '🏅 Jezero reached level {n}!', my: '🏅 Jezero အဆင့် {n} ရောက်ပါပြီ!', ja: '🏅 ジェゼロがレベル {n} に到達！' },
+  levelReached: { en: '🏅 Jezero reached level {n}!', my: '🏅 Jezero အဆင့် {n} ရောက်ပြီ!', ja: '🏅 ジェゼロがレベル {n} に到達！' },
   baseLevel: { en: 'Level {n}', my: 'အဆင့် {n}', ja: 'レベル {n}' },
   baseFull: { en: 'The base is full ({n} modules)', my: 'စခန်း ပြည့်နေပြီ (module {n} ခု)', ja: '基地は満杯です（{n} モジュール）' },
   cantBuild: { en: 'Can\'t build here: {why}', my: 'ဒီမှာ မဆောက်နိုင်ပါ- {why}', ja: 'ここには建てられません：{why}' },
-  'blocked.outside': { en: 'too far out', my: 'ဝေးလွန်းပါတယ်', ja: '遠すぎます' },
-  'blocked.pad': { en: 'too close to the landing pad', my: 'ဆင်းသက်ကွင်းနဲ့ နီးလွန်းပါတယ်', ja: '着陸パッドに近すぎます' },
-  'blocked.building': { en: 'a building is there', my: 'အဆောက်အအုံ ရှိနေပါတယ်', ja: '建物があります' },
-  'blocked.path': { en: 'on a rover or walking path', my: 'ရိုဗာ (သို့) လမ်းလျှောက်လမ်းပေါ်မှာ', ja: '探査車や歩道の上です' },
+  'blocked.outside': { en: 'too far out', my: 'အလွန် ဝေးသည်', ja: '遠すぎます' },
+  'blocked.pad': { en: 'too close to the landing pad', my: 'ဆင်းသက်ပြင်နှင့် နီးလွန်းသည်', ja: '着陸パッドに近すぎます' },
+  'blocked.building': { en: 'a building is there', my: 'အဆောက်အအုံ ရှိနေသည်', ja: '建物があります' },
+  'blocked.path': { en: 'on a rover or walking path', my: 'ရိုဗာ (သို့) လမ်းလျှောက်လမ်းပေါ်တွင်', ja: '探査車や歩道の上です' },
   'blocked.occupied': { en: 'already taken', my: 'နေရာ ယူထားပြီး', ja: '使用中です' },
   withThis: { en: 'With this', my: 'ဒါထည့်လျှင်', ja: 'これを置くと' },
   sunlightToday: { en: 'Sunlight today: {pct}%', my: 'ယနေ့ နေရောင်- {pct}%', ja: '今日の日差し：{pct}%' },
@@ -226,11 +225,11 @@ const STRINGS = {
   horizonHint: { en: 'Drag or move your open hand to look around · ↑ ↓ closer / farther · Esc or O to go back up', my: 'ပတ်ကြည့်ရန် ဆွဲပါ (သို့) လက်ဖဝါးကို ရွှေ့ပါ · ↑ ↓ နီး / ဝေး · ပြန်တက်ရန် Esc (သို့) O', ja: 'ドラッグか開いた手で見回す · ↑ ↓ 近く／遠く · Esc か O で上空に戻る' },
   autoLand: { en: 'Auto-land', my: 'အလိုအလျောက် ဆင်းသက်', ja: '自動着陸' },
   altitude: { en: 'Altitude', my: 'အမြင့်', ja: '高度' },
-  missedPad: { en: 'Missed the pad — try again', my: 'ဆင်းသက်ကွင်းကို လွဲသွားပါပြီ — ထပ်ကြိုးစားပါ', ja: 'パッドを外れました — もう一度' },
-  landedOn: { en: 'Touchdown at {name}!', my: '{name} မှာ ဆင်းသက်ပါပြီ!', ja: '{name}に着陸！' },
+  missedPad: { en: 'Missed the pad — try again', my: 'ပြင်ကို လွဲသွားပါပြီ — ထပ်ကြိုးစားပါ', ja: 'パッドを外れました — もう一度' },
+  landedOn: { en: 'Touchdown at {name}!', my: '{name} တွင် ဆင်းသက်ပြီ!', ja: '{name}に着陸！' },
   arrived: { en: 'Arrived at {name}', my: '{name} ကို ရောက်ပါပြီ', ja: '{name}に到着しました' },
   // Short confirmations after a gesture did something. {name} = the planet.
-  'flash.switch': { en: '✌️ detected → switching to {name}', my: '✌️ → {name} ကို ပြောင်းနေပါတယ်', ja: '✌️ 検出 → {name}へ移動' },
+  'flash.switch': { en: '✌️ detected → switching to {name}', my: '✌️ → {name} သို့ ပြောင်းနေပါတယ်', ja: '✌️ 検出 → {name}へ移動' },
   'flash.select': { en: '☝️ selected → {name}', my: '☝️ ရွေးပြီး → {name}', ja: '☝️ 選択 → {name}' },
   'flash.paused': { en: '✊ → paused', my: '✊ → ရပ်ထား', ja: '✊ → 一時停止' },
   'flash.resumed': { en: '✊ → resumed', my: '✊ → ပြန်စ', ja: '✊ → 再開' },
@@ -245,8 +244,18 @@ export const LOCALE: Record<Lang, string> = { en: 'en-US', my: 'my-MM', ja: 'ja-
  * Intl.NumberFormat for a UI language. Burmese asks for Myanmar digits explicitly, like the
  * planet facts use: Chrome ships no Burmese locale data and would fall back to Latin digits.
  */
-export const numberFormat = (lang: Lang, options: Intl.NumberFormatOptions = {}) =>
-  new Intl.NumberFormat(LOCALE[lang], lang === 'my' ? { ...options, numberingSystem: 'mymr' } : options);
+const numberFormats = new Map<string, Intl.NumberFormat>();
+export function numberFormat(lang: Lang, options: Intl.NumberFormatOptions = {}): Intl.NumberFormat {
+  const resolved = lang === 'my' ? { ...options, numberingSystem: 'mymr' } : options;
+  const key = JSON.stringify([lang, resolved]);
+  let formatter = numberFormats.get(key);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(LOCALE[lang], resolved);
+    if (numberFormats.size >= 32) numberFormats.delete(numberFormats.keys().next().value!);
+    numberFormats.set(key, formatter);
+  }
+  return formatter;
+}
 
 export const t = (key: StringKey, lang: Lang) => STRINGS[key][lang];
 

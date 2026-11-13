@@ -4,6 +4,7 @@ import type { Vec2 } from '../gestures/perception';
 import type { BodyNode } from '../planets/planet';
 
 const tmp = new THREE.Vector3();
+const visualScale=new THREE.Vector3();
 
 /**
  * Screen-space picking with a generous tolerance: tiny planets (Mercury is a
@@ -25,15 +26,17 @@ export function pickBody(
 
   let best: string | null = null;
   let bestScore = tolerancePx;
-  for (const { body, mesh, tilt, anchor } of nodes) {
-    if (!include(body) || !anchor.visible) continue; // faded-out moons can't be picked
+  for (const { body, mesh:source, tilt, anchor,presentation } of nodes) {
+    if (!include(body) || !(presentation?presentation.visible:anchor.visible)) continue;
+    const mesh=presentation??source;
     mesh.getWorldPosition(tmp);
     const distance = tmp.distanceTo(camera.position);
     tmp.project(camera);
     if (tmp.z > 1) continue; // behind the camera
     const sx = ((tmp.x + 1) / 2) * width;
     const sy = ((1 - tmp.y) / 2) * height;
-    const radiusPx = ((body.radius * tilt.scale.x) / distance) * pxPerUnitAtDist1; // as drawn (overview boost)
+    const radius=presentation?presentation.getWorldScale(visualScale).x:body.radius*tilt.scale.x;
+    const radiusPx = (radius / distance) * pxPerUnitAtDist1;
     const score = Math.hypot(sx - px, sy - py) - radiusPx; // ≤ 0 means directly on the body
     if (score < bestScore) {
       bestScore = score;

@@ -24,6 +24,8 @@ export interface Fingers {
 
 export interface HandObs {
   pose: Pose;
+  /** Upright extended thumb with four folded fingers; guided mode only. */
+  thumbsUp?: boolean;
   fingers: Fingers;
   /** wrist→tip / wrist→PIP for index, middle, ring, pinky (extended ≈ 1.35, curled ≈ 0.65). */
   ratios: [number, number, number, number];
@@ -81,6 +83,10 @@ export function observeHand(
   const unscale = (v: Vec2): Vec2 => ({ x: v.x / aspect, y: v.y });
   return {
     pose,
+    thumbsUp: !index && !middle && !ring && !pinky &&
+      dist(p[2], p[4]) > palm * 0.65 &&
+      p[4].y < Math.min(p[5].y, p[9].y, p[17].y) - palm * 0.15 &&
+      dist(p[2],p[4]) > (dist(p[2],p[3])+dist(p[3],p[4])) * 0.9,
     fingers: { thumb, index, middle, ring, pinky },
     ratios,
     pinchRatio,

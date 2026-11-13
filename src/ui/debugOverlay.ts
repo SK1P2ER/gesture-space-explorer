@@ -36,6 +36,7 @@ export class DebugOverlay {
   resolutionInfo = '—';
   /** Set by main each frame: the Quality setting, and in Auto what it has learned. */
   tierInfo = '—';
+  runtimeInfo = '';
   /** Recovered "can't happen" states, newest last; kept while debug is off so turning it on shows them. */
   readonly incidents: string[] = [];
 
@@ -56,6 +57,7 @@ export class DebugOverlay {
       `link    ${location.href}`,
       `device  ${navigator.userAgent} · ${innerWidth}×${innerHeight} @ ${devicePixelRatio}x`,
       this.stats.textContent ?? '',
+      this.runtimeInfo,
     ].join('\n');
   }
 

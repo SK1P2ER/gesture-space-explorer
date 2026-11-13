@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { FLAME, type Atmosphere } from '../data/atmosphere';
+import { loadShuttleDesign, type ShuttleDesign } from './shuttleDesign';
+import { normalMap } from '../native/normalMap';
+import { normalMapAsync } from '../native/normalMapAsync';
 
 // The rocket (v2.2): a two-stage launcher with a crew capsule, built in code from
 // lathe profiles; no image files. Its panels, seams, rivets, paint bands, soot and
@@ -83,7 +86,7 @@ export interface HullPaint {
  * a mission-patch square, and the capsule's two windows (lit cabins; brighter at night). The glow
  * map also holds a faint cool lift for the whole hull, so its shaded side never goes black.
  */
-export function paintHull(size: number): HullPaint {
+export function paintHull(size: number, makeNormals = normalsFrom): HullPaint {
   const n = size * size;
   const color = new Uint8Array(n * 4);
   const height = new Float32Array(n);
@@ -124,25 +127,14 @@ export function paintHull(size: number): HullPaint {
       height[i] = (ringSeam || staveSeam ? -1 : 0) + (rivet && !ringSeam ? 0.6 : 0) + (win ? -0.5 : 0);
     }
   }
-  return { color, normal: normalsFrom(height, size, 2.5), glow, size };
+  return { color, normal: makeNormals(height, size, 2.5), glow, size };
 }
 
 const clampByte = (x: number) => Math.max(0, Math.min(255, Math.round(x)));
 
 /** A tangent-space normal map from a height field (Sobel), wrapping in u. */
 export function normalsFrom(h: Float32Array, size: number, strength: number): Uint8Array {
-  const out = new Uint8Array(size * size * 4);
-  const at = (x: number, y: number) => h[Math.max(0, Math.min(size - 1, y)) * size + ((x + size) % size)];
-  for (let y = 0; y < size; y++)
-    for (let x = 0; x < size; x++) {
-      const dx = (at(x + 1, y - 1) + 2 * at(x + 1, y) + at(x + 1, y + 1) - at(x - 1, y - 1) - 2 * at(x - 1, y) - at(x - 1, y + 1)) / 8;
-      const dy = (at(x - 1, y + 1) + 2 * at(x, y + 1) + at(x + 1, y + 1) - at(x - 1, y - 1) - 2 * at(x, y - 1) - at(x + 1, y - 1)) / 8;
-      const nx = -dx * strength;
-      const ny = -dy * strength;
-      const len = Math.hypot(nx, ny, 1);
-      out.set([clampByte((nx / len) * 127.5 + 127.5), clampByte((ny / len) * 127.5 + 127.5), clampByte((1 / len) * 127.5 + 127.5), 255], (y * size + x) * 4);
-    }
-  return out;
+  return normalMap(h, size, strength);
 }
 
 function texture(data: Uint8Array, size: number, srgb: boolean) {
@@ -181,6 +173,8 @@ export interface RocketOptions {
   textureSize: number;
   /** Fewer facets and no normal map on Low. */
   quality: 'low' | 'high';
+  /** The uploaded Blender shuttle; the procedural kit remains available during loading or offline failures. */
+  design?: 'shuttle';
 }
 
 export class Rocket {
@@ -192,11 +186,38 @@ export class Rocket {
   private readonly materials: THREE.Material[] = [];
   private readonly hullMaterial: THREE.MeshStandardMaterial;
   private readonly legMatrix = new THREE.Matrix4();
+  private readonly landingLegsEnabled: boolean;
+  private readonly fallbackMeshes: THREE.Mesh[] = [];
+  private design: ShuttleDesign | null = null;
+  private lander = false;
+  private disposed = false;
+  private readonly normalJob = new AbortController();
+  readonly normalReady: Promise<void> = Promise.resolve();
+  private night = 0;
+  private ownSun = false;
+  private shadows = false;
+  private secondaryBoosterFlame: Flame | null = null;
+  private readonly thrust = { level: 0, seconds: 0, air: 'none' as Atmosphere, steady: false };
+  /** Settles after the optional Blender model has attached, or the procedural fallback is chosen. */
+  readonly ready: Promise<void>;
+  get designLoaded() { return this.design !== null; }
   deploy = -1;
 
   constructor(opts: RocketOptions) {
+    this.landingLegsEnabled = opts.design !== 'shuttle';
     const segments = opts.quality === 'high' ? 28 : 14;
-    const paint = paintHull(opts.textureSize);
+    // The authored model brings its own baked textures. Its temporary fallback
+    // must not spend half a second painting an atlas that will immediately hide.
+    const deferred: { height?: Float32Array } = {};
+    const useWorker = opts.quality === 'high' && opts.design !== 'shuttle';
+    const paint = paintHull(opts.design === 'shuttle' ? Math.min(opts.textureSize, 64) : opts.textureSize,
+      useWorker ? (height, size) => {
+        deferred.height = height;
+        // Neutral tangent-space normals until the independently owned worker result arrives.
+        const flat = new Uint8Array(size * size * 4);
+        for (let i = 0; i < flat.length; i += 4) flat.set([128, 128, 255, 255], i);
+        return flat;
+      } : normalsFrom);
     const map = texture(paint.color, paint.size, true);
     const glow = texture(paint.glow, paint.size, true);
     this.textures.push(map, glow);
@@ -206,6 +227,15 @@ export class Rocket {
       this.textures.push(normal);
       this.hullMaterial.normalMap = normal;
       this.hullMaterial.normalScale.set(0.8, 0.8);
+      if (deferred.height) {
+        this.normalReady = normalMapAsync(deferred.height, paint.size, 2.5, this.normalJob.signal).then(({ pixels }) => {
+          if (this.disposed) return;
+          normal.image.data = pixels;
+          normal.needsUpdate = true;
+        }).catch((error: unknown) => {
+          if (!this.disposed) console.warn('[rocket] Normal-map generation failed', error);
+        });
+      }
     }
     const dark = new THREE.MeshStandardMaterial({ color: 0x3a3e46, roughness: 0.4, metalness: 0.75 });
     this.materials.push(this.hullMaterial, dark);
@@ -256,6 +286,36 @@ export class Rocket {
     this.group.add(this.booster, this.upper);
     this.group.visible = false;
     this.setLegs(0);
+    this.fallbackMeshes.push(boosterHull, engines, upperHull);
+    this.ready = opts.design === 'shuttle' ? loadShuttleDesign(opts.quality).then((design) => {
+      if (this.disposed) { design.dispose(); return; }
+      this.design = design;
+      for (const mesh of this.fallbackMeshes) mesh.visible = false;
+      this.booster.add(design.booster);
+      this.upper.add(design.orbiter);
+      this.boosterFlame.mesh.position.set(-design.engineX, 0, design.engineZ);
+      this.boosterFlame.mesh.scale.set(0.035 / 0.11, 1, 0.035 / 0.11);
+      this.secondaryBoosterFlame = new Flame(0.035, 0.45, opts.quality);
+      this.secondaryBoosterFlame.mesh.name = 'flame:booster-right';
+      this.secondaryBoosterFlame.mesh.position.set(design.engineX, 0, design.engineZ);
+      this.booster.add(this.secondaryBoosterFlame.mesh);
+      this.upperFlame.mesh.position.set(0, design.ground, design.centerZ);
+      // New children inherit the current render pass, including a download
+      // completing after the base Sun or the flight has taken ownership.
+      for (const root of [design.booster, design.orbiter, this.secondaryBoosterFlame.mesh]) {
+        root.traverse((object) => { object.layers.mask = this.legs.layers.mask; });
+      }
+      const deploy = this.deploy;
+      this.deploy = -1;
+      this.setLegs(deploy);
+      this.setLander(this.lander);
+      this.setNight(this.night, this.ownSun);
+      this.setShadows(this.shadows);
+      const { level, seconds, air, steady } = this.thrust;
+      this.setThrust(level, seconds, air, steady);
+    }).catch((error: unknown) => {
+      if (!this.disposed) console.warn('[rocket] Blender shuttle could not load; using procedural rocket', error);
+    }) : Promise.resolve();
   }
 
   private readonly boosterFlame: Flame;
@@ -267,10 +327,15 @@ export class Rocket {
 
   /** Thrust 0–1 from whichever stage is firing, in this air; flickering unless `steady` (reduced motion). */
   setThrust(level: number, seconds: number, air: Atmosphere, steady = false) {
+    this.thrust.level = level;
+    this.thrust.seconds = seconds;
+    this.thrust.air = air;
+    this.thrust.steady = steady;
     const firing = this.stacked ? this.boosterFlame : this.upperFlame;
     const idle = this.stacked ? this.upperFlame : this.boosterFlame;
     firing.set(level, seconds, air, steady);
     idle.set(0, seconds, air, steady);
+    this.secondaryBoosterFlame?.set(this.stacked ? level : 0, seconds, air, steady);
   }
 
   /** Drop the booster: it falls back and tumbles away (or just goes, with reduced motion). */
@@ -278,6 +343,7 @@ export class Rocket {
     if (!this.stacked) return;
     this.stacked = false;
     this.boosterFlame.set(0, 0, 'none', true);
+    this.secondaryBoosterFlame?.set(0, 0, 'none', true);
     if (reducedMotion) {
       this.booster.visible = false;
       return;
@@ -292,7 +358,9 @@ export class Rocket {
     this.booster.visible = true;
     this.booster.position.set(0, 0, 0);
     this.booster.rotation.set(0, 0, 0);
-    this.upper.position.y = 0;
+    this.lander = false;
+    this.upper.position.set(0, 0, 0);
+    if (this.design) this.legs.visible = false;
   }
 
   /**
@@ -300,7 +368,9 @@ export class Rocket {
    * Off: where it sits on the stack.
    */
   setLander(on: boolean) {
-    this.upper.position.y = on ? -ROCKET.split : 0;
+    this.lander = on;
+    this.upper.position.y = on ? -(this.design?.ground ?? ROCKET.split) : 0;
+    this.upper.position.z = on ? -(this.design?.centerZ ?? 0) : 0;
     if (on && !this.parting) this.booster.visible = false;
   }
 
@@ -320,13 +390,18 @@ export class Rocket {
 
   /** Landing legs: 0 folded up along the hull, 1 out and down (standing). */
   setLegs(deploy: number) {
+    // These radial struts belong to the procedural lander, not the Blender shuttle.
+    this.legs.visible = this.landingLegsEnabled;
     if (Math.abs(deploy - this.deploy) < 1e-4) return;
     this.deploy = deploy;
     const { angle } = legPose(deploy);
     for (let i = 0; i < 4; i++) {
       const a = (i / 4) * Math.PI * 2;
       // Hinge on the upper stage, swing outward about the tangent: rotate about z (outward = +x), then around the axis.
-      this.legMatrix.makeRotationY(-a).multiply(new THREE.Matrix4().makeTranslation(ROCKET.upperRadius, ROCKET.split + ROCKET.leg.hingeY, 0)).multiply(new THREE.Matrix4().makeRotationZ(-angle));
+      this.legMatrix.makeTranslation(0, 0, this.design?.centerZ ?? 0)
+        .multiply(new THREE.Matrix4().makeRotationY(-a))
+        .multiply(new THREE.Matrix4().makeTranslation(ROCKET.upperRadius, (this.design?.ground ?? ROCKET.split) + ROCKET.leg.hingeY, 0))
+        .multiply(new THREE.Matrix4().makeRotationZ(-angle));
       this.legs.setMatrixAt(i, this.legMatrix);
     }
     this.legs.instanceMatrix.needsUpdate = true;
@@ -339,6 +414,9 @@ export class Rocket {
    * from below the horizon: dim the paint, and go fully metallic so its glints dim with it.
    */
   setNight(night: number, ownSun = false) {
+    this.night = night;
+    this.ownSun = ownSun;
+    this.design?.setNight(night, ownSun);
     this.hullMaterial.emissiveIntensity = 1 + 0.8 * night;
     // At a showcase base (v2.3) the rocket is lit by the base's own Sun, which sets: no dimming needed.
     const dim = ownSun ? 0 : night;
@@ -349,6 +427,7 @@ export class Rocket {
 
   /** Cast and receive the base Sun's shadows (at a showcase base, High and Ultra). */
   setShadows(on: boolean) {
+    this.shadows = on;
     this.group.traverse((o) => {
       if (o instanceof THREE.Mesh && !o.name.startsWith('flame')) o.castShadow = o.receiveShadow = on;
     });
@@ -360,6 +439,7 @@ export class Rocket {
     let triangles = 0;
     this.group.traverse((o) => {
       if (!(o instanceof THREE.Mesh)) return;
+      if (this.design && this.fallbackMeshes.includes(o)) return;
       meshes++;
       const g = o.geometry as THREE.BufferGeometry;
       const tris = (g.index ? g.index.count : g.attributes.position.count) / 3;
@@ -369,14 +449,19 @@ export class Rocket {
   }
 
   dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.normalJob.abort();
+    this.design?.dispose();
     this.group.traverse((o) => {
-      if (o instanceof THREE.Mesh) o.geometry.dispose();
+      if (o instanceof THREE.Mesh && !o.name.startsWith('flame')) o.geometry.dispose();
       if (o instanceof THREE.InstancedMesh) o.dispose();
     });
     for (const m of this.materials) m.dispose();
     for (const t of this.textures) t.dispose();
     this.boosterFlame.dispose();
     this.upperFlame.dispose();
+    this.secondaryBoosterFlame?.dispose();
     this.group.removeFromParent();
   }
 }

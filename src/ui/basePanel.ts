@@ -5,6 +5,8 @@ import type { SkyReport } from '../app/baseSky';
 import { LAYOUTS } from '../scene/baseKit/showcases';
 import { clockLabel } from '../sim/localSky';
 import { t, tf, type StringKey } from './i18n';
+import { dt } from './designStrings';
+import './basePanel.css';
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 
@@ -17,8 +19,22 @@ export class BasePanel {
   private facts: HTMLElement | null = null;
   private destinations: { id: string; button: HTMLButtonElement }[] = [];
   private launch: HTMLButtonElement | null = null;
+  private selection: HTMLElement | null = null;
+  private tab: 'overview' | 'travel' = 'overview';
+  private baseId: string | null = null;
+  private overview: HTMLElement | null = null;
+  private travel: HTMLElement | null = null;
+  private tabs: HTMLButtonElement[] = [];
+  private overviewDetails: HTMLElement | null = null;
+  private handle: HTMLButtonElement | null = null;
+  private collapsed = false;
+  private readonly compact = typeof matchMedia === 'function' ? matchMedia('(max-width: 640px), (max-height: 500px)') : null;
 
-  constructor(private readonly emit: (intent: Intent) => void) {}
+  constructor(private readonly emit: (intent: Intent) => void) {
+    this.compact?.addEventListener('change', () => {
+      if (!this.compact!.matches) this.setCollapsed(false);
+    });
+  }
 
   /** @param destination where the rocket will go, if chosen */
   render(base: Base | null, lang: Lang, destination: string | null, sky: SkyReport | null = null, canBuild = false, cameraControls?: HTMLElement) {
@@ -26,8 +42,13 @@ export class BasePanel {
     // minute) and the chosen destination update in place, so focus, scroll and taps survive them.
     const k = `${base?.id}|${lang}|${canBuild}|${!!cameraControls}`;
     if (k !== this.last) {
+      if (base?.id !== this.baseId) {
+        this.baseId = base?.id ?? null;
+        this.tab = 'overview';
+        this.collapsed = !!this.compact?.matches;
+      }
       this.last = k;
-      this.lastSky = '';
+      this.lastSky = '\u0000';
       this.lastDestination = undefined;
       this.root.hidden = !base;
       if (base) this.rebuild(base, lang, canBuild, cameraControls);
@@ -44,9 +65,19 @@ export class BasePanel {
       this.facts!.replaceChildren(el('dt', t('gravityHere', lang)), el('dd', `${body.gravity} m/s²`), ...(sky ? skyFacts(sky, lang) : []));
     }
     if (destination !== this.lastDestination) {
+      const changed = this.lastDestination !== undefined;
       this.lastDestination = destination;
       for (const { id, button } of this.destinations) button.setAttribute('aria-pressed', String(id === destination));
       this.launch!.disabled = !destination;
+      const target = BASES.find((b) => b.id === destination);
+      this.selection!.replaceChildren(
+        el('span', dt(target ? 'readyToLaunch' : 'chooseDestination', lang), 'selection-label'),
+        ...(target ? [el('strong', target.name[lang])] : []),
+      );
+      if (changed && target) {
+        this.showTab('travel', true);
+        this.setCollapsed(false);
+      }
     }
   }
 
@@ -59,17 +90,87 @@ export class BasePanel {
     // The panel is a polite live region; the ticking clock shouldn't be read out every minute.
     const facts = this.facts = document.createElement('dl');
     facts.setAttribute('aria-live', 'off');
-    this.root.replaceChildren(
-      el('h2', `🏠 ${base.name[lang]}`),
+    const handle = this.handle = el('button', '', 'base-sheet-handle') as HTMLButtonElement;
+    handle.type = 'button';
+    handle.setAttribute('aria-label', base.name[lang]);
+    handle.setAttribute('aria-controls', 'base-content');
+    handle.addEventListener('click', () => this.setCollapsed(!this.collapsed));
+    const head = el('div', '', 'base-heading');
+    const title = el('h2', base.name[lang]);
+    title.id = 'base-title';
+    head.append(
+      el('p', dt('flightDeck', lang), 'base-eyebrow'), title,
       el('p', `${tf('baseOn', lang, { body: body.name[lang] })} · ${t(`theme.${base.theme}` as StringKey, lang)}`, 'kind'),
-      leave,
-      ...(cameraControls ? [cameraControls] : []),
-      el('p', base.blurb[lang]),
-      facts,
+    );
+    this.root.setAttribute('aria-labelledby', 'base-title');
+    const tablist = el('div', '', 'base-tabs');
+    tablist.setAttribute('role', 'tablist');
+    tablist.setAttribute('aria-label', base.name[lang]);
+    this.tabs = (['overview', 'travel'] as const).map((tab, index) => {
+      const button = el('button', dt(tab, lang), 'base-tab') as HTMLButtonElement;
+      button.type = 'button';
+      button.id = `base-tab-${tab}`;
+      button.setAttribute('role', 'tab');
+      button.setAttribute('aria-controls', `base-${tab}`);
+      button.addEventListener('click', () => this.showTab(tab, true));
+      button.addEventListener('keydown', (event) => {
+        const key = event.key;
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key)) return;
+        event.preventDefault();
+        const next = key === 'Home' ? 0 : key === 'End' ? 1 : 1 - index;
+        this.showTab(next === 0 ? 'overview' : 'travel', true);
+        this.tabs[next].focus();
+      });
+      return button;
+    });
+    tablist.append(...this.tabs);
+    const overview = this.overview = el('section', '', 'base-overview');
+    overview.id = 'base-overview';
+    overview.setAttribute('role', 'tabpanel');
+    overview.setAttribute('aria-labelledby', 'base-tab-overview');
+    const actions = el('div', '', 'base-view-actions');
+    actions.append(
       ...(LAYOUTS[base.id] ? [this.horizonButton(lang), this.goldenButton(lang)] : []),
       ...(LAYOUTS[base.id] && canBuild ? [this.buildButton(lang)] : []),
-      ...this.launchControls(base, lang),
     );
+    const details = this.overviewDetails = el('div', '', 'base-details');
+    details.id = 'base-details';
+    details.append(el('p', base.blurb[lang], 'base-description'), facts);
+    overview.append(details, actions, ...(cameraControls ? [cameraControls] : []));
+    const travel = this.travel = el('section', '', 'base-travel');
+    travel.id = 'base-travel';
+    travel.setAttribute('role', 'tabpanel');
+    travel.setAttribute('aria-labelledby', 'base-tab-travel');
+    travel.append(...this.launchControls(base, lang));
+    const content = el('div', '', 'base-content');
+    content.id = 'base-content';
+    content.append(tablist, overview, travel);
+    this.root.replaceChildren(
+      handle, head, leave, content,
+    );
+    this.showTab(this.tab);
+    this.setCollapsed(this.collapsed);
+  }
+
+  private showTab(tab: 'overview' | 'travel', expand = false) {
+    this.tab = tab;
+    if (expand) this.setCollapsed(false);
+    this.tabs.forEach((button, index) => {
+      const selected = index === (tab === 'overview' ? 0 : 1);
+      button.setAttribute('aria-selected', String(selected));
+      button.tabIndex = selected ? 0 : -1;
+    });
+    if (this.overview) this.overview.hidden = this.overview.inert = tab !== 'overview';
+    if (this.travel) this.travel.hidden = this.travel.inert = tab !== 'travel' || this.collapsed;
+    this.handle?.setAttribute('aria-controls', tab === 'overview' ? 'base-details' : 'base-travel');
+  }
+
+  private setCollapsed(collapsed: boolean) {
+    this.collapsed = collapsed && !!this.compact?.matches;
+    this.root.setAttribute('data-collapsed', String(this.collapsed));
+    if (this.overviewDetails) this.overviewDetails.hidden = this.overviewDetails.inert = this.collapsed;
+    if (this.travel) this.travel.hidden = this.travel.inert = this.tab !== 'travel' || this.collapsed;
+    this.handle?.setAttribute('aria-expanded', String(!this.collapsed));
   }
 
   private goldenButton(lang: Lang) {
@@ -107,7 +208,9 @@ export class BasePanel {
     const launch = this.launch = el('button', `🚀 ${t('launch', lang)}`, 'chip launch') as HTMLButtonElement;
     launch.type = 'button';
     launch.addEventListener('click', () => this.emit({ type: 'launch' }));
-    return [el('p', t('flyTo', lang), 'kind'), list, launch, el('p', t('launchHint', lang), 'hint')];
+    this.selection = el('div', '', 'base-selection');
+    this.selection.setAttribute('aria-live', 'polite');
+    return [el('p', t('flyTo', lang), 'kind'), list, this.selection, launch, el('p', t('launchHint', lang), 'hint')];
   }
 }
 

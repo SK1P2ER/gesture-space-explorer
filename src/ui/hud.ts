@@ -92,7 +92,8 @@ export class Hud {
         ? `${t('loading', s.lang)} ${Math.round(s.status.progress * 100)}%`
         : s.status.kind === 'tracking'
           ? `✋ ${t('tracking', s.lang)} (${s.status.delegate})`
-          : `⌨️ ${t('keyboardOnly', s.lang)} — ${t(s.status.reason, s.lang)}`;
+          : `⌨ ${t('keyboardOnly', s.lang)}${s.status.reason === 'err.denied' ? '' : ` — ${t(s.status.reason, s.lang)}`}`;
+    this.status.title = s.status.kind === 'keyboard' ? t(s.status.reason, s.lang) : '';
     // After any stop (a failure, a disconnect, back/forward navigation): start again without a reload.
     this.handControl.hidden = !canRestartTracking(s.status);
     this.handControl.textContent = `🖐 ${t('handControlStart', s.lang)}`;

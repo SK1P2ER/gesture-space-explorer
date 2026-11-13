@@ -4,26 +4,7 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## 2.6.0 — 2026-10-31
-
-AstroLife 2126 behind `?flags=astrolife`, and the polish and upkeep prepared as 2.5.0. 2.5.0 was prepared but not released; its changes ship here.
-
-### Added
-
-- `?reset`, for user tests: forgets everything the app saved on this device (settings, quality and Auto's memory, passport, weight, Build layouts), so a tester starts as a first-time visitor. Nothing is sent or shown; `reset` drops out of the address.
-
-### Changed
-
-- Burmese: the landing pad is ဆင်းသက်ကွင်း everywhere, and sentences use the spoken polite style (…ပါတယ် / …ပါ), as most of the app already did. Build, landing and a few messages were in the written style (…သည်).
-- Development: the three.js fix for graphics resets is applied by `patch-package` on install, and its tests run in CI; the frame loop runs in named phases, in the same order as before (no change in behavior).
-
-### Performance
-
-- The Builder (`?flags=build`) and the camera views (`?flags=cinematic`) load only with their flag: about 7 kB less JavaScript to parse without flags (0.3 kB gzipped; textures remain the real startup cost).
-
-### Experimental (behind `?flags=`)
-
-- `?flags=astrolife`: **AstroLife 2126**, a fictional space-travel app around the explorer (`docs/decisions.md`, entry 21). It opens on its own hub over the live scene, with four destinations to read about and explore, and a booking for Cape → Jezero (nickname, departure, cabin, confirm; a booking can be cancelled, and one journey is under way at a time). Checking in issues a boarding pass whose QR code is a souvenir link: the pass travels after the `#`, so it never reaches a server, and any phone opens it as a keepsake. Boarding opens the explorer at the spaceport on the departure date (from the next real Earth–Mars launch window: March 2127), labelled "Simulation"; landing at Jezero completes the journey and earns its stamp, once, and leaving the journey gives back your own date and speed. The passport holds one stamp per completed journey; a completed journey makes a postcard (a 1600 × 1000 PNG of the scene, the greeting and the stamp) to save or share; and the passport can forget everything AstroLife keeps on the device. Fares and timetables are fiction, and nothing is paid; the camera is asked for only when the explorer opens, and stopped again on the way back to the hub. Everything stays on the device. Without the flag nothing of it is downloaded.
+## Unreleased
 
 ## 2.4.0 — 2026-10-29
 

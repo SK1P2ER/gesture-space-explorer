@@ -19,6 +19,20 @@ describe('bases', () => {
     }
   });
 
+  it('places the Earth port near Tanegashima while retaining its existing save and route identity', () => {
+    const port = baseOn('earth')!;
+    expect(port.id).toBe('cape');
+    expect(port.theme).toBe('launch');
+    expect(port.lat).toBeCloseTo(30.4);
+    expect(port.lon).toBeCloseTo(131.0);
+    expect(port.name).toEqual({ en: 'Tanegashima Spaceport', my: 'Tanegashima အာကာသဆိပ်ကမ်း', ja: '種子島宇宙港' });
+    expect(port.blurb.en).toContain('fictional');
+    expect(port.blurb.ja).toContain('架空');
+    const earth = BODIES.find((body) => body.id === port.body)!;
+    expect(earth.gravity).toBeGreaterThan(9);
+    expect(earth.gravity).toBeLessThan(10);
+  });
+
   it('stand where the texture shows that latitude and longitude (same mapping as the sphere)', () => {
     // three's SphereGeometry, with the UVs flipped north → south as planets/planet.ts does.
     const sphere = new THREE.SphereGeometry(1, 128, 64);

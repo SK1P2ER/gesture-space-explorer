@@ -24,6 +24,8 @@ export interface BodyNode {
   orbitShown: number | null;
   /** The planet sphere itself (a unit sphere scaled to the radius); spins on its (tilted) axis. */
   mesh: THREE.Mesh;
+  /** Optional render-only representation, also used for labels and picking. */
+  presentation?:THREE.Mesh;
   clouds?: THREE.Mesh;
   surface: PlanetSurface;
   /** Index into SPHERES: 0 = finest. */

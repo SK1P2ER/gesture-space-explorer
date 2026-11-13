@@ -43,6 +43,13 @@ describe('deep links: what a URL opens', () => {
   it('a base wins over a body that disagrees with it', () => {
     expect(parse('?body=saturn&base=jezero')).toEqual({ base: 'jezero', body: 'mars' });
   });
+
+  it('opens Tanegashima from its readable alias and legacy Cape links without changing the internal base id', () => {
+    expect(parse('?base=cape')).toEqual({ base: 'cape', body: 'earth' });
+    expect(parse('?base=tanegashima')).toEqual({ base: 'cape', body: 'earth' });
+    expect(parse('?base=Tanegashima&body=mars&lang=ja')).toEqual({ base: 'cape', body: 'earth', lang: 'ja' });
+    expect(parse('?base=tanegashima&view=horizon')).toEqual({ base: 'cape', body: 'earth' });
+  });
 });
 
 describe('deep links: the address for what is on screen', () => {
@@ -57,6 +64,7 @@ describe('deep links: the address for what is on screen', () => {
     expect(linkSearch('', { ...view, body: 'saturn' }, false)).toBe('?body=saturn');
     expect(linkSearch('', { ...view, body: 'mars', base: 'jezero' }, false)).toBe('?base=jezero');
     expect(linkSearch('', { ...view, body: 'mars', base: 'jezero', horizon: true, lang: 'my' }, false)).toBe('?base=jezero&view=horizon&lang=my');
+    expect(linkSearch('?base=cape&debug', { ...view, body: 'earth', base: 'cape' }, false)).toBe('?debug&base=tanegashima');
   });
 
   it('keeps every other parameter, and the date only while that moment is still shown', () => {
@@ -71,6 +79,7 @@ describe('deep links: the address for what is on screen', () => {
       { ...view, body: 'jupiter' },
       { ...view, body: 'mars', base: 'jezero', horizon: true, lang: 'ja' as const },
       { ...view, body: 'moon', base: 'tranquility' },
+      { ...view, body: 'earth', base: 'cape' },
     ];
     for (const v of views) {
       const link = parse(linkSearch('', v, false));
