@@ -2,6 +2,12 @@
 
 **English** | [日本語](README.ja.md)
 
+**Development review snapshot:** see the [team handoff](docs/team-handoff-japan-review.md).
+This branch is not a release or a replacement for `main`.
+
+**Code: MIT / 3D assets: CC BY 4.0.** Third-party components retain their own
+licenses; see [ASSETS.md](ASSETS.md).
+
 A 3D Solar System you control with hand gestures in front of your webcam: rotate, zoom, fly from planet to planet, point to select, and change the speed of time. Hand tracking runs entirely on your device (MediaPipe); the scene is rendered with Three.js.
 
 ![Earth in v1.1: 4K surface, drifting clouds, atmosphere, terminator](docs/screenshots/after-earth.jpg)
@@ -297,10 +303,10 @@ No internet connection is needed. Open `http://localhost:4173` in Chrome's `--ki
 - Moon positions: fitted to [JPL Horizons](https://ssd.jpl.nasa.gov/horizons/); the Moon from J. Meeus, *Astronomical Algorithms*, ch. 47
 - [MediaPipe](https://github.com/google-ai-edge/mediapipe): Apache 2.0
 - [Three.js](https://threejs.org/): MIT
-- M03 Japan spaceport vegetation: [Quaternius Stylized Nature MegaKit Standard](https://quaternius.itch.io/stylized-nature-megakit), CC0. Spaceport/rocket are user-supplied ASTROLIFE project assets. Draco geometry decoder: The Draco Authors, Apache 2.0; see `public/spaceport/README.md` and `public/spaceport/draco/LICENSE`.
+- M03 Japan spaceport vegetation: [Quaternius Stylized Nature MegaKit Standard](https://quaternius.itch.io/stylized-nature-megakit), CC0. Original rocket, shuttle and spaceport models: SK1P2ER, CC BY 4.0; see [ASSETS.md](ASSETS.md). Draco geometry decoder: The Draco Authors, Apache 2.0; see `public/spaceport/README.md` and `public/spaceport/draco/LICENSE`.
 - Planet facts: NASA. Surface gravity: [NASA Planetary Fact Sheet](https://nssdc.gsfc.nasa.gov/planetary/factsheet/) and [Sun Fact Sheet](https://nssdc.gsfc.nasa.gov/planetary/factsheet/sunfact.html)
 - Orbits: E. M. Standish, [Keplerian Elements for Approximate Positions of the Major Planets](https://ssd.jpl.nasa.gov/planets/approx_pos.html), JPL (Table 1, valid 1800–2050)
 - Rotation axes and rates: Archinal et al., *Report of the IAU Working Group on Cartographic Coordinates and Rotational Elements: 2015*, Celest. Mech. Dyn. Astr. 130:22 (2018)
-- This project: [MIT](LICENSE)
+- Code: [MIT](LICENSE). Original 3D models: [CC BY 4.0](LICENSE-CC-BY-4.0.txt), with the third-party exceptions in [ASSETS.md](ASSETS.md).
 
 See [CHANGELOG.md](CHANGELOG.md) for what changed in each version.

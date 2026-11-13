@@ -2,6 +2,12 @@
 
 [English](README.md) | **日本語**
 
+**開発レビュー用スナップショット:** [チーム向け引き継ぎ](docs/team-handoff-japan-review.md)を参照してください。
+このブランチはリリース版ではなく、`main` を置き換えるものではありません。
+
+**Code: MIT / 3D assets: CC BY 4.0.** 第三者の素材にはそれぞれのライセンスが適用されます。
+詳細は [ASSETS.md](ASSETS.md) を参照してください。
+
 Webカメラの前で手を動かして操作する、3D太陽系のWebアプリです。視点の回転、ズーム、惑星間の移動、指さしによる選択、時間の速さの変更をすべてハンドジェスチャーで行えます。手の認識は端末上で完結し（MediaPipe）、描画にはThree.jsを使用しています。
 
 ![v1.1の地球：4Kの地表、流れる雲、大気、昼夜の境界](docs/screenshots/after-earth.jpg)
@@ -294,6 +300,6 @@ npm run build && npm run preview
 - 惑星のデータ：NASA。表面重力：[NASA Planetary Fact Sheet](https://nssdc.gsfc.nasa.gov/planetary/factsheet/)、[Sun Fact Sheet](https://nssdc.gsfc.nasa.gov/planetary/factsheet/sunfact.html)
 - 軌道：E. M. Standish, [Keplerian Elements for Approximate Positions of the Major Planets](https://ssd.jpl.nasa.gov/planets/approx_pos.html), JPL（表1、1800〜2050年に有効）
 - 自転軸と自転速度：Archinal et al., *Report of the IAU Working Group on Cartographic Coordinates and Rotational Elements: 2015*, Celest. Mech. Dyn. Astr. 130:22 (2018)
-- このプロジェクト：[MIT](LICENSE)
+- コード：[MIT](LICENSE)。SK1P2ER が制作したロケット・シャトル・宇宙港の3Dモデル：[CC BY 4.0](LICENSE-CC-BY-4.0.txt)。第三者素材の例外は [ASSETS.md](ASSETS.md) を参照してください。
 
 バージョンごとの変更点は [CHANGELOG.md](CHANGELOG.md) を参照してください。

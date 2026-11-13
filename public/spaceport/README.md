@@ -5,9 +5,10 @@
 It contains the coastal port, eight trees, nine shrubs, Shuttle and launch arms.
 
 - Vegetation: [Quaternius Stylized Nature MegaKit Standard](https://quaternius.itch.io/stylized-nature-megakit), CC0.
-  Download provenance and original archive are retained in `assets/quaternius-nature-standard`.
-- Spaceport and rocket: user-supplied ASTROLIFE assets and the existing authored project.
-  This export does not grant a separate license for those user assets.
+  Download provenance is retained in `assets/quaternius-nature-standard/provenance.json`;
+  the original archive is not included in this review snapshot.
+- Original spaceport, rocket and shuttle geometry: Original Blender model by SK1P2ER — CC BY 4.0.
+  Third-party vegetation remains CC0. See `../../ASSETS.md` for attribution and license scope.
 - Draco decoder files: copyright The Draco Authors, Apache License 2.0.
   Unmodified decoder binaries copied from the installed Three.js package's
   `examples/jsm/libs/draco/gltf` directory. See `draco/LICENSE` and `draco/README.md`.
