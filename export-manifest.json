@@ -1,8 +1,8 @@
 {
  "profile": "japan-review",
  "source": {
-  "commit": "b0962a2d9b0f88fcb5bd3f1fdc09654c0b97000a",
-  "tree": "dfe4f5ef6d2e495b779f7dbdd316c0731955eab1"
+  "commit": "ef512a4d6a1eef4c7c68c323f667c66d9d3da4d1",
+  "tree": "cfd66ede27affd570123e4ac1fe599cf7788432e"
  },
  "exporter": {
   "commit": "348dd7a70ecbc5cef405761900636946c90710c7",
@@ -238,8 +238,8 @@
   },
   {
    "path": "package.json",
-   "bytes": 1057,
-   "sha256": "ba7acf75d07e63b1f80da1292398792d96111f642cdad14aa23a251d33bda86d"
+   "bytes": 1162,
+   "sha256": "aef18d77f885bb0bac950c81ad97b0777e1d3128ecb9f282a688f62ebeb677d5"
   },
   {
    "path": "public/icons/apple-touch-icon.png",
@@ -733,13 +733,13 @@
   },
   {
    "path": "src/app/guidedMission.ts",
-   "bytes": 16285,
-   "sha256": "01ae99a878179eb258b176a3202b05b679ac9757c73b46f2b927c8787f3c7ed2"
+   "bytes": 16492,
+   "sha256": "8d70ac3ac14432052abc877e145c6c2ce60144040376256d16d6369f11d8599f"
   },
   {
    "path": "src/app/guidedSession.ts",
-   "bytes": 4957,
-   "sha256": "2a69f5c0b9f391bf775efb1d8b76a6c95107e12edb7516e866cb8cab71ef766e"
+   "bytes": 5178,
+   "sha256": "21b4fe72e5cb5aa15d14d159e44425531140d8df8362d7e915f28ee12af68140"
   },
   {
    "path": "src/app/infoSheet.ts",
@@ -783,8 +783,8 @@
   },
   {
    "path": "src/app/tracking.ts",
-   "bytes": 7918,
-   "sha256": "51aa6579b274d80a419716a45abe1e2fb74de5ffd0485a1ac93fd0ef8fbb829e"
+   "bytes": 8785,
+   "sha256": "6d7e03ec0aac171d8e922e50e7af2b807e72a807d6d2b2f5cfbf898d7d7e790e"
   },
   {
    "path": "src/config.ts",
@@ -903,8 +903,8 @@
   },
   {
    "path": "src/main.ts",
-   "bytes": 43971,
-   "sha256": "9e9d8b418f6a2fdd907653f66d0086ec9be0223c7d0df317cdd8c8087a9c4e91"
+   "bytes": 44168,
+   "sha256": "f19eb1ab35d6a29ed61f2c59a0cc54caa759b8a037b7c8e5c4e907453e59402c"
   },
   {
    "path": "src/native/normalMap.ts",
@@ -1223,8 +1223,8 @@
   },
   {
    "path": "src/style.css",
-   "bytes": 32968,
-   "sha256": "64bd5887ad33ea057115833693a37778e66ba0fb10cae2c02ef93dd786aebb20"
+   "bytes": 33207,
+   "sha256": "e28e7604ce91467a37797928ff47e58713459ccce0cab9193e9ae98d45ac0e34"
   },
   {
    "path": "src/tracking/camera.ts",
@@ -1268,8 +1268,8 @@
   },
   {
    "path": "src/ui/chrome.ts",
-   "bytes": 7983,
-   "sha256": "e664aed6a4570a91a1bbb39187b0b6eb513a194a30f79bc508b5532c938fbf41"
+   "bytes": 8160,
+   "sha256": "52ef3422f4c230cf77229e7082ea90c95ff887272779f4c90df527324ad44ca2"
   },
   {
    "path": "src/ui/cinematicControls.ts",
@@ -1288,8 +1288,8 @@
   },
   {
    "path": "src/ui/debugOverlay.ts",
-   "bytes": 7504,
-   "sha256": "23e981e7e72b236300128c2b22d2e0feb06b9f7c523b4db435a6308c4ed1bd6f"
+   "bytes": 7714,
+   "sha256": "7c33576679a559ee010571e8fe5d17e1a24a1cbd7943fcd25893f0a0d8c67c97"
   },
   {
    "path": "src/ui/designStrings.ts",
@@ -1313,8 +1313,8 @@
   },
   {
    "path": "src/ui/hud.ts",
-   "bytes": 10447,
-   "sha256": "2f6d3a04b7740a2833c857a34255873b654e105ae6529d1e2e4fce23883e3fea"
+   "bytes": 10943,
+   "sha256": "ce1072538b19ecff2425054a55c2ff23f66f6515e69a6263016dc25b7933a749"
   },
   {
    "path": "src/ui/i18n.ts",
@@ -1465,6 +1465,11 @@
    "path": "tests/boost.test.ts",
    "bytes": 4738,
    "sha256": "664a38f37412720dbdf5e8a4e360cf25fb6fd373b236b5e15be5bb79bf6b4ace"
+  },
+  {
+   "path": "tests/browser/camera-lifecycle.test.mjs",
+   "bytes": 40978,
+   "sha256": "edae8dd26f26625cdf454ec5381e1ec81228dbf83c7faa7434c6fe997901367b"
   },
   {
    "path": "tests/browser/guided.test.mjs",
@@ -1628,8 +1633,8 @@
   },
   {
    "path": "tests/guidedSession.test.ts",
-   "bytes": 6345,
-   "sha256": "00758566749d3dec6a635a06950b4f790151bebf876c4ec2d26a5df209741691"
+   "bytes": 7476,
+   "sha256": "4601cfd98d1d48ef6edaeb0ca4612e0cbddf9faf63b02fa167927ed17e9d2378"
   },
   {
    "path": "tests/habitatParity.test.ts",
@@ -1923,13 +1928,13 @@
   },
   {
    "path": "tests/tracking.test.ts",
-   "bytes": 17523,
-   "sha256": "6c1a82a53d10986e223f0ac650d400f941a8bed4a8e2d92c495a189c6ab82fdb"
+   "bytes": 26812,
+   "sha256": "9b877d08af4840ba802a679f34e3cac2907650c6c00cd969f825dae2ce455826"
   },
   {
    "path": "tests/trackingPrivacy.test.ts",
-   "bytes": 9027,
-   "sha256": "396d7703cfa152b48d3adce572df1f9f5d53c65fdc19e8f46d8e20175697360c"
+   "bytes": 9091,
+   "sha256": "b424d94ebf1a33e2ee658c55d5bc8b58b5600c03ceb3b93f9fdb97a0d7e8c10e"
   },
   {
    "path": "tests/travel.test.ts",

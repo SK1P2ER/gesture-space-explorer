@@ -50,7 +50,7 @@ beforeEach(() => {
   getUserMedia = vi.fn();
   vi.stubGlobal('window', Object.assign(new EventTarget(), { isSecureContext: true }));
   vi.stubGlobal('navigator', { userAgent: 'Node test', maxTouchPoints: 0, mediaDevices: { getUserMedia } });
-  vi.stubGlobal('document', { querySelector: () => video.element });
+  vi.stubGlobal('document', Object.assign(new EventTarget(), { hidden: false, querySelector: () => video.element }));
   vi.spyOn(console, 'error').mockImplementation(() => {});
   const state = createState();
   // Every status the app publishes, not just the last: a failed startup must never pass through 'tracking'.
@@ -61,7 +61,7 @@ beforeEach(() => {
     state, bus: createIntentBus(),
     gestures: new GestureEngine(config.gestures, config.smoothing, () => null),
     extras: new ExtraGestures(config.gestures, config.smoothing),
-    overlay: { delegate: '', show: vi.fn(), onFrame: vi.fn(), enabled: false } as unknown as TrackingDeps['overlay'],
+    overlay: { delegate: '', show: vi.fn(), hide: vi.fn(), onFrame: vi.fn(), enabled: false } as unknown as TrackingDeps['overlay'],
     recorder: new Recorder(),
     gestureHud: { flash: vi.fn() } as unknown as TrackingDeps['gestureHud'],
     more: () => [], frameMode: () => 'focus', gestureMessage: () => null,

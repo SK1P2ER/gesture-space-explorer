@@ -28,6 +28,8 @@ export interface TrackingDeps {
   /** On-screen confirmation for a discrete gesture event (after it's applied), if any. */
   gestureMessage: (intent: Intent) => string | null;
   timing?: (t:number,detectMs:number,processingMs:number,hands:number,intents:number)=>void;
+  /** The camera stopped: anything half-observed outside the engine (a count, a held 👍) must not carry into the next session. */
+  stopped?: () => void;
 }
 
 const sessions = new WeakMap<HTMLVideoElement, TrackingSession>();
@@ -43,12 +45,16 @@ export class TrackingSession {
   private tracker: HandTracker | null = null;
   private stopLoop: (() => void) | null = null;
   private readonly onPageHide = () => this.dispose();
+  /** A hidden page holds no camera. Coming back reopens nothing: only 🖐 Turn on hand control starts a new session. */
+  private readonly onVisibilityChange = () => { if (document.hidden) this.dispose(); };
 
   constructor(private readonly video: HTMLVideoElement, private readonly deps: TrackingDeps) {
     sessions.get(video)?.dispose();
     sessions.set(video, this);
     deps.state.status = { kind: 'loading', progress: 0 };
     window.addEventListener('pagehide', this.onPageHide);
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
+    this.onVisibilityChange(); // a page opened in the background fires nothing until it shows, and must not ask for the camera before then
     this.ready = this.initialize();
   }
 
@@ -64,6 +70,7 @@ export class TrackingSession {
     if (this.stopped) return;
     this.stopped = true; // invalidate callbacks before releasing anything
     window.removeEventListener('pagehide', this.onPageHide);
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
     for (const release of [
       () => this.stopLoop?.(),
       () => this.controller.abort(),
@@ -77,12 +84,15 @@ export class TrackingSession {
       sessions.delete(this.video);
       this.deps.gestures.reset();
       this.deps.extras.reset();
+      this.deps.overlay.hide();
+      try { this.deps.stopped?.(); } catch (e) { console.error('[tracking] cleanup', e); }
       this.deps.state.status = { kind: 'keyboard', reason };
     }
   }
 
   private async initialize() {
     const { video, deps, controller } = this;
+    if (!this.current()) return; // stopped in the constructor: the page is hidden
     // Start both loads together; handle detector rejection immediately even while camera permission is pending.
     const trackerPromise = import('../tracking/handTracker').then(async ({ createHandTracker }) => {
       if (!this.current()) return null;

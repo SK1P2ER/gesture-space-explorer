@@ -45,6 +45,27 @@ describe('guided confirmation hold', () => {
     const h = new HoldConfirm(); h.update(0,true); expect(h.update(5000,true)).toBe(false);
     expect(h.progress).toBeLessThan(1);
   });
+  // Injected observations: the camera stopping is modelled by interrupt(), with the next frame arriving sooner than any stall limit.
+  it('a hold cut off by the camera stopping shows no progress and cannot be finished by the next session', () => {
+    const h = new HoldConfirm();
+    for (let t=0;t<=400;t+=100) expect(h.update(t,true)).toBe(false);
+    expect(h.progress).toBeCloseTo(0.8);
+    h.interrupt();
+    expect(h.progress).toBe(0);
+    expect(h.update(500,true)).toBe(false); // would have completed the old hold
+    expect(h.progress).toBe(0);
+    for (let t=600;t<1000;t+=100) expect(h.update(t,true)).toBe(false);
+    expect(h.update(1000,true)).toBe(true); // a whole new hold confirms
+  });
+  it('a 👍 that still has to be released stays that way through a camera stop', () => {
+    const h = new HoldConfirm(); h.requireRelease();
+    h.interrupt();
+    expect(h.waitingRelease).toBe(true);
+    for (let t=0;t<=1000;t+=100) expect(h.update(t,true)).toBe(false);
+    h.update(1100,false);
+    for (let t=1200;t<1700;t+=100) expect(h.update(t,true)).toBe(false);
+    expect(h.update(1700,true)).toBe(true);
+  });
 });
 
 describe('guided refresh compatibility', () => {

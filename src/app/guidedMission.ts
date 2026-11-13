@@ -54,6 +54,10 @@ export class GuidedMission {
     this.root.append(this.label,this.step,this.timer,this.instruction,this.destinations,this.summary,this.action,this.progress,this.feedback);
     document.querySelector('header.hud')!.append(this.root);
   }
+  /** The camera stopped: no hand is seen any more, and a hold it cut off must be made again from the start. */
+  cameraStopped() {
+    this.hold.interrupt(); this.handSeen=false; this.progress.value=0;
+  }
   /**
    * Forgets a restored journey that no native mission continues (Start fresh, or no checkpoint to offer).
    * main.ts calls it before a deep link applies, so the stale session can't swallow the link's intents.

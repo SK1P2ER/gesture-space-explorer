@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:smoke": "node --test --test-concurrency=1 tests/browser/smoke.test.mjs",
+    "test:camera-lifecycle": "node --test --test-concurrency=1 tests/browser/camera-lifecycle.test.mjs",
     "textures:build": "node scripts/build-textures.mjs .texture-sources --download"
   },
   "type": "module",

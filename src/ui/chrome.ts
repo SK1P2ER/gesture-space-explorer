@@ -74,8 +74,9 @@ export class ChromeUi {
     this.previewButton.addEventListener('click', () => emit({ type: 'togglePreview' }));
     this.previewButton.addEventListener('click', () => this.previewButton.blur()); // keep Space / Enter for the scene
 
-    // Immersive mode wakes on any input at all.
+    // Immersive mode wakes on any input at all, and on coming back to the page: the camera stopped, and the way to restart it shows.
     const wake = () => this.input();
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) wake(); });
     for (const type of ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const) addEventListener(type, wake, { capture: true, passive: true });
     addEventListener('pointermove', (e) => {
       if (e.pointerType === 'mouse') wake();

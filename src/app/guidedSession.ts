@@ -78,6 +78,8 @@ export class HoldConfirm {
   requireRelease() { this.latched=true;this.held=500;this.progress=1; }
   get waitingRelease() { return this.latched; }
   reset() { this.last=null;this.held=0;this.latched=false;this.previous=false;this.progress=0; }
+  /** The camera stopped mid-hold: nothing held so far counts in the next session. A 👍 that still has to be released stays that way. */
+  interrupt() { this.last=null;this.held=0;this.previous=false;this.progress=0; }
   update(t: number, present: boolean) {
     const gap=this.last===null?0:t-this.last; this.last=t;
     const continuing=this.previous; this.previous=present;

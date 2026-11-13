@@ -67,7 +67,9 @@ html, body {
   cursor: pointer;
 }
 #hand-control[hidden] { display: none; }
-body.immersive #hand-control { display: none; }
+/* Waking, it shows only once the status has settled and the tap that woke the page has lifted: it can't slide from under a finger, or take a tap not aimed at it. */
+#hand-control { transition: visibility 0s 0.5s; }
+body.immersive #hand-control { visibility: hidden; transition: none; }
 
 #loading {
   display: inline-block;

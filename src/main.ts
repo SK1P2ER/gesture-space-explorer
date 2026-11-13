@@ -298,7 +298,7 @@ if (import.meta.env.DEV) Object.assign((window as unknown as { __app: object }).
 attachPageLifecycle({
   suspend: () => { saveCheckpoint();cancelCinematic(); spaceport.close(); },
   // Keep the controls/listeners, but resume in manual mode rather than restoring a stale camera lease.
-  // TrackingSession stops on every pagehide; pageshow deliberately never reopens the camera.
+  // TrackingSession stops on every pagehide and whenever the page is hidden; pageshow deliberately never reopens the camera.
   resume: cancelCinematic,
   dispose: () => { guided?.dispose(); saveCheckpoint();localSpaceport.dispose();japanViewControls.dispose();japanDetail.dispose();cancelCinematic(); cinematic.dispose(); cinematicControls.dispose(); spaceport.dispose(); },
 });
@@ -472,6 +472,8 @@ function gestureMessage(intent: Intent): string | null {
 const trackingDeps: TrackingDeps = {
   state, bus, gestures, extras, overlay, recorder, gestureHud, gestureMessage,
   timing:(...values)=>runtimeMetrics.tracking(...values),
+  // A count or a 👍 held when the camera stopped must be made again in the next session.
+  stopped: () => { countdownGesture.reset(); guided?.cameraStopped(); },
   frameMode: () => modes.mode,
   // In Build mode the pinch grabs modules: the engine's pinch-zoom is dropped there.
   keep: (i) => guided?.session.active ? guided.session.stage==='exploring' && (i.type==='rotate'||i.type==='zoom') : !(modes.mode === 'build' && i.type === 'zoom'),

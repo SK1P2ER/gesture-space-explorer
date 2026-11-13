@@ -121,6 +121,13 @@ export class DebugOverlay {
     this.syncVisibility();
   }
 
+  /** The camera is off: no empty preview to suggest otherwise, and no hand left over from its last frame. */
+  hide() {
+    this.cameraShown = false;
+    this.lastFrame = null;
+    this.syncVisibility();
+  }
+
   /** Shown with the camera, or in debug mode without it (the stats and the Copy report button only). */
   private syncVisibility() {
     this.root.hidden = !this.cameraShown && !this.debug;
