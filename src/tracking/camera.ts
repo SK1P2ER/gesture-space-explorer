@@ -1,4 +1,5 @@
 import type { Config } from '../config';
+import { cameraEvents } from '../performance/cameraEvents';
 
 export type CameraError = 'unsupported' | 'insecure' | 'denied' | 'not-found' | 'disconnected' | 'unknown';
 
@@ -11,13 +12,15 @@ export interface CameraHandle {
 /**
  * @param onEnded called if the camera goes away later (unplugged, revoked,
  *   taken by another app), so the UI can fall back to keyboard mode.
+ * @param sessionId the tracking session asking, for the debug diagnostics' event log only.
  */
-export async function startCamera(video: HTMLVideoElement, cfg: Config['camera'], onEnded: () => void, signal?: AbortSignal): Promise<CameraHandle> {
+export async function startCamera(video: HTMLVideoElement, cfg: Config['camera'], onEnded: () => void, signal?: AbortSignal, sessionId = 0): Promise<CameraHandle> {
   signal?.throwIfAborted();
   if (!window.isSecureContext) throw cameraError('insecure');
   if (!navigator.mediaDevices?.getUserMedia) throw cameraError('unsupported');
 
   let stream: MediaStream;
+  const requestId = cameraEvents.request(sessionId);
   try {
     stream = await navigator.mediaDevices.getUserMedia({
       audio: false,
@@ -25,14 +28,20 @@ export async function startCamera(video: HTMLVideoElement, cfg: Config['camera']
     });
   } catch (e) {
     const name = (e as DOMException).name;
-    if (name === 'NotAllowedError' || name === 'SecurityError') throw cameraError('denied');
-    if (name === 'NotFoundError' || name === 'OverconstrainedError') throw cameraError('not-found');
-    throw cameraError('unknown');
+    const code: CameraError = name === 'NotAllowedError' || name === 'SecurityError' ? 'denied'
+      : name === 'NotFoundError' || name === 'OverconstrainedError' ? 'not-found' : 'unknown';
+    cameraEvents.rejected(requestId, code);
+    throw cameraError(code);
   }
 
   let disposed = false;
   const tracks = stream.getTracks();
   const videoTracks = stream.getVideoTracks();
+  cameraEvents.resolved(requestId, tracks);
+  const ended = (e: Event) => {
+    cameraEvents.ended(e.target as MediaStreamTrack);
+    onEnded();
+  };
   const camera: CameraHandle = {
     stream,
     isLive: () => !disposed && videoTracks.length > 0 && videoTracks.every((track) => track.readyState === 'live'),
@@ -40,8 +49,11 @@ export async function startCamera(video: HTMLVideoElement, cfg: Config['camera']
       if (disposed) return;
       disposed = true;
       signal?.removeEventListener('abort', camera.dispose);
-      for (const track of videoTracks) track.removeEventListener('ended', onEnded);
-      for (const track of tracks) track.stop();
+      for (const track of videoTracks) track.removeEventListener('ended', ended);
+      for (const track of tracks) {
+        track.stop();
+        cameraEvents.stopped(track);
+      }
       // An older startup must never pause or detach a newer preview.
       if (video.srcObject === stream) {
         video.pause();
@@ -49,7 +61,7 @@ export async function startCamera(video: HTMLVideoElement, cfg: Config['camera']
       }
     },
   };
-  for (const track of videoTracks) track.addEventListener('ended', onEnded, { once: true });
+  for (const track of videoTracks) track.addEventListener('ended', ended, { once: true });
   signal?.addEventListener('abort', camera.dispose, { once: true });
   try {
     signal?.throwIfAborted(); // getUserMedia itself cannot be aborted; release a late stream here.

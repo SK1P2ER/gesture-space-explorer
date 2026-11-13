@@ -486,7 +486,8 @@ body.photo-mode #time-dial { visibility: hidden; }
 #preview.debug { width: max(240px, min(320px, calc(240px * var(--aspect)))); }
 /* ?debug without a camera: the stats, without an empty mirror. */
 #preview.stats-only .mirror { display: none; }
-#preview .debug-copy {
+/* Copy report, and with ?debug the Diagnostics button below it. */
+#preview :is(.debug-copy, .debug-action) {
   display: block;
   width: 100%;
   padding: 6px 10px;
@@ -498,7 +499,7 @@ body.photo-mode #time-dial { visibility: hidden; }
   border-top: 1px solid var(--border);
   cursor: pointer;
 }
-#preview .debug-copy[hidden], #preview.tucked .debug-copy { display: none; }
+#preview :is(.debug-copy, .debug-action)[hidden], #preview.tucked :is(.debug-copy, .debug-action) { display: none; }
 #preview.debug #debug-stats {
   display: block;
   margin: 0;

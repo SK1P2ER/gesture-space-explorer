@@ -132,7 +132,8 @@ export class DebugOverlay {
   private syncVisibility() {
     this.root.hidden = !this.cameraShown && !this.debug;
     this.root.classList.toggle('stats-only', this.debug && !this.cameraShown);
-    this.copyButton.hidden = !this.debug;
+    // The Copy report button, and the Diagnostics button beside it when the page opened with ?debug.
+    for (const button of this.root.querySelectorAll<HTMLElement>('.debug-copy, .debug-action')) button.hidden = !this.debug;
   }
 
   onFrame(frame: HandFrame, detectMs: number) {
