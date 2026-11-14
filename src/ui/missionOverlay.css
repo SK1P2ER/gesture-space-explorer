@@ -19,6 +19,9 @@ body.clean-view .active-vehicle-label, body.photo-mode .active-vehicle-label, bo
 .mission-resume { position:fixed; left:16px; bottom:100px; z-index:35; width:min(340px,calc(100vw - 64px)); padding:16px; border:1px solid #71cfcb88; border-radius:16px; color:#ecf1f8; background:#101d2cf5; box-shadow:0 8px 30px #0006; }
 .mission-resume p { font-size:.85rem; line-height:1.6; margin:0 0 12px; }
 .mission-resume button { margin:4px; min-height:44px; }
+/* A refused journey action points at the choice: a warmer edge and one short line, no motion. */
+.mission-resume.remind { border-color:#ffd38a; }
+.mission-resume .resume-hint { margin:8px 0 0; font-size:.8rem; color:#ffd38a; }
 #mission-overlay {
   top: auto;
   bottom: calc(100px + var(--sab, 0px));
