@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Build } from '../src/app/build';
 import { createIntentHandler, type HandlerDeps } from '../src/app/intentHandler';
-import { Mission } from '../src/app/mission';
+import { Mission, type MissionDeps } from '../src/app/mission';
 import { modeForFocus, ModeMachine } from '../src/app/modes';
 import { createState } from '../src/app/state';
 import { config } from '../src/config';
@@ -10,9 +10,10 @@ import { BASES, surfacePoint } from '../src/data/bases';
 import { BODIES } from '../src/data/bodies';
 import { keyToIntent } from '../src/input/keyboard';
 import { createIntentBus } from '../src/intents';
-import type { BaseNode } from '../src/scene/bases';
+import {padFrame,type BaseNode} from '../src/scene/bases';
 import { CameraRig } from '../src/scene/cameraRig';
 import { DAY, SimClock, WEEK } from '../src/sim/clock';
+import {parseCheckpoint} from '../src/app/checkpoint';
 
 const at = (id: string) => BODIES.findIndex((body) => body.id === id);
 const INVARIANT = /Mission invariant: baseView without an active base \(at the (intent|frame) boundary\); recovered to SolarView/;
@@ -27,7 +28,7 @@ afterEach(() => {
 });
 
 /** Real mission/intent/scene objects; planet fixtures omit rendering-only services. */
-function setup(bodyId = 'mars', rate = WEEK) {
+function setup(bodyId = 'mars', rate = WEEK, presentation: Partial<Pick<MissionDeps, 'presentLaunch' | 'reducedMotion'>> = {}) {
   const scene = new THREE.Scene();
   const bases: BaseNode[] = BASES.map((base) => {
     const body = BODIES[at(base.body)];
@@ -63,6 +64,7 @@ function setup(bodyId = 'mars', rate = WEEK) {
     reducedMotion: () => true,
     goldenHour: () => null,
     rocketOptions: () => ({ quality: 'low', textureSize: 32 }),
+    ...presentation,
   });
   const build = new Build({
     state, modes, enabled: false, flash,
@@ -101,6 +103,127 @@ function setup(bodyId = 'mars', rate = WEEK) {
   });
   return { scene, state, modes, rig, clock, mission, flash, report, press };
 }
+
+describe('authored Earth launch handoff', () => {
+  function launch(options: Partial<Pick<MissionDeps, 'presentLaunch' | 'reducedMotion'>> = {}, body = 'earth') {
+    const fixture = setup(body, WEEK, { reducedMotion: () => false, ...options });
+    // Navigation fixtures normally overlap planets at the origin. Give real
+    // flight-boundary cases distinct worlds before exercising the route solver.
+    fixture.scene.children.filter(node => node instanceof THREE.Group).forEach((node, index) => { node.position.x = index * 100; });
+    fixture.scene.updateMatrixWorld(true);
+    fixture.press('v'); fixture.press('ArrowRight'); fixture.press('Enter');
+    for (let i = 0; i < 3; i++) fixture.mission.update(1, fixture.rig.camera);
+    return fixture;
+  }
+
+  it.each(['travel','docking'] as const)('resumes %s at the saved progress without replaying launch or stamping early',phase=>{
+    const source=launch({},'moon');source.state.autoLand=true;
+    if(phase==='docking'){source.mission.trip!.elapsed=source.mission.trip!.seconds;source.mission.update(0,source.rig.camera);}
+    source.mission.update(.5,source.rig.camera);
+    const saved=parseCheckpoint(JSON.stringify(source.mission.checkpoint()))!;
+    expect(saved.phase).toBe(phase);
+    const restored=setup('mars');restored.mission.resume(saved);
+    expect(restored.modes.mode).toBe(phase);expect(restored.mission.countdown).toBeNull();
+    if(phase==='travel')expect(restored.mission.trip?.elapsed).toBe(saved.trip?.elapsed);
+    else {expect(restored.mission.dock?.state.alt).toBe(saved.dock?.state.alt);expect(restored.state.passport.cape).toBeUndefined();}
+    expect(restored.mission.checkpoint()?.lang).toBe(saved.lang);
+  });
+
+  it('returns camera up to the world frame when leaving the local Japan orbit',()=>{
+    const {mission,rig,press}=setup('earth');press('v');mission.update(0,rig.camera);
+    expect(rig.camera.up.distanceTo(new THREE.Vector3(0,1,0))).toBeGreaterThan(.1);
+    mission.leave();expect(rig.camera.up.toArray()).toEqual([0,1,0]);
+  });
+  it('resets the Japan map without launching or changing the mission',()=>{
+    const {mission,modes,press,rig}=setup('earth');press('v');
+    mission.handle({type:'rotate',dx:1,dy:.1});mission.resetJapanView();
+    mission.japanMapCamera(rig.camera);
+    expect(rig.zoomDistance).toBeCloseTo(rig.camera.position.distanceTo(padFrame(mission.base!).center));
+    expect(rig.zoomDistance).toBeLessThan(10);expect(rig.flying).toBe(false);
+    expect(modes.mode).toBe('baseView');expect(mission.trip).toBeNull();expect(mission.countdown).toBeNull();
+  });
+
+  it('holds one launch, then starts the selected flight exactly once after completion', () => {
+    let complete!: () => void, cancel!: () => void;
+    const close = vi.fn();
+    const presentLaunch = vi.fn((_destination, done, abort) => { complete = done; cancel = abort; return close; });
+    const { mission, modes, rig } = launch({ presentLaunch });
+    const destination = mission.destination;
+    expect(modes.mode).toBe('launch'); expect(mission.presentingLaunch).toBe(true);
+    expect(mission.trip).toBeNull(); expect(mission.countdown).toBeNull();
+    mission.update(10, rig.camera);
+    expect(presentLaunch).toHaveBeenCalledTimes(1);
+    expect(presentLaunch.mock.calls[0][0]).toBe(destination);
+    complete();
+    expect(modes.mode).toBe('travel'); expect(mission.presentingLaunch).toBe(false);
+    expect(mission.trip?.to).toBe(destination); expect(mission.trip?.elapsed).toBe(1.2);
+    const trip = mission.trip;
+    complete(); cancel();
+    expect(mission.trip).toBe(trip); expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels without spending the destination or allowing a stale completion to depart', () => {
+    let complete!: () => void, cancel!: () => void;
+    const close = vi.fn();
+    const { mission, modes, clock, press } = launch({ presentLaunch: (_to, done, abort) => { complete = done; cancel = abort; return close; } });
+    const base = mission.base, destination = mission.destination;
+    cancel(); complete();
+    expect(modes.mode).toBe('baseView'); expect(mission.base).toBe(base);
+    expect(mission.destination).toBe(destination); expect(mission.trip).toBeNull();
+    expect(mission.presentingLaunch).toBe(false); expect(clock.rate).toBe(1);
+    expect(close).toHaveBeenCalledTimes(1);
+    press('Escape'); expect(clock.rate).toBe(WEEK);
+  });
+
+  it('an aborted presentation cannot complete a later launch', () => {
+    const completions: (() => void)[] = [];
+    const close = vi.fn();
+    const { mission, modes, rig, press } = launch({ presentLaunch: (_to, done) => { completions.push(done); return close; } });
+    press('Escape'); press('Enter');
+    for (let i = 0; i < 3; i++) mission.update(1, rig.camera);
+    completions[0](); expect(modes.mode).toBe('launch'); expect(mission.trip).toBeNull();
+    completions[1](); expect(modes.mode).toBe('travel'); expect(close).toHaveBeenCalledTimes(2);
+  });
+
+  it('falls through to flight if the presenter throws', () => {
+    const { mission, modes, report } = launch({ presentLaunch: () => { throw new Error('Renderer unavailable'); } });
+    expect(modes.mode).toBe('travel'); expect(mission.trip?.to).toBe(mission.destination);
+    expect(mission.presentingLaunch).toBe(false); expect(report).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases a presentation when another base replaces its owner', () => {
+    let complete!: () => void;
+    const close = vi.fn();
+    const { mission, modes } = launch({ presentLaunch: (_to, done) => { complete = done; return close; } });
+    mission.enter('jezero'); complete();
+    expect(modes.mode).toBe('baseView'); expect(mission.base?.base.id).toBe('jezero');
+    expect(mission.trip).toBeNull(); expect(mission.presentingLaunch).toBe(false);
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['reduced motion', 'another world'])('keeps the direct flight for %s', reason => {
+    const presentLaunch = vi.fn(() => vi.fn());
+    const { mission, modes } = launch({ presentLaunch, reducedMotion: () => reason === 'reduced motion' }, reason === 'another world' ? 'mars' : 'earth');
+    expect(presentLaunch).not.toHaveBeenCalled(); expect(modes.mode).toBe('travel');
+    expect(mission.presentingLaunch).toBe(false);
+  });
+
+  it.each([false,true])('Japan arrival enters normal docking directly (auto-land: %s)',autoLand=>{
+    const {mission,modes,rig,state} = launch({},'moon');
+    state.autoLand = autoLand;
+    mission.trip!.elapsed = mission.trip!.seconds; mission.update(0,rig.camera);
+    expect(modes.mode).toBe('docking'); expect(mission.base?.base.id).toBe('cape');
+    expect(mission.trip).toBeNull(); expect(state.passport.cape).toBeUndefined();
+    const attempt = mission.dock!;
+    for(let i=0;i<20;i++) mission.update(.05,rig.camera);
+    expect(mission.dock).toBe(attempt); expect(attempt.state.alt).toBeLessThan(attempt.startAlt);
+    if(!autoLand) mission.handle({type:'select'});
+    let view;for(let i=0;i<240&&modes.mode==='docking';i++) view=mission.update(.05,rig.camera);
+    expect(modes.mode).toBe('baseView'); expect(mission.dock).toBeNull();
+    expect(view).toBe('chase'); // no one-frame world-up camera flash at Japan touchdown
+    expect(state.passport.cape).toBeDefined();
+  });
+});
 
 describe('moon navigation through keyboard intents, Mission and general handling', () => {
   it.each(['m', 'M'])('%s at Jezero preserves the base, destination, progress and scene resources', (key) => {

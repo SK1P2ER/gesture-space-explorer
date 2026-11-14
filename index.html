@@ -115,20 +115,30 @@
       <div class="focus-row">
         <strong id="focus"></strong>
       </div>
-      <p id="help" hidden></p>
       <div class="footer-links">
         <button id="photo" type="button"></button>
-        <button id="menu" type="button" aria-expanded="false" aria-controls="footer-menu">☰</button>
-        <div id="footer-menu">
-          <button id="watermark" type="button" aria-pressed="true"></button>
-          <button id="true-scale" type="button" aria-pressed="false"></button>
-          <button id="weight" type="button" aria-expanded="false" aria-controls="weight-panel"></button>
-          <button id="passport" type="button" aria-expanded="false" aria-controls="passport-panel"></button>
-          <button id="quality" type="button" aria-pressed="true"></button>
-          <button id="language" type="button"></button>
-          <a id="credits-link" href="#credits"></a>
+        <button id="passport" type="button" aria-expanded="false" aria-controls="passport-panel"></button>
+        <button id="menu" type="button" aria-expanded="false" aria-controls="footer-menu" aria-haspopup="dialog">⚙ Settings</button>
+        <div id="footer-menu" role="dialog" aria-labelledby="settings-title" data-scene-shortcuts="off" hidden inert>
+          <div class="settings-head">
+            <h2 id="settings-title">Settings</h2>
+            <button id="settings-close" type="button" aria-label="Close">×</button>
+          </div>
+          <p id="scene-settings-label" class="settings-label">Scene settings</p>
+          <div class="settings-options">
+            <button id="quality" type="button" aria-pressed="true"></button>
+            <button id="language" type="button"></button>
+            <button id="watermark" type="button" aria-pressed="true"></button>
+            <button id="true-scale" type="button" aria-pressed="false"></button>
+          </div>
+          <p id="settings-tools-label" class="settings-label">Tools</p>
+          <div class="settings-options">
+            <button id="weight" type="button" aria-expanded="false" aria-controls="weight-panel"></button>
+            <button id="help-toggle" type="button" aria-expanded="false" aria-controls="help">?</button>
+            <a id="credits-link" href="#credits"></a>
+          </div>
+          <p id="help" hidden></p>
         </div>
-        <button id="help-toggle" type="button" aria-expanded="false" aria-controls="help">?</button>
       </div>
     </footer>
 

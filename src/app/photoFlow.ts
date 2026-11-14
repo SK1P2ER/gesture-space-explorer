@@ -24,6 +24,8 @@ export class PhotoFlow {
   private requested = false;
   private busy = false;
   private last: File | null = null;
+  captureCanvas:(()=>HTMLCanvasElement)|null=null;
+  captureSubject:(()=>{id:string;name:string})|null=null;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -53,8 +55,8 @@ export class PhotoFlow {
     if (!this.requested) return;
     // Same task as the render: the drawing buffer still holds this frame.
     this.requested = false;
-    const subject = this.subject();
-    void this.finish(snapshot(this.canvas, this.watermark() ? watermarkText(subject.name) : null), subject.id);
+    const subject = this.captureSubject?.()??this.subject();
+    void this.finish(snapshot(this.captureCanvas?.()??this.canvas, this.watermark() ? watermarkText(subject.name) : null), subject.id);
   }
 
   /** Still inside the tap that asked for it, so the share sheet is allowed to open. */

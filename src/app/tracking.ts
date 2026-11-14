@@ -2,6 +2,7 @@ import { config } from '../config';
 import type { GestureEngine } from '../gestures/engine';
 import type { ExtraGestures } from '../gestures/extras';
 import type { Intent, IntentBus } from '../intents';
+import { cameraEvents } from '../performance/cameraEvents';
 import { cameraErrorCode, startCamera, type CameraHandle } from '../tracking/camera';
 import type { HandTracker } from '../tracking/handTracker';
 import type { HandFrame } from '../tracking/types';
@@ -27,10 +28,16 @@ export interface TrackingDeps {
   frameMode: () => string;
   /** On-screen confirmation for a discrete gesture event (after it's applied), if any. */
   gestureMessage: (intent: Intent) => string | null;
+  timing?: (t:number,detectMs:number,processingMs:number,hands:number,intents:number)=>void;
+  /** The camera stopped: anything half-observed outside the engine (a count, a held 👍) must not carry into the next session. */
+  stopped?: () => void;
 }
 
 const sessions = new WeakMap<HTMLVideoElement, TrackingSession>();
 let nextSessionId = 0;
+/** The newest session, for a diagnostics snapshot taken while the camera is already on. */
+let latest: TrackingSession | null = null;
+cameraEvents.provideSnapshot(() => latest?.snapshot() ?? null);
 
 /** Owns one camera/detector lifetime, including resources that arrive after cancellation. */
 export class TrackingSession {
@@ -42,12 +49,22 @@ export class TrackingSession {
   private tracker: HandTracker | null = null;
   private stopLoop: (() => void) | null = null;
   private readonly onPageHide = () => this.dispose();
+  /** A hidden page holds no camera. Coming back reopens nothing: only 🖐 Turn on hand control starts a new session. */
+  private readonly onVisibilityChange = () => {
+    if (!document.hidden) return;
+    if (!this.stopped) cameraEvents.emit({ type: 'hidden-handled', sessionId: this.id });
+    this.dispose();
+  };
 
   constructor(private readonly video: HTMLVideoElement, private readonly deps: TrackingDeps) {
     sessions.get(video)?.dispose();
     sessions.set(video, this);
+    latest = this;
+    cameraEvents.emit({ type: 'session-created', sessionId: this.id });
     deps.state.status = { kind: 'loading', progress: 0 };
     window.addEventListener('pagehide', this.onPageHide);
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
+    this.onVisibilityChange(); // a page opened in the background fires nothing until it shows, and must not ask for the camera before then
     this.ready = this.initialize();
   }
 
@@ -59,10 +76,16 @@ export class TrackingSession {
     return !this.stopped && sessions.get(this.video) === this;
   }
 
+  /** For the debug diagnostics: this session and the tracks it holds now. */
+  snapshot() {
+    return { sessionId: this.id, stopped: this.stopped, status: this.deps.state.status.kind, tracks: this.camera ? this.camera.stream.getTracks() : [] };
+  }
+
   dispose(reason: StringKey = 'err.disconnected') {
     if (this.stopped) return;
     this.stopped = true; // invalidate callbacks before releasing anything
     window.removeEventListener('pagehide', this.onPageHide);
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
     for (const release of [
       () => this.stopLoop?.(),
       () => this.controller.abort(),
@@ -72,16 +95,21 @@ export class TrackingSession {
       try { release(); } catch (e) { console.error('[tracking] cleanup', e); }
     }
     this.stopLoop = this.camera = this.tracker = null;
-    if (sessions.get(this.video) === this) {
+    const current = sessions.get(this.video) === this;
+    if (current) {
       sessions.delete(this.video);
       this.deps.gestures.reset();
       this.deps.extras.reset();
+      this.deps.overlay.hide();
+      try { this.deps.stopped?.(); } catch (e) { console.error('[tracking] cleanup', e); }
       this.deps.state.status = { kind: 'keyboard', reason };
     }
+    cameraEvents.emit({ type: 'session-disposed', sessionId: this.id, reason, current });
   }
 
   private async initialize() {
     const { video, deps, controller } = this;
+    if (!this.current()) return; // stopped in the constructor: the page is hidden
     // Start both loads together; handle detector rejection immediately even while camera permission is pending.
     const trackerPromise = import('../tracking/handTracker').then(async ({ createHandTracker }) => {
       if (!this.current()) return null;
@@ -103,7 +131,7 @@ export class TrackingSession {
     });
 
     try {
-      const camera = await startCamera(video, config.camera, () => this.dispose('err.disconnected'), controller.signal);
+      const camera = await startCamera(video, config.camera, () => this.dispose('err.disconnected'), controller.signal, this.id);
       if (!this.current()) {
         camera.dispose();
         return;
@@ -134,6 +162,7 @@ export class TrackingSession {
       if (!this.current()) { stop(); return; }
       this.stopLoop = stop;
       deps.state.status = { kind: 'tracking', delegate: tracker.delegate };
+      cameraEvents.emit({ type: 'tracking-started', sessionId: this.id });
     } catch (e) {
       if (this.current()) {
         console.error('[tracker]', e);
@@ -143,6 +172,7 @@ export class TrackingSession {
   }
 
   private onFrame(frame: HandFrame, detectMs: number, aspect: number) {
+    const started=performance.now();
     if (!this.current()) return;
     if (!this.camera?.isLive()) { this.dispose('err.disconnected'); return; }
     const { bus, gestures, extras, overlay, recorder, gestureHud, gestureMessage, more, frameMode, keep } = this.deps;
@@ -162,6 +192,7 @@ export class TrackingSession {
     const { pose, action, progress } = gestures.ui;
     overlay.gestureInfo = pose ? `${pose} → ${action ?? '—'}${progress ? ` ${Math.round(progress * 100)}%` : ''}` : '—';
     if (overlay.enabled) logGestureFrame(gestures, extras, intents);
+    this.deps.timing?.(frame.t,detectMs,performance.now()-started,frame.hands.length,intents.length);
   }
 }
 

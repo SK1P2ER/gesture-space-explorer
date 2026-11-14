@@ -1,0 +1,98 @@
+/* Shared mission-control palette. Component layout lives beside each UI owner. */
+:root {
+  --bg: #030812;
+  --fg: #edf3fb;
+  --muted: #98aabd;
+  --panel: rgba(9, 17, 30, .94);
+  --border: rgba(171, 195, 224, .14);
+  --accent: #e8b16b;
+  --action: #f28c57;
+  --ok: #8bd9c1;
+  --header-bottom: 100px;
+}
+
+button, input, a { -webkit-tap-highlight-color: transparent; }
+button { transition: background-color .15s ease, border-color .15s ease, color .15s ease; }
+button:focus-visible, a:focus-visible, input:focus-visible {
+  outline: 2px solid #a8d7ed;
+  outline-offset: 4px;
+}
+.panel { background: var(--panel); backdrop-filter: none; border-color: var(--border); box-shadow: 0 14px 50px #0005; }
+.panel h2 { color: var(--fg); font-size: 1.25rem; font-weight: 600; letter-spacing: -.025em; }
+.panel .chip { color: var(--fg); background: #ffffff06; border: 1px solid var(--border); border-radius: 10px; }
+.panel .chip:hover, .panel .chip:focus-visible { background: #ffffff10; border-color: #b9cadd55; }
+.panel .close { width: 34px; height: 34px; background: #ffffff05; }
+
+header.hud.top {
+  top: calc(22px + var(--sat));
+  left: calc(24px + var(--sal));
+  right: auto;
+  max-width: calc(100vw - 230px - var(--sal) - var(--sar));
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: linear-gradient(120deg, #09111eef, #09111ea8);
+  text-shadow: none;
+}
+.top h1 { font-size: .92rem; font-weight: 600; letter-spacing: -.02em; }
+.top h1 > span:first-child { display: none; }
+#status, #loading { font-size: .68rem; padding: 3px 0; border: none; background: none; }
+#status[data-kind='keyboard'] { color: var(--muted); }
+#status[data-kind='tracking'] { color: var(--ok); }
+#hand-control { font-size: .68rem; padding: 5px 9px; border-color: var(--border); color: var(--fg); background: #ffffff08; }
+#loading { margin-left: 10px; }
+#version { top: auto; bottom: calc(24px + var(--sab)); right: calc(24px + var(--sar)); font-size: .65rem; }
+#gesture-flash { border-color: var(--border); font-size: .9rem; box-shadow: 0 8px 30px #0004; }
+
+#clean-view {
+  position: fixed; top: calc(24px + var(--sat)); right: calc(24px + var(--sar)); z-index: 25;
+  max-width: 200px; min-height: 40px; padding: 10px 14px;
+  color: var(--fg); background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+  font: 500 .76rem/1.4 system-ui, 'Myanmar Text', sans-serif; cursor: pointer;
+}
+#clean-view:hover { background: #142337; }
+#clean-view[hidden] { display: none; }
+body.clean-view :is(header.hud, footer.hud, #info, #base-panel, #build-panel, #mission-hud, #mission-overlay, #weight-panel, #passport-panel, #timebar, #time-dial, #labels, #sky-labels, #preview, #version, #gesture-flash, #pointer, #cinematic-panel) { display: none !important; }
+body.photo-mode #clean-view { display: none; }
+
+#timebar { width: min(350px, calc(100vw - 32px)); bottom: calc(24px + var(--sab)); padding: 10px 14px; border-radius: 16px; background: var(--panel); text-shadow: none; }
+#timebar .date { font-size: .76rem; color: var(--fg); }
+#timebar .rate { font-size: .7rem; color: var(--muted); }
+#timebar button { min-height: 26px; border-radius: 8px; }
+#timebar input.speed { accent-color: var(--accent); }
+.planet-label { border-color: var(--border); font-size: .75rem; background: #09111edb; padding: 5px 10px; }
+
+#mission-hud { top: calc(var(--header-bottom) + 16px); left: calc(24px + var(--sal)); width: 156px; padding: 14px; border-radius: 16px; font-size: .73rem; }
+#mission-hud .fuel { height: 3px; margin-bottom: 12px; background: #ffffff0b; }
+#mission-hud .fuel .fill { background: var(--ok); }
+#mission-hud canvas { margin-top: 12px; opacity: .85; }
+body[data-mode='baseView'] #mission-hud canvas { display: none; }
+body.mission-active :is(header.hud.top, footer.hud.bottom, #timebar, #preview, #labels, #version, #clean-view) { display: none !important; }
+body.mission-active #mission-hud { top: calc(24px + var(--sat)); }
+body.mission-active #mission-hud canvas { width: 96px; margin-inline: auto; }
+body.mission-active #gesture-flash { top: auto; bottom: calc(22px + var(--sab)); max-width: calc(100vw - 32px); }
+
+@media (max-width: 700px) {
+  header.hud.top { top: calc(12px + var(--sat)); left: calc(12px + var(--sal)); padding: 10px 12px; max-width: calc(100vw - 136px - var(--sal) - var(--sar)); }
+  .top h1 { font-size: .78rem; }
+  .top .title-full { display: none; } .top .title-short { display: inline; }
+  #hand-control { margin-left: 0; font-size: .64rem; }
+  #loading { display: none; }
+  #clean-view { top: calc(12px + var(--sat)); right: calc(12px + var(--sar)); max-width: 116px; min-height: 38px; padding: 8px 10px; font-size: .68rem; }
+  #mission-hud { top: calc(var(--header-bottom) + 10px); left: calc(12px + var(--sal)); width: 138px; padding: 10px 12px; font-size: .69rem; }
+  #timebar.collapsed { top: auto !important; bottom: calc(var(--footer-h, 90px) + 16px + var(--sab)) !important; left: auto !important; right: calc(12px + var(--sar)); transform: none !important; width: auto; max-width: 180px; border-radius: 12px; }
+  body:has(#base-panel:not([hidden])) #timebar.collapsed { display: none; }
+  #timebar:not(.collapsed) { bottom: calc(var(--footer-h, 90px) + 16px + var(--sab)); }
+  body.mission-active #mission-hud { top: calc(92px + var(--sat)); left: calc(12px + var(--sal)); width: 150px; }
+  body.mission-active #mission-hud canvas { display: none; }
+  body.mission-active #gesture-flash { bottom: calc(285px + var(--sab)); font-size: .75rem; }
+  #version { display: none; }
+}
+@media (max-height: 500px) {
+  header.hud.top { top: calc(10px + var(--sat)); padding: 8px 12px; }
+  #mission-hud { width: 124px; top: calc(var(--header-bottom) + 8px); padding: 8px 10px; font-size: .65rem; }
+  #mission-hud canvas, body.mission-active #mission-hud canvas { display: none; }
+  body.mission-active #mission-hud { top: calc(16px + var(--sat)); }
+  #timebar { max-width: 300px; bottom: calc(12px + var(--sab)); }
+}
+@media (prefers-reduced-motion: reduce) { button { transition: none; } }

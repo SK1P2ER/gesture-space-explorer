@@ -1,0 +1,10 @@
+{
+  "landmarks": [
+    {"id":"assembly","objects":["VAB | high bay","VAB | lower service wing"],"eye":[-190,108,-140],"target":[-70,38,-245]},
+    {"id":"control","objects":["Command_Building_Main","Command_Building_Roof"],"eye":[230,52,-78],"target":[170,13,-130]},
+    {"id":"pad","bounds":{"min":[-45,6,-45],"max":[45,70,45]},"eye":[-112,44,-150],"target":[0,32,0]},
+    {"id":"landing","bounds":{"min":[-209,6,51],"max":[-141,10,119]},"eye":[-285,85,210],"target":[-175,9,85]}
+  ],
+  "collision_objects":["VAB | high bay","VAB | lower service wing","Command_Building_Main","Command_Building_Roof","Utility_Shed"],
+  "landing":{"center":[-175,7.025,85],"radius":32,"approach_seconds":8}
+}

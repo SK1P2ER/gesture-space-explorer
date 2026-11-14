@@ -11,10 +11,15 @@ class El {
   disabled = false;
   type = '';
   private attrs = new Map<string, string>();
+  private events = new Map<string, ((event: unknown) => void)[]>();
   constructor(public tagName: string) {}
   setAttribute(name: string, value: string) { this.attrs.set(name, value); }
   getAttribute(name: string) { return this.attrs.get(name) ?? null; }
-  addEventListener() {}
+  addEventListener(type: string, listener: (event: unknown) => void) {
+    this.events.set(type, [...this.events.get(type) ?? [], listener]);
+  }
+  click() { this.events.get('click')?.forEach((listener) => listener({})); }
+  focus() {}
   append(...nodes: El[]) { this.children.push(...nodes); }
   replaceChildren(...nodes: El[]) { this.children = nodes; }
   get text(): string { return this.textContent + this.children.map((c) => c.text).join(''); }
@@ -31,8 +36,9 @@ function fixture() {
 const sky = (hours: number) => ({
   local: { objects: [] }, day: { hours, sunrise: 6, sunset: 18 }, up: [],
 }) as unknown as SkyReport;
-const find = (root: El, cls: string) => root.children.find((c) => c.className.split(' ').includes(cls))!;
-const facts = (root: El) => root.children.find((c) => c.tagName === 'dl')!;
+const descendants = (root: El): El[] => root.children.flatMap((child) => [child, ...descendants(child)]);
+const find = (root: El, cls: string) => descendants(root).find((c) => c.className.split(' ').includes(cls))!;
+const facts = (root: El) => descendants(root).find((c) => c.tagName === 'dl')!;
 
 it('updates the clock and the chosen destination in place, keeping the controls', () => {
   const { root, panel } = fixture();
@@ -72,4 +78,30 @@ it('rebuilds for another language or base, and hides with no base', () => {
   panel.render(baseById('cape'), 'ja', null, null);
   expect(root.hidden).toBe(false);
   expect(find(root, 'launch').disabled).toBe(true);
+});
+
+it('keeps Overview and Travel separate and preserves the chosen tab across language refreshes', () => {
+  const { root, panel } = fixture();
+  const base = baseById('jezero');
+  panel.render(base, 'en', null, sky(10));
+  expect(find(root, 'base-overview').hidden).toBe(false);
+  expect(find(root, 'base-travel').hidden).toBe(true);
+  find(root, 'base-tabs').children[1].click();
+  expect(find(root, 'base-overview').hidden).toBe(true);
+  expect(find(root, 'base-travel').hidden).toBe(false);
+  panel.render(base, 'ja', null, sky(10));
+  expect(find(root, 'base-travel').hidden).toBe(false);
+  expect(find(root, 'base-tabs').children[1].getAttribute('aria-selected')).toBe('true');
+});
+
+it('opens Travel for a destination chosen by keyboard or gesture without rebuilding controls', () => {
+  const { root, panel } = fixture();
+  const base = baseById('jezero');
+  panel.render(base, 'en', null, sky(10));
+  const launch = find(root, 'launch');
+  panel.render(base, 'en', 'cape', sky(10));
+  expect(find(root, 'base-travel').hidden).toBe(false);
+  expect(find(root, 'launch')).toBe(launch);
+  expect(launch.disabled).toBe(false);
+  expect(find(root, 'base-selection').text).toContain(baseById('cape').name.en);
 });

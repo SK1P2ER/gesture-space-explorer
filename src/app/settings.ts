@@ -3,34 +3,15 @@ import { BASES } from '../data/bases';
 import { parseSensitivity, type SteerSensitivity } from '../gestures/steer';
 import { parsePassport, type Passport } from '../sim/passport';
 import { safeLocalStorage } from '../quality';
+import type {Lang} from '../data/bodies';
 
 // What the app remembers on this device (localStorage). Every access is guarded:
 // storage can be blocked (private mode, sandboxed iframes), and then choices
 // still apply for the visit, just aren't kept.
 
 export const storage = safeLocalStorage();
-
-/** Every key the app saves starts with this (settings, quality, Auto's memory, passport, Build layouts). */
-const PREFIX = 'gse.';
-
-/**
- * ?reset, for user tests: forget everything this app saved on this device, so the next tester
- * starts as a first-time visitor. Only the app's own keys go; nothing is sent anywhere, and nothing
- * is shown (a first visit has no message). Returns the address's search without `reset` (so a
- * reload keeps the tester's progress), or null when the address doesn't ask.
- */
-export function resetIfAsked(search: string, store: Pick<Storage, 'length' | 'key' | 'removeItem'> | null): string | null {
-  if (!new URLSearchParams(search).has('reset')) return null;
-  try {
-    const saved = Array.from({ length: store?.length ?? 0 }, (_, i) => store!.key(i)).filter((k): k is string => !!k?.startsWith(PREFIX));
-    for (const key of saved) store!.removeItem(key);
-  } catch {
-    // storage blocked: nothing was kept to forget
-  }
-  // Other parameters stay exactly as typed (?reset&base=jezero opens Jezero, fresh).
-  const rest = search.replace(/^\?/, '').split('&').filter((p) => p && decodeURIComponent(p.split('=')[0].replace(/\+/g, ' ')) !== 'reset');
-  return rest.length ? `?${rest.join('&')}` : '';
-}
+export function readLanguage():Lang {try{const lang=storage?.getItem('gse.lang');return lang==='my'||lang==='ja'?lang:'en';}catch{return 'en';}}
+export function writeLanguage(lang:Lang){try{storage?.setItem('gse.lang',lang);}catch{/* Optional storage. */}}
 
 export const KEYS = {
   watermark: 'gse.watermark',

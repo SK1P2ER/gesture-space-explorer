@@ -42,11 +42,18 @@ describe('persistent landing pad parity (before Phase 2)', () => {
     } finally { fixture.dispose(); }
   });
 
-  it('borrows the persistent material shared by all five pads and gives each pad owned geometry', () => {
+  it('keeps Japan paint owned, shares the other persistent materials and owns every pad geometry', () => {
     const fixture = landingBases();
     try {
       const pads = fixture.bases.map((b) => b.pad as THREE.Mesh);
-      expect(new Set(pads.map((p) => p.material)).size).toBe(1);
+      const japan=fixture.bases.find(b=>b.base.id==='cape')!.pad as THREE.Mesh;
+      const others=pads.filter(p=>p!==japan);
+      expect(new Set(others.map(p=>p.material)).size).toBe(1);
+      expect(others[0].material).not.toBe(japan.material);
+      expect((japan.material as THREE.MeshStandardMaterial).roughness).toBe(.96);
+      japan.geometry.computeBoundingBox();
+      expect(japan.geometry.boundingBox!.max.y+japan.position.y).toBeCloseTo(.015,7);
+      expect(japan.geometry.boundingBox!.min.x).toBeCloseTo(-PAD_RADIUS,7);
       expect(new Set(pads.map((p) => p.geometry)).size).toBe(5);
     } finally { fixture.dispose(); }
   });

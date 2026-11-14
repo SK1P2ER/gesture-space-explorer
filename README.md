@@ -2,6 +2,12 @@
 
 **English** | [日本語](README.ja.md)
 
+**Development review snapshot:** see the [team handoff](docs/team-handoff-japan-review.md).
+This branch is not a release or a replacement for `main`.
+
+**Code: MIT / 3D assets: CC BY 4.0.** Third-party components retain their own
+licenses; see [ASSETS.md](ASSETS.md).
+
 A 3D Solar System you control with hand gestures in front of your webcam: rotate, zoom, fly from planet to planet, point to select, and change the speed of time. Hand tracking runs entirely on your device (MediaPipe); the scene is rendered with Three.js.
 
 ![Earth in v1.1: 4K surface, drifting clouds, atmosphere, terminator](docs/screenshots/after-earth.jpg)
@@ -26,11 +32,10 @@ A 3D Solar System you control with hand gestures in front of your webcam: rotate
 - **Pluto and Halley's Comet** — Pluto, labeled as a dwarf planet, and Halley's Comet follow their real tilted, eccentric orbits (Pluto really was inside Neptune's orbit from 1979 to 1999). The comet grows a coma and two tails inside ~4 AU: a straight blue ion tail pointing exactly away from the Sun, and a curved dust tail. Halley is far out now, so its card has a **Next visit** button that jumps to July 2061 at a day per second. The overview frames Neptune's orbit; zoom out to see Pluto's and Halley's.
 - **Asteroid belt and Kuiper belt** — thousands of rocks between Mars and Jupiter (6,000 on High, 1,500 on Low), with the Kirkwood gaps that Jupiter's pull keeps empty, each on its own Kepler orbit so the inner ones overtake the outer ones; a faint Kuiper belt just beyond Neptune.
 - **Your weight on other worlds** — enter your weight (⚖️ or `G`) to see what a scale would read on every body, from Mercury to the Sun (NASA surface gravity). A planet's info card shows your weight there and how long sunlight takes to reach it on the shown date.
-- **Space bases and rocket trips (v2.0)** — five bases on real sites: Cape Launch Center (Earth), Tranquility Base (the Moon), Jezero Dome (Mars), Conamara Ice Station (Europa) and Kraken Shore (Titan), low-poly models built in code that turn with their world. `V` (or **Visit** on a card) flies down to one. Pick a destination (`←` `→`, point at a world, or the list), then launch: `Enter`, the 🚀 button, or count down with your fingers, 3 → 2 → 1. The rocket arcs between the worlds with a chase camera and warp streaks (`Enter` skips), then **you land it**: steer onto the pad with your palm, the mouse or the arrow keys. Heavier worlds come down faster and gustier; **auto-land** (`Enter` during a landing, or `A` to always land) is there for anyone who'd rather watch. A mission HUD shows fuel, the real distance left, the ETA and a mini-map, and a **passport** (`J`) collects a dated stamp for every base you reach, kept on the device.
+- **Space bases and rocket trips (v2.0)** — five bases on real sites: Tanegashima Spaceport (Earth, Japan), Tranquility Base (the Moon), Jezero Dome (Mars), Conamara Ice Station (Europa) and Kraken Shore (Titan), low-poly models built in code that turn with their world. `V` (or **Visit** on a card) flies down to one. Pick a destination (`←` `→`, point at a world, or the list), then launch: `Enter`, the 🚀 button, or count down with your fingers, 3 → 2 → 1. The rocket arcs between the worlds with a chase camera and warp streaks (`Enter` skips), then **you land it**: steer onto the pad with your palm, the mouse or the arrow keys. Heavier worlds come down faster and gustier; **auto-land** (`Enter` during a landing, or `A` to always land) is there for anyone who'd rather watch. A mission HUD shows fuel, the real distance left, the ETA and a mini-map, and a **passport** (`J`) collects a dated stamp for every base you reach, kept on the device.
 - **Jezero, the showcase base (v2.1)** — Mars' base is now a small working outpost: three inflatable habitats joined by tunnels, a glowing greenhouse, a solar field that tracks the Sun, a rover garage, a comms antenna, two rovers on their rounds and astronauts walking between modules, standing on curved ground that blends into the planet. Its day is real: local solar time, sunrise and sunset from the ephemeris, windows lighting up at dusk. The **horizon view** (`O`, or 🌄) puts you on the ground: a butterscotch sky by day, Mars' blue sunset, and at night the real stars with Phobos (in its phase), Deimos and Earth as a bright star, all at their real positions. It's built only while Mars is in focus and freed when you leave.
 - **A rocket worth watching (v2.2)** — a two-stage launcher with a crew capsule, built and painted in code. The booster separates partway out (the camera looks back as it tumbles away), and the upper stage lands on its own legs. Flames take the colour of the air, and engines kick up dust from the pad — rust on Mars, none on the Moon.
 - **Jezero in real light (v2.3)** — on High and Ultra the base has its own Sun from its real sky, with shadows, sky reflections, and materials made in code (fabric, ribbed metal, solar cells, dust on the windward side). **🌅 Golden hour** in the base card jumps to the next sunset and puts you on the ground for the long shadows.
-- **AstroLife 2126 (v2.6, experimental: `?flags=astrolife`)** — a fictional space-travel app around the explorer. Read about four destinations, book Cape → Jezero (nickname, departure, cabin), check in for a boarding pass whose QR code is a souvenir link, then fly it: the explorer opens at the spaceport on the departure date, taken from the next real Earth–Mars launch window (March 2127), and landing at Jezero earns the journey's stamp in the passport and a postcard to save or share. Fares, liners and the 9-day crossing are fiction, and say so. Everything stays on the device: no server, and the souvenir link carries the pass after the `#`, which browsers never send. The camera waits until the explorer opens. Without the flag, none of it is downloaded.
 - **Multilingual** — the in-app UI and planet facts are available in **English, Burmese and Japanese** (press `L` to cycle). This README is available in English and Japanese.
 - **Tested** — 386 Vitest tests, including gesture recognition replayed from real MediaPipe recordings, planet positions checked against real events (equinoxes, oppositions, perihelion), moons, Pluto and Halley checked against JPL Horizons, bright stars on the sky map, the camera's fly-in and framing, scale invariants, and a check that every texture file a planet can request actually ships.
 
@@ -70,8 +75,6 @@ Every gesture uses a **different hand pose**; speed alone never decides what a g
 **Keyboard and mouse:** `←` `→` switch planets (then Pluto and Halley's Comet) · `↑` `↓` or the wheel zoom · drag to rotate · `Enter` select · `Esc` close · `Space` pause · `[` `]` time speed · `B` reverse time · `N` back to now · `M` the focused planet's moons, one by one · click a planet or moon to go there · `P` photo · `W` watermark on/off · `T` true scale (turns off the overview boost) · `G` weight panel · `V` visit the focused world's base (there, `←` `→` pick a destination and `Enter` launches; while landing, the arrows steer and `Enter` auto-lands) · `O` horizon view at Jezero (drag to look around) · `A` auto-land always · `J` passport · `L` language (English → Burmese → Japanese) · `D` debug overlay · `F` FPS counter (dev builds, or with `?debug`). The time bar has a speed slider (center = stopped), **Now** and pause buttons, for mouse and touch.
 
 **Links (v2.4):** the address bar follows what's on screen, so copying it shares the view. A link can name a body (`?body=saturn`), a base (`?base=jezero`, with `&view=horizon` to stand on the ground), a moment (`&date=2061-07-28`, or `&date=2024-04-08T18:18Z`; it opens paused there) and a language (`&lang=ja`). Anything a link gets wrong is ignored.
-
-**First visit (`?reset`, for user tests):** opening the app with `?reset` (for example `?reset&base=jezero`) forgets everything it saved on this device: settings, quality and what Auto learned, the passport, the weight, Build layouts. So the next tester starts as a first-time visitor. Nothing is sent anywhere and no message is shown; `reset` then drops out of the address, so a reload keeps the tester's progress. Camera permission belongs to the browser: reset it in the site settings, or use a private window.
 
 ## Quick start
 
@@ -289,7 +292,6 @@ No internet connection is needed. Open `http://localhost:4173` in Chrome's `--ki
 - Camera frames are processed in the browser and never sent to a server.
 - No video, images or landmark data are stored.
 - The weight you enter is kept only in this browser (`localStorage`) and never sent anywhere.
-- AstroLife's bookings, passes and stamps (`?flags=astrolife`) are kept only in this browser too; its passport can delete them all. A boarding pass's souvenir link holds the nickname, avatar, flight and cabin after the `#`, so it reaches whoever you share it with, but never a server.
 - The debug recorder downloads landmark numbers (not images) to your own machine, and only when you start it yourself.
 
 ## Credits & license
@@ -301,9 +303,10 @@ No internet connection is needed. Open `http://localhost:4173` in Chrome's `--ki
 - Moon positions: fitted to [JPL Horizons](https://ssd.jpl.nasa.gov/horizons/); the Moon from J. Meeus, *Astronomical Algorithms*, ch. 47
 - [MediaPipe](https://github.com/google-ai-edge/mediapipe): Apache 2.0
 - [Three.js](https://threejs.org/): MIT
+- M03 Japan spaceport vegetation: [Quaternius Stylized Nature MegaKit Standard](https://quaternius.itch.io/stylized-nature-megakit), CC0. Original rocket, shuttle and spaceport models: SK1P2ER, CC BY 4.0; see [ASSETS.md](ASSETS.md). Draco geometry decoder: The Draco Authors, Apache 2.0; see `public/spaceport/README.md` and `public/spaceport/draco/LICENSE`.
 - Planet facts: NASA. Surface gravity: [NASA Planetary Fact Sheet](https://nssdc.gsfc.nasa.gov/planetary/factsheet/) and [Sun Fact Sheet](https://nssdc.gsfc.nasa.gov/planetary/factsheet/sunfact.html)
 - Orbits: E. M. Standish, [Keplerian Elements for Approximate Positions of the Major Planets](https://ssd.jpl.nasa.gov/planets/approx_pos.html), JPL (Table 1, valid 1800–2050)
 - Rotation axes and rates: Archinal et al., *Report of the IAU Working Group on Cartographic Coordinates and Rotational Elements: 2015*, Celest. Mech. Dyn. Astr. 130:22 (2018)
-- This project: [MIT](LICENSE)
+- Code: [MIT](LICENSE). Original 3D models: [CC BY 4.0](LICENSE-CC-BY-4.0.txt), with the third-party exceptions in [ASSETS.md](ASSETS.md).
 
 See [CHANGELOG.md](CHANGELOG.md) for what changed in each version.

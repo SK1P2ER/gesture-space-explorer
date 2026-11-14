@@ -20,11 +20,12 @@ it('requires review of every global keydown listener and routes action handlers 
   expect(registrations).toEqual({
     'src/app/debugTools.ts': ["'keydown'", "'keydown'"],
     'src/input/keyboard.ts': ["'keydown'"],
-    // Passive observers: idle wake never dispatches actions; audio unlock observes first user input.
-    'src/ui/chrome.ts': ['type'], 'src/ui/photo.ts': ["'keydown'"],
-    // Esc goes back a screen, only while the AstroLife shell's modal layer is open, when no scene shortcut
-    // can run (shortcutOwnership.ts sees aria-modal). Global, because a click on the backdrop leaves focus on <body>.
-    'src/shell/shell.ts': ["'keydown'"],
+    // These owners consume Escape only while their own drawer/view is open;
+    // scene ownership must not block the owner's own dismissal key.
+    'src/ui/chrome.ts': ["'keydown'", 'type'],
+    'src/ui/cleanView.ts': ["'keydown'"],
+    // Passive observer: audio unlock only observes first user input.
+    'src/ui/photo.ts': ["'keydown'"],
   });
   for (const [path, count] of [['src/app/debugTools.ts', 2], ['src/input/keyboard.ts', 1]] as const) {
     const source = readFileSync(path, 'utf8');

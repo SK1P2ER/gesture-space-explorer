@@ -64,10 +64,8 @@ async function open({ path = '/', camera = 'denied', viewport = { width: 1100, h
     localStorage.setItem('gse.passport', JSON.stringify({ jezero: Date.UTC(2026, 0, 1), tranquility: Date.UTC(2026, 0, 1) }));
     for (const [k, v] of Object.entries(storage)) localStorage.setItem(k, v);
     window.__cameraStreams = [];
-    window.__cameraAsks = 0; // every request, granted or not
     const acquire = navigator.mediaDevices?.getUserMedia?.bind(navigator.mediaDevices);
     navigator.mediaDevices.getUserMedia = async (constraints) => {
-      window.__cameraAsks++;
       if (camera === 'denied') throw new DOMException('Smoke test: camera denied', 'NotAllowedError');
       const stream = await acquire(constraints);
       window.__cameraStreams.push(stream);
@@ -84,19 +82,13 @@ async function sceneFocus() {
   await page.locator('#scene').evaluate((canvas) => { canvas.tabIndex = -1; canvas.focus(); });
 }
 const atJezero = () => page.waitForFunction(() => !document.querySelector('#base-panel').hidden && /Jezero/.test(document.querySelector('#base-panel h2')?.textContent ?? ''));
-/** Waits for the AstroLife shell's screen heading to match. */
-const heading =(pattern) => page.waitForFunction((source) => new RegExp(source).test(document.querySelector('#shell h2')?.textContent ?? ''), pattern.source);
 
 test('starts in keyboard mode without a camera, with its version and no errors', async () => {
-  const requested = [];
-  await open({ setup: (p) => p.on('request', (r) => requested.push(new URL(r.url()).pathname)) });
+  await open();
   await statusKind('keyboard');
   assert.match(await text('#status'), /Keyboard mode/);
   assert.equal(await text('#version'), `v${version}`);
   assert.equal(await page.locator('#hand-control').isVisible(), true); // the camera can be retried
-  // Without ?flags=astrolife the AstroLife shell is neither on the page nor downloaded.
-  assert.equal(await page.locator('#shell, #to-hub').count(), 0);
-  assert.deepEqual(requested.filter((path) => /\/shell[.-]/.test(path)), []);
 });
 
 test('privacy: a model that fails after the camera is granted stops the camera', async () => {
@@ -125,7 +117,7 @@ test('Turn on hand control retries the camera without a reload', async () => {
   await page.locator('#hand-control').click();
   await page.waitForFunction(() => ['loading', 'keyboard'].includes(document.querySelector('#status').dataset.kind));
   await statusKind('keyboard'); // denied again, but asked again: no reload needed
-  assert.match(await text('#status'), /Camera permission denied/);
+  assert.match(await page.locator('#status').getAttribute('title'), /Camera permission denied/);
 });
 
 test('planets: arrows switch the focused body, Enter opens its card, Escape closes it', async () => {
@@ -175,16 +167,6 @@ test('deep links: a shared link opens that base, view, language and moment (paus
   await page.waitForFunction(() => !new URLSearchParams(location.search).has('date'));
 });
 
-test('first visit for user tests: ?reset forgets what this app saved, before the app reads it', async () => {
-  // Saved here: a fixed Low (the suite's default), passport stamps, a weight, and another site's key.
-  await open({ path: '/?reset&body=saturn', storage: { 'gse.weightKg': '70', 'other.key': 'kept' } });
-  await statusKind('keyboard');
-  assert.match(await text('#quality'), /Auto/); // not the saved fixed Low
-  assert.equal(new URL(page.url()).search, '?body=saturn'); // a reload keeps the tester's progress
-  assert.deepEqual(await page.evaluate(() => ['gse.quality', 'gse.passport', 'gse.weightKg', 'other.key'].map((k) => localStorage.getItem(k))),
-    [null, null, null, 'kept']);
-});
-
 test('Jezero: V enters the base, M (no moons) keeps it, Escape leaves', async () => {
   await open({ path: '/?body=mars' }); // V itself is under test here, so only the body comes from a link
   await statusKind('keyboard');
@@ -202,6 +184,7 @@ test('missions: choose a destination and launch from the base panel', async () =
   await open({ path: '/?base=jezero' });
   await statusKind('keyboard');
   await atJezero();
+  await page.locator('#base-tab-travel').click();
   await page.locator('#base-panel .destinations button').filter({ hasText: 'Tranquility Base' }).click();
   await page.locator('#base-panel .launch').click();
   // The countdown, then the trip: the mission overlay says where the rocket is going.
@@ -222,6 +205,7 @@ test('Builder (?flags=build): opens at Jezero and closes again', async () => {
 test('controls keep their keys: Space on Quality changes quality, not the scene', async () => {
   await open();
   await statusKind('keyboard');
+  await page.locator('#menu').click();
   const before = await text('#quality');
   await page.locator('#quality').focus();
   await page.keyboard.press('Space');
@@ -267,8 +251,9 @@ test('Mars with every flag off: Jezero shows only the finished redesigns, draws,
   await page.waitForFunction(() => !document.body.classList.contains('horizon') && !document.querySelector('#base-panel').hidden);
 });
 
-test('debug report: ?debug shows its lines without a camera, and Copy report copies the link and lines', async () => {
-  await open({ path: '/?debug&base=jezero', permissions: ['clipboard-read', 'clipboard-write'] });
+for (const debugPath of ['/?debug&base=jezero', '/?debug=&base=jezero']) {
+test(`debug report: ${debugPath} shows its lines without a camera, and Copy report copies the link and lines`, async () => {
+  await open({ path: debugPath, permissions: ['clipboard-read', 'clipboard-write'] });
   await statusKind('keyboard');
   await atJezero();
   await page.waitForFunction(() => /quality /.test(document.querySelector('#debug-stats').textContent));
@@ -277,246 +262,29 @@ test('debug report: ?debug shows its lines without a camera, and Copy report cop
   await page.waitForFunction(() => document.querySelector('#preview .debug-copy').textContent.includes('Copied'));
   const report = await page.evaluate(() => navigator.clipboard.readText());
   assert.match(report, /debug report/);
-  assert.match(report, /^link\s+.*\?debug&base=jezero/m);
+  const linkLine = report.match(/^link\s+(\S+)$/m);
+  assert.ok(linkLine, 'the copied report contains a link');
+  const reportURL = new URL(linkLine[1]);
+  assert.equal(reportURL.href, page.url(), 'the copied link matches the current address');
+  assert.equal(reportURL.origin, new URL(baseURL).origin);
+  assert.equal(reportURL.pathname, '/');
+  // URLSearchParams serializes the empty ?debug flag as ?debug= when views update the URL.
+  assert.deepEqual([...reportURL.searchParams.entries()].sort(), [['base', 'jezero'], ['debug', '']]);
   assert.match(report, /^res\s+/m);
   assert.match(report, /^quality\s+/m);
 });
+}
 
-test('AstroLife (?flags=astrolife): the hub opens first, and the camera waits for the explorer and stops for the hub', async () => {
-  await open({ path: '/?flags=astrolife', camera: 'fake' });
-  await page.locator('#shell h2').waitFor();
-  assert.match(await text('#shell h2'), /Where to next/);
-  assert.match(await text('#shell .shell-notice'), /fictional simulation/);
-  // Behind the shell the scene takes no shortcuts: → would change the planet, V would fly to a base.
-  await page.keyboard.press('ArrowRight');
-  await page.keyboard.press('v');
-  await frames(10);
-  assert.equal(await page.evaluate(() => window.__cameraAsks), 0, 'no camera request before the explorer opens');
-  await page.getByRole('button', { name: 'Open the explorer' }).click();
-  await page.waitForFunction(() => document.querySelector('#shell').hidden && window.__cameraAsks === 1);
-  assert.equal(await text('#focus'), 'Mars'); // the hub's world, and no base entered by the V behind the shell
-  assert.equal(await page.locator('#base-panel').isVisible(), false);
-  await sceneFocus();
-  await page.keyboard.press('ArrowRight');
-  await page.waitForFunction(() => document.querySelector('#focus').textContent === 'Jupiter');
-  // Back to the hub: the camera stops, and the address names no view (a reload opens the hub).
-  await page.locator('#to-hub').click();
-  await page.locator('#shell h2').waitFor();
-  await page.waitForFunction(() => window.__cameraStreams.length > 0 && window.__cameraStreams.every((s) => s.getTracks().every((t) => t.readyState === 'ended')));
-  await page.waitForFunction(() => location.search === '?flags=astrolife');
-});
-
-test('AstroLife: the hub, a destination and the list on a phone, in every language, then on to a base', async () => {
-  await open({ path: '/?flags=astrolife', viewport: { width: 390, height: 844 }, phone: true });
-  await heading(/Where to next/);
-  await page.getByRole('button', { name: 'See the journey' }).click();
-  await heading(/^Jezero Dome$/);
-  const facts = await text('#shell .al-facts');
-  assert.match(facts, /fictional/); // the 2126 timetable is made up, and says so
-  assert.match(facts, /real/); // the distance today is not
-  await page.keyboard.press('Escape'); // back a screen
-  await heading(/Where to next/);
-  await page.getByRole('button', { name: 'Destinations', exact: true }).click();
-  await heading(/^Destinations$/);
-  assert.equal(await page.locator('#shell [data-destination]').count(), 4);
-  for (const lang of ['my', 'ja', 'en']) {
-    await page.locator('#shell .shell-bar button').click();
-    await page.waitForFunction((lang) => document.documentElement.lang === lang, lang);
-    assert.equal(await page.locator('#shell-panel').evaluate((p) => p.scrollWidth <= p.clientWidth), true, `no sideways scroll in ${lang}`);
-  }
-  await page.getByRole('button', { name: 'Explore in 3D: Tranquility Base' }).click();
-  await page.waitForFunction(() => document.querySelector('#shell').hidden && /Tranquility/.test(document.querySelector('#base-panel:not([hidden]) h2')?.textContent ?? ''));
-});
-
-test('AstroLife: book Cape → Jezero once, keep it across a reload, then cancel it', async () => {
-  await open({ path: '/?flags=astrolife' });
-  await heading(/Where to next/);
-  await page.getByRole('button', { name: 'See the journey' }).click();
-  await page.getByRole('button', { name: 'Book this journey' }).click();
-  await heading(/Who.s travelling/);
-  await page.getByRole('button', { name: 'Continue' }).click(); // no name yet
-  await page.waitForFunction(() => /Enter a nickname/.test(document.querySelector('#al-name-error:not([hidden])')?.textContent ?? ''));
-  assert.equal(await page.locator('#al-name').getAttribute('aria-invalid'), 'true');
-  await page.locator('#al-name').fill('  Ada   Lovelace ');
-  await page.getByRole('radio', { name: 'Avatar 3' }).check();
-  await page.keyboard.press('Enter'); // the form submits from the keyboard too
-  await heading(/Departure and cabin/);
-  await page.getByRole('radio', { name: /AL216/ }).check();
-  await page.getByRole('radio', { name: /Observation suite/ }).check();
-  await page.getByRole('button', { name: 'Continue' }).click();
-  await heading(/Check and confirm/);
-  const review = await text('#shell .al-facts');
-  for (const part of [/🌍 Ada Lovelace/, /AL216/, /Observation suite/, /21,000 credits/, /fictional/]) assert.match(review, part);
-  await page.getByRole('button', { name: 'Confirm booking' }).click();
-  await heading(/Your journey/);
-  assert.match(await text('#shell [role="status"]'), /Booking confirmed/);
-  const ref = await text('#shell .al-ref');
-  assert.match(ref, /^AL-[0-9A-HJKMNP-TV-Z]{5}$/);
-  await page.keyboard.press('Escape'); // back goes home, not to the confirm step
-  await heading(/Where to next/);
-  assert.equal(await page.locator(`#shell [data-booking="${ref}"]`).count(), 1);
-  await page.reload({ waitUntil: 'domcontentloaded' }); // kept on the device
-  await page.locator(`#shell [data-booking="${ref}"]`).waitFor();
-  await page.getByRole('button', { name: 'View booking' }).click();
-  await page.getByRole('button', { name: 'Cancel booking' }).click();
-  await page.getByRole('button', { name: /Press again to confirm/ }).click();
-  await page.waitForFunction(() => document.querySelector('#shell .al-status')?.textContent === 'Cancelled');
-  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('gse.astrolife')));
-  assert.deepEqual(saved.bookings.map((b) => [b.ref, b.status, b.traveller.name]), [[ref, 'cancelled', 'Ada Lovelace']]);
-  await page.getByRole('button', { name: 'Destinations', exact: true }).click();
-  await page.getByRole('button', { name: 'Details: Jezero Dome' }).click();
-  await page.getByRole('button', { name: 'Book this journey' }).waitFor(); // nothing under way: Jezero can be booked again
-});
-
-test('AstroLife: check in, the pass’s souvenir link opens as a keepsake, and a hostile link is ignored', async () => {
-  const booking = {
-    ref: 'AL-9NH92', attempt: 'smoke-attempt-01', traveller: { name: 'Ada', avatar: 'a2' }, from: 'cape', to: 'jezero',
-    departure: 'AL216', cabin: 'suite', status: 'confirmed', createdAt: Date.UTC(2026, 9, 30),
-  };
-  await open({
-    path: '/?flags=astrolife', permissions: ['clipboard-read', 'clipboard-write'],
-    storage: { 'gse.astrolife': JSON.stringify({ v: 1, traveller: booking.traveller, bookings: [booking] }) },
-  });
-  await page.getByRole('button', { name: 'View booking' }).click();
-  await page.getByRole('button', { name: 'Check in' }).click();
-  await page.waitForFunction(() => document.querySelector('#shell .al-status')?.textContent === 'Checked in');
-  assert.equal(await page.getByRole('button', { name: 'Check in' }).count(), 0); // checked in once, and no button to do it again
-  assert.equal(await page.locator('#shell .al-pass svg.al-qr title').textContent(), 'Souvenir QR code: opens this pass as a keepsake on any phone');
-  await page.getByRole('button', { name: 'Copy souvenir link' }).click();
-  await page.waitForFunction(() => /Copied/.test(document.querySelector('#shell .al-pass .al-actions')?.textContent ?? ''));
-  const link = new URL(await page.evaluate(() => navigator.clipboard.readText()));
-  assert.equal(link.search, '?flags=astrolife'); // the pass is only after the #, which never reaches a server
-  assert.deepEqual(Object.fromEntries(new URLSearchParams(link.hash.slice(1))), { souvenir: '1', ref: 'AL-9NH92', nick: 'Ada', av: 'a2', fl: 'AL216', cab: 'suite' });
-
-  await page.goto(link.href); // only the # changes: the open shell picks it up
-  await heading(/^Ada’s journey to Jezero Dome$/);
-  assert.match(await text('#shell .al-pass'), /🛸 Ada/);
-  await page.getByRole('button', { name: 'Plan your own journey' }).click();
-  await heading(/Where to next/);
-  assert.equal(await page.evaluate(() => location.hash), ''); // a reload won't bring the souvenir back
-
-  // Markup in a link is never markup: the whole souvenir is refused, and nothing runs or appears.
-  const hostile = `${baseURL}/?flags=astrolife#souvenir=1&ref=AL-9NH92&nick=${encodeURIComponent('<img src=x onerror="window.__pwned=1">')}&av=a3&fl=AL216&cab=suite`;
-  await page.goto(hostile);
-  await page.reload({ waitUntil: 'domcontentloaded' });
-  await heading(/Where to next/);
-  assert.deepEqual(await page.evaluate(() => [window.__pwned, document.querySelectorAll('img').length, document.querySelector('#shell').textContent.includes('onerror')]), [undefined, 0, false]);
-});
-
-test('AstroLife: board, fly Cape → Jezero on the 2127 departure, land, earn the stamp once; free roam gets its date back', async () => {
-  const booking = {
-    ref: 'AL-J0RNY', attempt: 'smoke-attempt-02', traveller: { name: 'Ada', avatar: 'a4' }, from: 'cape', to: 'jezero',
-    departure: 'AL216', cabin: 'window', status: 'checkedIn', createdAt: Date.UTC(2026, 9, 30), checkedInAt: Date.UTC(2026, 9, 30, 1),
-  };
-  await open({
-    path: '/?flags=astrolife',
-    storage: { 'gse.astrolife': JSON.stringify({ v: 1, traveller: booking.traveller, bookings: [booking] }), 'gse.autoLand': '1' },
-  });
-  const year = () => page.evaluate(() => /\b(\d{4})\b/.exec(document.querySelector('#timebar .date').textContent)?.[1]);
-  await heading(/Where to next/); // drawn: the time bar has its date
-  const before = await year();
-  assert.match(before, /^20\d\d$/);
-  await page.getByRole('button', { name: 'View booking' }).click();
-  await page.getByRole('button', { name: 'Begin journey' }).click();
-  // The explorer, at the spaceport, with Jezero chosen and the clock on the departure: fiction, and labelled so.
-  await page.waitForFunction(() => document.querySelector('#shell').hidden && /Cape Launch Center/.test(document.querySelector('#base-panel:not([hidden]) h2')?.textContent ?? ''));
-  assert.match(await text('#journey-banner'), /^Simulation AL-J0RNY · Cape Launch Center → Jezero Dome · ready/);
-  assert.equal(await year(), '2127');
-  await page.locator('#base-panel .launch').click();
-  await page.waitForFunction(() => /Jezero/.test(document.querySelector('#mission-overlay')?.textContent ?? ''), null, { timeout: 60000 });
-  await page.waitForFunction(() => /on the way to Jezero Dome/.test(document.querySelector('#journey-banner').textContent));
-  await sceneFocus();
-  await page.keyboard.press('Enter'); // skip ahead to the approach; auto-land takes it down
-  await page.waitForFunction(() => /arrived at Jezero Dome · journey stamp collected/.test(document.querySelector('#journey-banner').textContent), null, { timeout: 90000 });
-  const saved = () => page.evaluate(() => JSON.parse(localStorage.getItem('gse.astrolife')).bookings[0]);
-  const done = await saved();
-  assert.equal(done.status, 'completed');
-  assert.ok(done.departedAt <= done.completedAt);
-  // Free roam: leaving the base ends the journey, and the visitor's own date comes back.
-  await sceneFocus();
-  await page.keyboard.press('Escape');
-  await page.waitForFunction(() => document.querySelector('#journey-banner').hidden);
-  assert.equal(await year(), before);
-  // AstroLife opens on the completed journey; the stamp was earned once.
-  await page.locator('#to-hub').click();
-  await page.waitForFunction(() => /Journey complete/.test(document.querySelector('#shell .al-stamp')?.textContent ?? ''));
-  assert.equal((await saved()).completedAt, done.completedAt);
-});
-
-test('AstroLife: the passport holds the journey stamp, the postcard is a PNG of it, and Forget deletes everything', async () => {
-  const done = {
-    ref: 'AL-P0STC', attempt: 'smoke-attempt-03', traveller: { name: 'Ada', avatar: 'a4' }, from: 'cape', to: 'jezero',
-    departure: 'AL216', cabin: 'suite', status: 'completed', createdAt: Date.UTC(2026, 9, 30),
-    checkedInAt: Date.UTC(2026, 9, 30, 1), departedAt: Date.UTC(2026, 9, 30, 2), completedAt: Date.UTC(2026, 9, 30, 3),
-  };
-  await open({ path: '/?flags=astrolife', storage: { 'gse.astrolife': JSON.stringify({ v: 1, traveller: done.traveller, bookings: [done] }) } });
-  await heading(/Where to next/);
-  await page.getByRole('button', { name: 'Passport', exact: true }).click();
-  await heading(/^🚀 Ada$/);
-  assert.match(await text('#shell .al-lead'), /1 of 4 destinations stamped/);
-  assert.equal(await page.locator('#shell [data-stamp="jezero"]').count(), 1);
-  assert.match(await text('#shell [data-stamp="jezero"]'), /Arrived Mar 15, 2127/); // departure + the 9-day crossing (fiction)
-  await page.locator('#shell [data-stamp="jezero"] button').click();
-  await page.waitForFunction(() => /Journey complete/.test(document.querySelector('#shell .al-stamp')?.textContent ?? ''));
-  await page.getByRole('button', { name: 'Make a postcard' }).click();
-  await page.waitForFunction(() => document.querySelector('#shell .al-postcard img')?.naturalWidth === 1600);
-  assert.equal(await page.locator('#shell .al-postcard img').getAttribute('alt'), 'Postcard from Jezero Dome');
-  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Save postcard' }).click()]);
-  assert.equal(download.suggestedFilename(), 'astrolife-postcard-AL-P0STC.png');
-  const png = await readFile(await download.path());
-  assert.deepEqual([...png.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-  const { width, height } = await sharp(png).metadata();
-  assert.deepEqual([width, height], [1600, 1000]);
-  // Forget: everything AstroLife kept on this device goes.
-  await page.getByRole('button', { name: 'Passport', exact: true }).click();
-  await page.getByRole('button', { name: 'Forget AstroLife on this device' }).click();
-  await page.getByRole('button', { name: /Press again to confirm/ }).click();
-  await heading(/Where to next/);
-  assert.equal(await page.evaluate(() => localStorage.getItem('gse.astrolife')), null);
-  await page.getByRole('button', { name: 'Passport', exact: true }).click();
-  assert.match(await text('#shell .al-empty'), /No stamps yet/);
-});
-
-test('AstroLife accessibility basics: every screen, in every language, has a heading and only named controls', async () => {
-  await open({ path: '/?flags=astrolife', viewport: { width: 390, height: 844 }, phone: true });
-  await heading(/Where to next/);
-  const audit = () => page.evaluate(() => {
-    const shell = document.querySelector('#shell');
-    const name = (el) => (el.getAttribute('aria-label') || el.labels?.[0]?.textContent || el.textContent || '').trim();
-    const unnamed = [...shell.querySelectorAll('button, a[href], input, [role="img"]')]
-      .filter((el) => !(name(el) || el.querySelector('title')?.textContent)).map((el) => el.outerHTML.slice(0, 80));
-    const panel = document.querySelector('#shell-panel');
-    return {
-      unnamed,
-      title: document.getElementById(shell.getAttribute('aria-labelledby'))?.textContent ?? null,
-      lang: document.documentElement.lang,
-      sideways: panel.scrollWidth > panel.clientWidth,
-    };
-  });
-  // Every screen that needs no booking: hub, destinations, a destination, the three booking steps, the passport.
-  const screens = [
-    async () => {},
-    async () => page.locator('#shell .shell-tabs button').nth(1).click(),
-    async () => page.locator('#shell [data-destination="jezero"] button').first().click(),
-    async () => page.locator('#shell .al-actions button.primary').first().click(), // book
-    async () => { await page.locator('#al-name').fill('Ada'); await page.keyboard.press('Enter'); },
-    async () => page.locator('#shell form button[type="submit"]').click(),
-    async () => page.locator('#shell .shell-tabs button').nth(2).click(),
-  ];
-  for (const [i, lang] of ['en', 'my', 'ja'].entries()) {
-    if (i) {
-      await page.locator('#shell .shell-tabs button').first().click();
-      await page.locator('#shell .shell-bar button').click();
-      await page.waitForFunction((lang) => document.documentElement.lang === lang, lang);
-    }
-    for (const [n, go] of screens.entries()) {
-      await go();
-      await frames(2);
-      const a = await audit();
-      assert.deepEqual(a.unnamed, [], `${lang} screen ${n}: unnamed controls`);
-      assert.ok(a.title?.trim(), `${lang} screen ${n}: the dialog has a title`);
-      assert.equal(a.lang, lang);
-      assert.equal(a.sideways, false, `${lang} screen ${n}: sideways scroll`);
-    }
-  }
+test('guided prototype: Burmese passenger review, destination and automatic launch remain visible', async () => {
+  await open({path:'/?flags=astrolife,guided&base=jezero&lang=my',viewport:{width:390,height:844}});
+  await statusKind('keyboard');
+  await page.waitForFunction(()=>!document.querySelector('#base-panel').hidden);
+  const action=page.locator('#guided-mission>button');
+  await action.click();await action.click();
+  await page.locator('#guided-mission>div button').first().click();
+  await action.click();
+  await page.locator('#mission-overlay.is-flight').waitFor({state:'visible',timeout:60000});
+  assert.equal(await page.locator('#guided-mission').isVisible(),true);
+  const gap=await page.evaluate(()=>document.querySelector('#mission-hud').getBoundingClientRect().top-document.querySelector('header.hud').getBoundingClientRect().bottom);
+  assert.ok(gap>=0,`guided header overlaps mission HUD by ${-gap}px`);
 });

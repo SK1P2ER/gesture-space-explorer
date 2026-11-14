@@ -12,6 +12,34 @@ const step = (rig: CameraRig, seconds: number, target: () => THREE.Vector3) => {
 const looksAt = (rig: CameraRig, p: THREE.Vector3) =>
   rig.camera.getWorldDirection(new THREE.Vector3()).dot(p.clone().sub(rig.camera.position).normalize());
 
+describe('landing viewport framing', () => {
+  it.each([16 / 9, 9 / 19.5])('keeps the original scene inside the free view without moving the landing camera (%s)', (aspect) => {
+    const rig = new CameraRig(aspect);
+    const camera = rig.camera;
+    camera.position.set(0, 4, 12);
+    camera.lookAt(0, 0, 0);
+    camera.updateMatrixWorld();
+    const original = camera.clone();
+    const points = [-0.95, 0.95].flatMap(x => [-0.95, 0.95].map(y => new THREE.Vector3(x, y, 0).unproject(original)));
+    const insets = { top: 0.1, right: 0.28, bottom: 0.32, left: 0.12 };
+    rig.setInsets(insets);
+    rig.applyLandingInsets();
+    for (const world of points) {
+      const p = world.clone().project(camera);
+      expect(p.x).toBeGreaterThan(-1 + 2 * insets.left);
+      expect(p.x).toBeLessThan(1 - 2 * insets.right);
+      expect(p.y).toBeGreaterThan(-1 + 2 * insets.bottom);
+      expect(p.y).toBeLessThan(1 - 2 * insets.top);
+    }
+    expect(camera.position.equals(original.position)).toBe(true);
+    expect(camera.quaternion.equals(original.quaternion)).toBe(true);
+    expect(camera.zoom).toBe(original.zoom);
+    expect(camera.fov).toBe(original.fov);
+    camera.clearViewOffset();
+    expect(camera.projectionMatrix.elements).toEqual(original.projectionMatrix.elements);
+  });
+});
+
 function setup() {
   const rig = new CameraRig(16 / 9);
   rig.setSystemRadius(100);

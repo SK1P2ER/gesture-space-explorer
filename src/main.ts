@@ -1,7 +1,10 @@
+import { GuidedMission } from './app/guidedMission';
 // Wiring and the frame loop. What the app does lives in src/app/: the mode
 // machine (modes.ts), intent handling (intentHandler.ts), photos, tracking,
 // debug tools, settings and the phone info sheet.
 import * as THREE from 'three';
+import { initNativeNormalMap } from './native/normalMap';
+import { frameSeconds } from './app/frameLoop';
 import { createIntentHandler } from './app/intentHandler';
 import { Mission } from './app/mission';
 import { setupDebugTools } from './app/debugTools';
@@ -9,14 +12,22 @@ import { setupInfoSheet } from './app/infoSheet';
 import { modeForFocus, ModeMachine } from './app/modes';
 import { PhotoFlow } from './app/photoFlow';
 import { createState } from './app/state';
-import { resetIfAsked, storage } from './app/settings';
-import { startTracking, type TrackingDeps, type TrackingSession } from './app/tracking';
+import { storage,writeLanguage } from './app/settings';
+import {readCheckpoint,writeCheckpoint} from './app/checkpoint';
+import {ResumeMission} from './ui/resumeMission';
+import {JapanDetail} from './scene/japanDetail';
+import {LocalSpaceport} from './scene/localSpaceport';
+import {ActiveVehicle} from './ui/activeVehicle';
+import {JapanViewControls} from './ui/japanViewControls';
+import {landingTelemetry} from './sim/landingTelemetry';
+import {RuntimeMetrics} from './performance/runtimeMetrics';
+import { cameraEvents } from './performance/cameraEvents';
+import type { DiagnosticsContext } from './performance/diagnostics';
+import { startTracking, type TrackingDeps } from './app/tracking';
 import { attachPageLifecycle } from './app/pageLifecycle';
-import { runFrame, type FramePhases } from './app/frameLoop';
-import { boardClock, journeyOngoing, restoreClock, type Journey, type SavedTime } from './app/journey';
 import { config } from './config';
 import { BODIES, reachFactor } from './data/bodies';
-import { BASES, baseById } from './data/bases';
+import { BASES, baseById, baseOn } from './data/bases';
 import { GestureEngine } from './gestures/engine';
 import { ExtraGestures } from './gestures/extras';
 import { attachKeyboardAndMouse } from './input/keyboard';
@@ -28,8 +39,8 @@ import {
   ResolutionGovernor, saveQuality, UltraGuard, writeAutoMemory, type Quality, type QualitySetting,
 } from './quality';
 import { CameraRig } from './scene/cameraRig';
-import type { CinematicContext, CinematicRequest, MarsCinematicDirector } from './scene/marsCinematicDirector';
-import type { CinematicControls } from './ui/cinematicControls';
+import { MarsCinematicDirector, type CinematicContext, type CinematicRequest } from './scene/marsCinematicDirector';
+import { CinematicControls } from './ui/cinematicControls';
 import { pickBody } from './scene/picking';
 import { ScenePipeline } from './scene/postprocessing';
 import { SolarSystem } from './scene/solarSystem';
@@ -41,31 +52,34 @@ import { GestureHud } from './ui/gestureHud';
 import { Hud } from './ui/hud';
 import { t, tf } from './ui/i18n';
 import { PlanetLabels } from './ui/labels';
-import { canShareFile, download, snapshot, toPng } from './ui/photo';
 import { Recorder } from './ui/recorder';
 import { TimeBar } from './ui/timeBar';
 import { TimeDialOverlay } from './ui/timeDial';
 import { WeightPanel } from './ui/weightPanel';
 import { BasePanel } from './ui/basePanel';
+import { SpaceportEntry } from './ui/spaceportEntry';
 import { MissionOverlay } from './ui/missionOverlay';
 import { LAYOUTS, Showcases } from './scene/baseKit/showcases';
 import { Build } from './app/build';
-import type { BuildPanel } from './ui/buildPanel';
-import type { BuildGrab } from './gestures/buildGrab';
+import { BuildPanel } from './ui/buildPanel';
+import { BuildGrab } from './gestures/buildGrab';
 import { CELL } from './sim/buildRules';
 import { skyOver, type SkyReport } from './app/baseSky';
 import { nextSetting } from './sim/localSky';
 import { SKY_MOONS } from './data/skyMoons';
 import { SkyLabels } from './ui/skyLabels';
 import { ChromeUi } from './ui/chrome';
+import { CleanView } from './ui/cleanView';
+import './ui/experience.css';
 import { MissionHud, type MapView } from './ui/missionHud';
 import { PassportPanel } from './ui/passportPanel';
 import { CountdownGesture } from './gestures/countdown';
 
-// ?reset (user tests): a first visit. Before anything reads what was saved (app/settings.ts).
-const unreset = resetIfAsked(location.search, storage);
-if (unreset !== null) history.replaceState(history.state, '', `${location.pathname}${unreset}${location.hash}`);
 const state = createState();
+const runtimeMetrics=new RuntimeMetrics();
+// Compile the tiny C++ texture kernel asynchronously; the JS path remains ready
+// immediately, including browsers where WebAssembly or the request is blocked.
+void initNativeNormalMap();
 const modes = new ModeMachine();
 
 // ---------------------------------------------------------------- scene ----
@@ -92,6 +106,9 @@ renderer.toneMappingExposure = config.render.exposure;
 renderer.debug.checkShaderErrors = import.meta.env.DEV;
 
 const system = new SolarSystem(BODIES, renderer, PROFILES[state.quality]);
+const japanBase=system.bases.find(b=>b.base.id==='cape')!;
+const japanDetail=new JapanDetail(japanBase);
+const activeVehicle=new ActiveVehicle();
 // The shown date: starts now, at a week per second (see sim/clock.ts).
 const clock = new SimClock(Date.now());
 const rig = new CameraRig(innerWidth / innerHeight);
@@ -201,24 +218,35 @@ canvas.addEventListener('pointermove', (e) => {
 
 /** The body under the mouse or a tap (client pixels): planets, and the moons of the system in focus. */
 function pickAt(x: number, y: number) {
+  if(localSpaceport.active)return null;
   return pickBody(system.nodes, rig.camera, { x: x / innerWidth, y: y / innerHeight }, innerWidth, innerHeight, 12, mission.pickFilter() ?? pickable(BODIES[state.focus]));
 }
 
+const spaceport = new SpaceportEntry();
+const localSpaceport=new LocalSpaceport((x,y)=>bus.emit({type:'steer',x,y}));
+photo.captureCanvas=()=>localSpaceport.canvas??canvas;
+photo.captureSubject=()=>localSpaceport.active?{id:'tanegashima-spaceport',name:{en:'Japan spaceport',my:'ဂျပန်အာကာသစခန်း',ja:'日本の宇宙港'}[state.lang]}:state.focus===0?{id:'solar-system',name:t('solarSystem',state.lang)}:{id:BODIES[state.focus].id,name:BODIES[state.focus].name[state.lang]};
 const mission = new Mission({
-  state, modes, rig, clock, bases: system.bases, scene: system.scene, setFocus,
+  state, modes, rig, clock, bases: system.bases, bodies: system.nodes, scene: system.scene, setFocus,
   flash: (text) => gestureHud.flash(text),
   reducedMotion: () => reducedMotion.matches,
   goldenHour: (node) => {
     const ms = nextSetting(node.body.body, node.base.lat, node.base.lon, clock.time);
     return ms === null ? null : { ms, sun: skyOver(node, ms).local.sun };
   },
-  rocketOptions: () => ({ engines: 5, textureSize: PROFILES[state.quality].kitTexture, quality: state.quality === 'low' ? 'low' : 'high' }),
+  rocketOptions: () => ({ engines: 5, textureSize: PROFILES[state.quality].kitTexture, quality: state.quality === 'low' ? 'low' : 'high', design: 'shuttle' }),
+  presentLaunch: (destination, complete, cancel) => {
+    spaceport.render(state.lang, state.quality === 'low', reducedMotion.matches);
+    return spaceport.startLaunch(destination.base.name[state.lang], complete, cancel);
+  },
   report: (message) => overlay.report(message),
-  // AstroLife counts a booked journey's lift-off and landing (only with ?flags=astrolife).
-  liftedOff: (from, to) => shell?.liftedOff(from, to),
-  landed: (baseId) => shell?.landed(baseId),
 });
 const basePanel = new BasePanel(bus.emit);
+/** Set while the saved-mission offer is unanswered: true refuses an intent that would start, redirect or replace a journey. */
+let missionLocked:((intent:Intent)=>boolean)|null=null;
+const japanViewControls=new JapanViewControls(()=>{if(mission.base?.base.id!=='cape'){if(missionLocked?.({type:'enterBase',baseId:'cape'}))return;mission.enter('cape');}localSpaceport.enter();},()=>localSpaceport.map(),()=>localSpaceport.active?localSpaceport.reset():mission.resetJapanView());
+spaceport.root.prepend(japanViewControls.root);
+if (import.meta.env.DEV) Object.assign((window as unknown as { __app: object }).__app, { spaceport,japanDetail,localSpaceport,runtimeMetrics,state });
 const missionOverlay = new MissionOverlay(bus.emit);
 const missionHud = new MissionHud();
 const showcases = new Showcases(system.bases);
@@ -243,21 +271,14 @@ const skyLabels = new SkyLabels();
 
 // ------------------------------------------------------------ building (?flags=build) ----
 const FLAGS = new Set((new URLSearchParams(location.search).get('flags') ?? '').split(',').filter(Boolean));
-// Code that only a ?flags= feature uses loads only with its flag (v2.5): visitors never download it.
-// Without the flag, a stand-in does what the real object does until that feature is used: nothing.
-// (Without a flag nothing is awaited: startup runs straight through, as before.)
-const [cinematicCode, buildCode, shellCode] = FLAGS.has('cinematic') || FLAGS.has('build') || FLAGS.has('astrolife') ? await Promise.all([
-  FLAGS.has('cinematic') ? Promise.all([import('./scene/marsCinematicDirector'), import('./ui/cinematicControls')]) : null,
-  FLAGS.has('build') ? Promise.all([import('./ui/buildPanel'), import('./gestures/buildGrab')]) : null,
-  FLAGS.has('astrolife') ? import('./shell/shell') : null,
-]) : [null, null, null];
-type Director = Pick<MarsCinematicDirector, 'active' | 'animating' | 'selected' | 'eye' | 'validate' | 'start' | 'update' | 'cancel' | 'dispose'>;
-/** Never started, so never active: what the real director is without ?flags=cinematic. */
-const idleDirector: Director = {
-  active: false, animating: false, selected: null, eye: new THREE.Vector3(),
-  validate() {}, start: () => false, update: () => false, cancel() {}, dispose() {},
-};
-const cinematic: Director = cinematicCode ? new cinematicCode[0].MarsCinematicDirector(rig.camera) : idleDirector;
+// Both flags are required; the normal Explorer and bare / retain their controls.
+const guided = FLAGS.has('astrolife') && FLAGS.has('guided') ? new GuidedMission(bus.emit, () => ({
+  mode:modes.mode, base:mission.base?.base.id ?? null, lang:state.lang,
+  blocked:checkpointPending || spaceport.active || state.menuOpen || state.passportOpen || state.weightOpen || !!document.querySelector('dialog[open]'),
+  sensitivity:state.steerSensitivity,
+})) : null;
+if (import.meta.env.DEV) Object.assign((window as unknown as {__app:object}).__app, {guided});
+const cinematic = new MarsCinematicDirector(rig.camera);
 let cinematicRequest: CinematicRequest | null = null;
 const cinematicContext = (): CinematicContext | null => {
   const base = mission.base, owner = showcases.get('jezero'), landing = showcases.landingAt('jezero');
@@ -265,15 +286,13 @@ const cinematicContext = (): CinematicContext | null => {
     ? { base, owner, landing, mode: modes.mode, horizon: !!mission.horizon, quality: state.quality } : null;
 };
 const cancelCinematic = () => { cinematicRequest = null; cinematic.cancel(); };
-/** Without the flag the panel is never shown (cinematicAvailable), so it needn't exist. */
-const noControls: Pick<CinematicControls, 'root' | 'render' | 'dispose'> = { root: document.createElement('details'), render() {}, dispose() {} };
-const cinematicControls = cinematicCode ? new cinematicCode[1].CinematicControls((request) => {
+const cinematicControls = new CinematicControls((request) => {
   if (!FLAGS.has('cinematic') || !cinematicContext()) return;
   cancelCinematic();
   if (request === 'panorama') mission.goToGoldenHour();
   else if (mission.horizon) mission.exitHorizon();
   cinematicRequest = request;
-}, cancelCinematic) : noControls;
+}, cancelCinematic);
 mission.baseCamera = (dt) => {
   const owned = cinematic.update(dt, reducedMotion.matches, clock.paused, rig.viewInsets);
   if (owned && mission.horizon) mission.horizonEye.copy(cinematic.eye);
@@ -281,11 +300,11 @@ mission.baseCamera = (dt) => {
 };
 if (import.meta.env.DEV) Object.assign((window as unknown as { __app: object }).__app, { cinematic });
 attachPageLifecycle({
-  suspend: cancelCinematic,
+  suspend: () => { saveCheckpoint();cancelCinematic(); spaceport.close(); },
   // Keep the controls/listeners, but resume in manual mode rather than restoring a stale camera lease.
-  // TrackingSession stops on every pagehide; pageshow deliberately never reopens the camera.
+  // TrackingSession stops on every pagehide and whenever the page is hidden; pageshow deliberately never reopens the camera.
   resume: cancelCinematic,
-  dispose: () => { cancelCinematic(); cinematic.dispose(); cinematicControls.dispose(); },
+  dispose: () => { guided?.dispose(); saveCheckpoint();localSpaceport.dispose();japanViewControls.dispose();japanDetail.dispose();cancelCinematic(); cinematic.dispose(); cinematicControls.dispose(); spaceport.dispose(); },
 });
 showcases.operationsEnabled = FLAGS.has('operations');
 showcases.operationsAt = (id) => {
@@ -324,8 +343,7 @@ const build = new Build({
   flash: (text) => gestureHud.flash(text),
   enabled: FLAGS.has('build'),
 });
-// Without ?flags=build, Build mode can't start: its panel stays hidden and nothing is ever grabbed.
-const buildPanel: Pick<BuildPanel, 'render'> = buildCode ? new buildCode[0].BuildPanel(bus.emit) : { render() {} };
+const buildPanel = new BuildPanel(bus.emit);
 // The panel's size frames the Build camera. Observed rather than measured in the loop, where reading
 // it straight after the panels' DOM writes forced a synchronous layout every frame.
 let buildPanelSize = { width: 0, height: 0 };
@@ -334,7 +352,7 @@ new ResizeObserver(([entry]) => {
   buildPanelSize = { width: box.inlineSize, height: box.blockSize };
 }).observe(document.querySelector('#build-panel')!);
 const coarsePointer = matchMedia('(pointer: coarse)');
-const buildGrab: Pick<BuildGrab, 'update' | 'reset'> = buildCode ? new buildCode[1].BuildGrab() : { update: () => [], reset() {} };
+const buildGrab = new BuildGrab();
 showcases.buildAt = (id) => {
   const site = buildSite();
   if (!site || site.id !== id) return null;
@@ -374,11 +392,28 @@ canvas.addEventListener('pointermove', (e) => {
   if (build.active && e.pointerType === 'mouse' && !e.buttons) bus.emit({ type: 'buildCursor', ...screen(e.clientX, e.clientY) });
 });
 const chrome = new ChromeUi(bus.emit, rig, state);
+const cleanView = new CleanView(bus.emit, (active) => {
+  system.setCleanView(active);
+  if (active) rig.setInsets({ top: 0, right: 0, bottom: 0, left: 0 });
+});
+const header = document.querySelector<HTMLElement>('header.hud')!;
+const updateHeaderSize = () => document.documentElement.style.setProperty('--header-bottom', `${Math.ceil(header.getBoundingClientRect().bottom)}px`);
+new ResizeObserver(updateHeaderSize).observe(header);
+addEventListener('resize', updateHeaderSize);
 bus.on(() => chrome.input()); // any intent (a gesture too) wakes the UI
 const passportPanel = new PassportPanel(bus.emit);
 const countdownGesture = new CountdownGesture();
 bus.on(createIntentHandler({ state, modes, rig, clock, overlay, gestureHud, photo, mission, build, setFocus,
   beforeMission: (intent) => {
+    if (missionLocked?.(intent)) return true;
+    if (guided?.intercept(intent)) return true;
+    if (spaceport.active) return true;
+    if(localSpaceport.active) {
+      if(intent.type==='select'&&intent.bodyId)return true;
+      if((modes.mode==='baseView'||modes.mode==='launch')&&intent.type==='rotate'){localSpaceport.rotate(intent.dx,intent.dy);return true;}
+      if((modes.mode==='baseView'||modes.mode==='launch')&&intent.type==='zoom'){localSpaceport.zoom(intent.factor);return true;}
+      if(modes.mode==='baseView'&&intent.type==='dismiss'&&!state.menuOpen&&!state.passportOpen&&!state.weightOpen){localSpaceport.map();return true;}
+    }
     if (!cinematic.active && !cinematicRequest) return false;
     if (intent.type === 'dismiss' && (state.menuOpen || state.passportOpen || state.weightOpen)) return false;
     const release: readonly Intent['type'][] = ['rotate', 'zoom', 'dismiss', 'next', 'prev', 'nextMoon', 'select',
@@ -415,6 +450,34 @@ attachKeyboardAndMouse(canvas, bus, config, pickAt, buildPointer);
 const debugUrl = new URLSearchParams(location.search).has('debug');
 document.querySelector('#version')!.textContent = `v${__APP_VERSION__}`;
 
+// ?debug → 🩺 Diagnostics, beside Copy report. The panel and its recorder load when first opened, and nothing is
+// recorded until Start. Without ?debug there is no button and no diagnostics code is fetched.
+interface DiagnosticsHooks { frame(t: number, context: () => DiagnosticsContext): void; timing(t: number, detectMs: number, processingMs: number): void }
+let diagnostics: DiagnosticsHooks | null = null;
+if (debugUrl) {
+  const copy = document.querySelector<HTMLButtonElement>('#preview .debug-copy')!;
+  const toggle = Object.assign(document.createElement('button'), { type: 'button', className: 'debug-action', id: 'diagnostics-toggle', textContent: '🩺 Diagnostics' });
+  toggle.hidden = copy.hidden;
+  copy.after(toggle);
+  const entryChunk = new URL(import.meta.url).pathname.split('/').pop() || null; // this module is the entry chunk
+  toggle.addEventListener('click', () => {
+    toggle.blur(); // keep Space / Enter for the scene
+    void import('./ui/diagnosticsPanel').then(({ toggleDiagnostics }) => toggleDiagnostics({ appVersion: __APP_VERSION__, entryChunk, setHooks: (hooks) => { diagnostics = hooks; } }));
+  });
+}
+const loadingPill = document.querySelector<HTMLElement>('#loading');
+/** What a diagnostics segment is keyed by; read only while a session is recording. */
+function diagnosticsContext(): DiagnosticsContext {
+  return {
+    mode: modes.mode, spaceport: localSpaceport.active,
+    phase: mission.countdown ? 'countdown' : mission.horizon ? 'horizon' : 'none',
+    camera: state.status.kind, tier: state.quality,
+    renderScale: localSpaceport.active ? Math.max(.6, governor.scale) : governor.scale,
+    pixelRatio: (localSpaceport.renderer ?? renderer).getPixelRatio(),
+    loading: loadingPill ? !loadingPill.hidden : false,
+  };
+}
+
 const credits = new CreditsDialog();
 document.querySelector('#credits-link')!.addEventListener('click', (e) => {
   e.preventDefault();
@@ -441,11 +504,15 @@ function gestureMessage(intent: Intent): string | null {
 }
 const trackingDeps: TrackingDeps = {
   state, bus, gestures, extras, overlay, recorder, gestureHud, gestureMessage,
+  timing:(...values)=>{runtimeMetrics.tracking(...values);diagnostics?.timing(values[0],values[1],values[2]);},
+  // A count or a 👍 held when the camera stopped must be made again in the next session.
+  stopped: () => { countdownGesture.reset(); guided?.cameraStopped(); },
   frameMode: () => modes.mode,
   // In Build mode the pinch grabs modules: the engine's pinch-zoom is dropped there.
-  keep: (i) => !(modes.mode === 'build' && i.type === 'zoom'),
+  keep: (i) => guided?.session.active ? guided.session.stage==='exploring' && (i.type==='rotate'||i.type==='zoom') : !(modes.mode === 'build' && i.type === 'zoom'),
   // The launch countdown only listens at a base.
   more: (t) => {
+    if(guided?.session.active) { guided.observe(t,gestures.lastObs); countdownGesture.reset(); return []; }
     if (modes.mode === 'build') {
       const o = gestures.lastObs;
       return buildGrab.update(t, o && o.pose === 'pinch' ? o.pinchPoint : null);
@@ -458,12 +525,13 @@ const trackingDeps: TrackingDeps = {
     return modes.mode === 'baseView' || modes.mode === 'launch' ? countdownGesture.update(t, gestures.lastObs?.fingers ?? null) : (countdownGesture.reset(), []);
   },
 };
-/** The session in use, so the AstroLife shell can stop it. Started below, with the explorer. */
-let tracking: TrackingSession | null = null;
-const startHandTracking = () => { tracking = startTracking(trackingDeps); };
+startTracking(trackingDeps);
 // 🖐 Turn on hand control: a new session replaces whatever stopped (it never reopens the camera by itself).
 bus.on((intent) => {
-  if (intent.type === 'restartTracking' && !['loading', 'tracking'].includes(state.status.kind)) startHandTracking();
+  if (intent.type !== 'restartTracking') return;
+  const accepted = !['loading', 'tracking'].includes(state.status.kind);
+  cameraEvents.emit({ type: 'restart-requested', accepted }); // for the debug diagnostics only
+  if (accepted) startTracking(trackingDeps);
 });
 
 // The mission HUD's map: the planets where they are now, the bases' worlds marked, the rocket and its route.
@@ -501,70 +569,68 @@ const link = parseDeepLink(location.search, {
   range: [MIN_TIME, MAX_TIME],
 });
 if (link.lang) state.lang = link.lang;
+const savedMission=readCheckpoint(storage);
+let checkpointPending=!!savedMission&&(!link.base||link.base===savedMission.baseId);
+let resumeOffer:ResumeMission|null=null;
+let checkpointAt=0;
+if(checkpointPending&&savedMission) {
+  resumeOffer=new ResumeMission(savedMission,resume=>{
+    checkpointPending=false;resumeOffer=null;missionLocked=null;
+    if(resume){pendingLink=false;mission.resume(savedMission);localSpaceport.restore(savedMission.view??'globe');}
+    else {writeCheckpoint(storage,null);guided?.discard();pendingLink=link.body!==undefined;}
+    saveCheckpoint();
+  });
+  // Until the offer is answered, nothing may start a different journey: checkpoints are not saved meanwhile,
+  // and Continue would restore the old mission over it. Viewing, camera and settings stay free.
+  const journey:readonly Intent['type'][]=['chooseDestination','launch','countdown','select','next','prev'];
+  /** The base this intent would go down to, resolved the way Mission.handle does in each mode. */
+  const entering=(intent:Intent,atBase:boolean)=>{
+    if(intent.type==='enterBase')return intent.baseId??(atBase?undefined:baseOn(BODIES[state.focus].id)?.id);
+    // Away from a base, selecting the body whose card is already open goes down to its base.
+    if(intent.type==='select'&&intent.bodyId&&!atBase&&state.selected?.id===intent.bodyId)return baseOn(intent.bodyId)?.id;
+    return undefined;
+  };
+  missionLocked=(intent)=>{
+    const atBase=modes.mode==='baseView'||modes.mode==='launch'||modes.mode==='build';
+    const target=entering(intent,atBase);
+    const refused=target!==undefined ? target!==savedMission.baseId
+      : intent.type==='toggleBuild'||(atBase&&journey.includes(intent.type));
+    if(refused)resumeOffer?.remind(state.lang);
+    return refused;
+  };
+}
+// No checkpoint is offered on this load (none saved, or the link names another base): a restored guided
+// journey has no native mission to continue, so it starts over before the link applies.
+else guided?.discard();
+function saveCheckpoint(){if(!checkpointPending){const snapshot=mission.checkpoint();if(snapshot){snapshot.view=localSpaceport.requested?'spaceport':'globe';writeCheckpoint(storage,snapshot);}writeLanguage(state.lang);}}
+document.addEventListener('visibilitychange',()=>{if(document.hidden)saveCheckpoint();});
 if (link.time !== undefined) {
   clock.jumpTo(link.time);
   clock.paused = true; // a shared moment stays put until Space or the time bar
 }
 /** The body, base and view need the planets where the date puts them: applied on the first frame. */
-let pendingLink = link.body !== undefined;
+let pendingLink = link.body !== undefined && !(checkpointPending && savedMission?.phase!=='base');
 function applyLink() {
   setFocus(BODIES.findIndex((b) => b.id === link.body), true); // a link cuts there: no fly-in
   if (link.base) bus.emit({ type: 'enterBase', baseId: link.base });
+  if(link.base==='cape'&&new URLSearchParams(location.search).get('site')==='ground')localSpaceport.enter();
   if (link.view === 'horizon') bus.emit({ type: 'toggleHorizon' });
 }
 /** The address bar follows the view, quietly (replaceState: Back isn't filled with views). */
 let addressKey = '';
 function followAddress() {
-  // Under the AstroLife shell the scene is only a backdrop: the address names no view, so a reload opens the shell again.
-  const view = shell?.isOpen ? { body: 'sun', base: null, horizon: false, lang: state.lang }
-    : { body: BODIES[state.focus].id, base: mission.base?.base.id ?? null, horizon: mission.horizon !== null, lang: state.lang };
+  if(checkpointPending)return;
+  const view = { body: BODIES[state.focus].id, base: mission.base?.base.id ?? null, horizon: mission.horizon !== null, lang: state.lang };
   const keepDate = link.time !== undefined && clock.paused && clock.time === link.time;
-  const key = `${view.body}|${view.base}|${view.horizon}|${view.lang}|${keepDate}`;
+  const ground=localSpaceport.requested&&mission.base?.base.id==='cape';
+  const key = `${view.body}|${view.base}|${view.horizon}|${view.lang}|${keepDate}|${ground}`;
   if (key === addressKey) return;
   addressKey = key;
-  const search = linkSearch(location.search, view, keepDate);
+  const query=new URLSearchParams(linkSearch(location.search, view, keepDate));
+  if(ground)query.set('site','ground');else query.delete('site');
+  const search=query.size?`?${query}`:'';
   if (search !== location.search) history.replaceState(history.state, '', `${location.pathname}${search}${location.hash}`);
 }
-
-// ------------------------------------------------- AstroLife 2126 (?flags=astrolife, decision 21) ----
-// The shell opens first, over the scene (a link to a view opens that view instead). The camera is
-// asked for only when the explorer opens, and stopped again whenever the shell takes the screen.
-const shell = shellCode ? new shellCode.Shell({
-  lang: () => state.lang,
-  emit: bus.emit,
-  canLeave: () => modes.mode === 'solarView' || modes.mode === 'focus' || (modes.mode === 'baseView' && !mission.countdown),
-  storage,
-  cover(open) {
-    document.body.classList.toggle('shell-open', open);
-    if (!open) {
-      startHandTracking();
-      return;
-    }
-    tracking?.dispose('handControlPaused');
-    tracking = null;
-    state.selected = null;
-    state.menuOpen = state.passportOpen = state.weightOpen = false;
-    if (mission.base) mission.leave();
-  },
-  show(bodyId) {
-    const index = BODIES.findIndex((b) => b.id === bodyId);
-    if (index >= 0 && index !== state.focus) setFocus(index);
-  },
-  journey({ from, to, at }) {
-    journey = { from, to, saved: boardClock(clock, at) };
-    bus.emit({ type: 'enterBase', baseId: from });
-    bus.emit({ type: 'chooseDestination', baseId: to });
-  },
-  flash: (text) => gestureHud.flash(text),
-  capture: () => new Promise((resolve) => { sceneCopy = resolve; }),
-  files: { png: toPng, download, canShare: canShareFile },
-}) : null;
-/** A copy of the next rendered frame is wanted (an AstroLife postcard): taken right after it's drawn, like a photo. */
-let sceneCopy: ((copy: HTMLCanvasElement) => void) | null = null;
-/** A booked journey under way in the explorer, and the clock as it was before boarding (app/journey.ts). */
-let journey: (Journey & { saved: SavedTime }) | null = null;
-if (shell && !pendingLink) shell.open();
-else startHandTracking();
 
 /** Auto changes tier only where a rebuild can't interrupt anything: the overview, a body, a base at rest. */
 function canSwitchTier() {
@@ -573,200 +639,210 @@ function canSwitchTier() {
   return modes.mode === 'baseView' && !mission.horizon && !mission.countdown && !cinematic.active && !cinematicRequest;
 }
 
-/** What one frame's phases share (one object, reused: nothing is allocated per frame). */
-const frame = { now: 0, dt: 0, cpuStart: 0, view: null as ReturnType<Mission['update']> };
-/** The sky over a base at this frame's time (local time, the Sun, Phobos, Deimos, Earth), once per frame. */
-const skyFor = (id: string) => {
-  if (!skies.has(id)) skies.set(id, skyOver(system.bases.find((b) => b.base.id === id)!, clock.time));
-  return skies.get(id)!;
-};
-
-// The frame loop, in named phases (app/frameLoop.ts fixes their order).
-const phases: FramePhases = {
-  start(now) {
-    frame.now = now;
-    frame.cpuStart = performance.now();
-    // Ultra that can't keep up gives way to High (once; choosing Ultra again re-arms it).
-    if (ultraGuard.frame(now - lastNow, state.quality)) {
-      setQualitySetting('high');
-      gestureHud.flash(t('ultraTooSlow', state.lang));
-    }
-    if (governor.frame(now - lastNow)) resize();
-    const autoSwitch = autoTier?.frame(now - lastNow, lastCpuMs, governor.targetMs, canSwitchTier());
-    if (autoSwitch && autoSwitch !== state.quality) setQuality(autoSwitch);
-    frame.dt = Math.min((now - lastNow) / 1000, 0.1); // avoid jumps after tab switches
+renderer.setAnimationLoop((now) => {
+  const cpuStart = performance.now();
+  if (spaceport.active) {
+    // The mission clock and auto-tier pause while exploring or presenting launch.
+    const dt = frameSeconds(now - lastNow);
     lastNow = now;
-  },
-
-  simulateWorld() {
-    if (clock.advance(frame.dt)) gestureHud.flash(t('timeLimit', state.lang));
-    system.update(clock.time, clock.effectiveRate, frame.dt);
-  },
-
-  applyInput() {
-    if (pendingLink) {
-      pendingLink = false;
-      applyLink();
+    spaceport.update(dt, reducedMotion.matches);
+    if (spaceport.active) {
+      lastCpuMs = performance.now() - cpuStart;
+      return;
     }
-    cinematic.validate(cinematicContext());
-    if ((cinematic.active || cinematicRequest) && [...document.querySelectorAll<HTMLElement>('dialog[open], [role="dialog"][aria-modal="true"], #weight-panel:not([hidden]), #passport-panel:not([hidden]), #photo-toast:not([hidden])')]
-      .some((panel) => !panel.hidden && panel.getClientRects().length > 0 && getComputedStyle(panel).visibility !== 'hidden')) cancelCinematic();
-  },
+    // Completion can close the presentation during update. Render its mission
+    // handoff now, rather than exposing the old pad frame for one screen refresh.
+  }
+  // Ultra that can't keep up gives way to High (once; choosing Ultra again re-arms it).
+  if (ultraGuard.frame(now - lastNow, state.quality)) {
+    setQualitySetting('high');
+    gestureHud.flash(t('ultraTooSlow', state.lang));
+  }
+  if (governor.frame(now - lastNow)) resize();
+  const autoSwitch = autoTier?.frame(now - lastNow, lastCpuMs, governor.targetMs, canSwitchTier());
+  if (autoSwitch && autoSwitch !== state.quality) setQuality(autoSwitch);
+  const dt = frameSeconds(now - lastNow);
+  lastNow = now;
+  if (clock.advance(dt)) gestureHud.flash(t('timeLimit', state.lang));
+  system.update(clock.time, clock.effectiveRate, dt);
+  if (pendingLink) {
+    pendingLink = false;
+    applyLink();
+  }
+  cinematic.validate(cinematicContext());
+  if ((cinematic.active || cinematicRequest) && [...document.querySelectorAll<HTMLElement>('dialog[open], [role="dialog"][aria-modal="true"], #weight-panel:not([hidden]), #passport-panel:not([hidden]), #photo-toast:not([hidden])')]
+    .some((panel) => !panel.hidden && panel.getClientRects().length > 0 && getComputedStyle(panel).visibility !== 'hidden')) cancelCinematic();
+  const holdLanding=modes.mode==='docking'&&mission.base?.base.id==='cape'&&localSpaceport.requested&&localSpaceport.status==='loading';
+  const view = mission.update(holdLanding?0:dt, rig.camera);
+  guided?.render();
+  const atJapan=mission.base?.base.id==='cape'&&['baseView','launch','docking'].includes(modes.mode);
+  localSpaceport.sync(atJapan,atJapan&&modes.mode==='docking',mission.trip?.to.base.id==='cape',state.quality==='low');
+  if(atJapan)for(const object of mission.baseRoots())object.visible=false;
+  // Showcase bases: built only while their world is in focus, or a rocket is on its way there.
+  // The sky over the bases in view (local time, the Sun, Phobos, Deimos, Earth), once per frame.
+  skies.clear();
+  const skyFor = (id: string) => {
+    if (!skies.has(id)) skies.set(id, skyOver(system.bases.find((b) => b.base.id === id)!, clock.time));
+    return skies.get(id)!;
+  };
+  showcases.trueScale = state.trueScale;
+  showcases.operationsPaused = clock.paused;
+  showcases.update(
+    (id) => mission.base?.base.id === id || mission.trip?.to.base.id === id || baseById(id).body === BODIES[state.focus].id,
+    state.quality === 'low' ? 'low' : 'high', now / 1000, rig.camera, reducedMotion.matches,
+    mission.horizon ? mission.base?.base.id ?? null : null,
+    (id) => skyFor(id).local,
+    mission.horizonEye,
+    renderer,
+  );
+  cinematic.validate(cinematicContext()); // rebuilds may have retired the owner in this frame
+  pipeline.baseOn = showcases.drawing;
+  // Pass 2 walks only the base's planet (whose surface holds the base) and the rocket with its dust.
+  pipeline.baseRoots = showcases.drawing && mission.base ? [system.nodes[BODIES.findIndex((b) => b.id === mission.base!.base.body)].pivot, ...mission.baseRoots()] : [];
+  if (view !== 'chase') {
+    rig.setTarget(view?.target ?? system.worldPosition(state.focus, focusPos));
+    rig.update(dt);
+  } else if (!cinematic.active) {
+    if (modes.mode === 'docking' && !cleanView.active) {
+      // The landing camera still follows the same rocket and pad. Reserve the
+      // controls' measured space, including expanded Help, just as the orbit view does.
+      rig.applyLandingInsets();
+    } else if (rig.camera.view?.enabled) {
+      rig.camera.clearViewOffset();
+    }
+  }
+  if(atJapan&&modes.mode==='baseView') {
+    const insets=rig.viewInsets;
+    rig.camera.setViewOffset(innerWidth,innerHeight,(insets.right-insets.left)*innerWidth/2,(insets.bottom-insets.top)*innerHeight/2,innerWidth,innerHeight);
+  }
+  if (cinematicRequest) {
+    const context = cinematicContext();
+    if (context) cinematic.start(cinematicRequest, context, reducedMotion.matches);
+    cinematicRequest = null;
+  }
+  system.setHorizon(mission.horizon ? state.focus : null);
+  if(atJapan&&!localSpaceport.active)mission.japanMapCamera(rig.camera);
+  const japanNight=atJapan?skyFor('cape').local.night:0;
+  japanDetail.update();
+  const siteView=localSpaceport.active?'ground':atJapan?'globe':'none';
+  if(canvas.dataset.siteView!==siteView)canvas.dataset.siteView=siteView;
+  if(canvas.dataset.siteDetail!==localSpaceport.status)canvas.dataset.siteDetail=localSpaceport.status;
+  document.body.classList.toggle('local-spaceport-view',localSpaceport.active);
+  document.body.classList.toggle('horizon', mission.horizon !== null);
+  system.updateView(rig.camera, state.focus, { height: innerHeight, pixelRatio: fullPixelRatio() }, dt, rig.zoomDistance, state.trueScale,atJapan);
+  showcases.syncMaps(); // updateView can finish a fade and close the previously borrowed image.
+  // A photo gets every pixel the tier allows; auto-quality measures afresh afterwards.
+  if (photo.pending && governor.scale < 1) {
+    governor.reset();
+    resize();
+  }
+  if (overlay.enabled) {
+    const target = governor.targetMs;
+    overlay.resolutionInfo = `${Math.round((localSpaceport.active?Math.max(.6,governor.scale):governor.scale) * 100)}% · ${(localSpaceport.renderer??renderer).getPixelRatio().toFixed(2)}x · holds ${target ? Math.round(1000 / target) : '—'} fps`;
+    overlay.tierInfo = autoTier ? `Auto: ${autoTier.describe()}` : `${state.qualitySetting} (fixed)`;
+  }
+  debug.frameStats?.setContext((localSpaceport.renderer??renderer).getContext() as WebGL2RenderingContext);
+  debug.frameStats?.beginGpu();
+  pipeline.bloomEnabled=PROFILES[state.quality].bloom;pipeline.exposureScale=1;
+  if(localSpaceport.active&&atJapan) {
+    localSpaceport.render({phase:modes.mode as 'baseView'|'launch'|'docking',stacked:mission.vehicleStacked,docking:mission.dock?.state??null},holdLanding?0:dt,state.quality==='low',japanNight,rig.viewInsets,reducedMotion.matches,governor.scale);
+  }else pipeline.render();
+  activeVehicle.update(localSpaceport.vehicleObject,localSpaceport.camera??rig.camera,localSpaceport.active&&!spaceport.active,state.lang);
+  const earthMapVisible=atJapan||(modes.mode==='focus'&&BODIES[state.focus].id==='earth');
+  japanViewControls.update(japanBase.group,rig.camera,earthMapVisible&&!localSpaceport.active&&!spaceport.active);
+  showcases.afterRender();
+  debug.frameStats?.endGpu();
+  photo.afterRender();
+  labels.update(
+    system.nodes,
+    rig.camera,
+    (state.selected ?? BODIES[state.focus]).id,
+    gestures.ui.pointer ? gestures.ui.hoverId : mouseHoverId,
+    state.lang,
+  );
 
-  simulateMission() {
-    frame.view = mission.update(frame.dt, rig.camera);
-    // Left the journey for free roam (or the shell): the visitor's own date and speed come back.
-    if (journey && !journeyOngoing(modes.mode, mission.base?.base.id ?? null, journey)) {
-      restoreClock(clock, journey.saved);
-      journey = null;
-      shell?.journeyEnded();
-    }
-  },
-
-  updateScene() {
-    const { now, dt, view } = frame;
-    // Showcase bases: built only while their world is in focus, or a rocket is on its way there.
-    skies.clear();
-    showcases.trueScale = state.trueScale;
-    showcases.operationsPaused = clock.paused;
-    showcases.update(
-      (id) => mission.base?.base.id === id || mission.trip?.to.base.id === id || baseById(id).body === BODIES[state.focus].id,
-      state.quality === 'low' ? 'low' : 'high', now / 1000, rig.camera, reducedMotion.matches,
-      mission.horizon ? mission.base?.base.id ?? null : null,
-      (id) => skyFor(id).local,
-      mission.horizonEye,
-      renderer,
-    );
-    cinematic.validate(cinematicContext()); // rebuilds may have retired the owner in this frame
-    pipeline.baseOn = showcases.drawing;
-    // Pass 2 walks only the base's planet (whose surface holds the base) and the rocket with its dust.
-    pipeline.baseRoots = showcases.drawing && mission.base ? [system.nodes[BODIES.findIndex((b) => b.id === mission.base!.base.body)].pivot, ...mission.baseRoots()] : [];
-    if (view !== 'chase') {
-      rig.setTarget(view?.target ?? system.worldPosition(state.focus, focusPos));
-      rig.update(dt);
-    } else if (!cinematic.active && rig.camera.view?.enabled) {
-      rig.camera.clearViewOffset(); // the chase and landing cameras frame themselves
-    }
-    if (cinematicRequest) {
-      const context = cinematicContext();
-      if (context) cinematic.start(cinematicRequest, context, reducedMotion.matches);
-      cinematicRequest = null;
-    }
-    system.setHorizon(mission.horizon ? state.focus : null);
-    document.body.classList.toggle('horizon', mission.horizon !== null);
-    system.updateView(rig.camera, state.focus, { height: innerHeight, pixelRatio: fullPixelRatio() }, dt, rig.zoomDistance, state.trueScale);
-    showcases.syncMaps(); // updateView can finish a fade and close the previously borrowed image.
-    // A photo gets every pixel the tier allows; auto-quality measures afresh afterwards.
-    if (photo.pending && governor.scale < 1) {
-      governor.reset();
-      resize();
-    }
-  },
-
-  render() {
-    if (overlay.enabled) {
-      const target = governor.targetMs;
-      overlay.resolutionInfo = `${Math.round(governor.scale * 100)}% · ${renderer.getPixelRatio().toFixed(2)}x · holds ${target ? Math.round(1000 / target) : '—'} fps`;
-      overlay.tierInfo = autoTier ? `Auto: ${autoTier.describe()}` : `${state.qualitySetting} (fixed)`;
-    }
-    debug.frameStats?.beginGpu();
-    pipeline.render();
-    showcases.afterRender();
-    debug.frameStats?.endGpu();
-    photo.afterRender();
-    if (sceneCopy) {
-      const done = sceneCopy;
-      sceneCopy = null;
-      done(snapshot(canvas, null)); // same task as the render: the drawing buffer still holds this frame
-    }
-  },
-
-  updateUi() {
-    const { now } = frame;
-    labels.update(
-      system.nodes,
-      rig.camera,
-      (state.selected ?? BODIES[state.focus]).id,
-      gestures.ui.pointer ? gestures.ui.hoverId : mouseHoverId,
-      state.lang,
-    );
-
-    // Names in the horizon view's sky (after the camera has moved this frame).
-    const horizonSky = mission.horizon && mission.base ? showcases.sky(mission.base.base.id) : null;
-    skyLabels.render(
-      horizonSky
-        ? horizonSky.labelPoints().map(({ id, world }) => ({ id, world, text: (SKY_MOONS.find((m) => m.id === id)?.name ?? BODIES.find((b) => b.id === id)!.name)[state.lang] }))
-        : [],
-      rig.camera,
-    );
-    overlay.onRender(now);
-    debug.update();
-    gestureHud.render(gestures.ui, extras.ui, state.lang);
-    timeBar.render(clock, state.lang, state.timeBarOpen, now);
-    timeDial.render(extras.ui.dialActive, clock, state.lang);
-    credits.update(state.lang);
-    const hereSky = mission.base && (modes.mode === 'baseView' || mission.horizon) ? skyFor(mission.base.base.id) : null;
-    mission.setRocketNight(mission.base ? skyFor(mission.base.base.id).local.night : 0);
-    const cinematicAvailable = FLAGS.has('cinematic') && modes.mode === 'baseView' && mission.base?.base.id === 'jezero';
-    basePanel.render(modes.mode === 'baseView' && !mission.horizon ? mission.base?.base ?? null : null, state.lang, mission.destination?.base.id ?? null, hereSky, build.enabled,
-      cinematicAvailable ? cinematicControls.root : undefined);
-    cinematicControls.render(cinematicAvailable, !!mission.horizon, state.lang, cinematic.selected, cinematic.animating, reducedMotion.matches);
-    const buildStatus = build.active ? build.status() : null;
-    buildPanel.render(buildStatus && mission.base ? {
-      kind: build.kind, status: buildStatus, preview: build.preview(), best: state.baseLevels[mission.base.base.id] ?? 1,
-      canUndo: build.canUndo, canRedo: build.canRedo, dust: skyFor(mission.base.base.id).sol.dust,
-      touchHint: !state.buildHintSeen && coarsePointer.matches,
-    } : null, state.lang);
-    // Build camera: zoomed so a cell is at least ~44 px (52 with margin) in the free part of the screen.
-    if (build.active) {
-      const panel = buildPanelSize;
-      const sheet = panel.width > innerWidth * 0.9; // phones: a bottom sheet
-      const free = Math.min(sheet ? innerHeight - panel.height : innerHeight, sheet ? innerWidth : innerWidth - panel.width);
-      mission.buildFrame = THREE.MathUtils.clamp((CELL * free) / (4 * 52), 0.35, 1.4);
-    }
-    missionOverlay.render({
-      count: modes.mode === 'launch' ? mission.countdown?.count ?? null : null,
-      byHand: !(mission.countdown?.auto ?? true),
-      flyingTo: modes.mode === 'travel' ? mission.trip?.to.base.name[state.lang] ?? null : null,
-      horizon: mission.horizon && hereSky ? hereSky : null,
-      // Quantized so the overlay only rebuilds a few times a second.
-      docking: modes.mode === 'docking' && mission.dock
-        ? { altitude: Math.round((mission.dock.state.alt / mission.dock.startAlt) * 50) / 50, auto: mission.dock.auto || state.autoLand, sensitivity: state.steerSensitivity }
-        : null,
-    }, state.lang);
-    const readout = mission.readout();
-    missionHud.render(readout, readout && miniMap(), state.lang);
-    passportPanel.render(state.passportOpen, state.passport, state.lang, state.baseLevels);
-    weightPanel.render(state.weightOpen, state.weightKg, (state.selected ?? BODIES[state.focus]).id, state.lang);
-    hud.render({
-      lang: state.lang,
-      focused: BODIES[state.focus],
-      selected: state.selected,
-      status: state.status,
-      textures: system.textureStatus,
-      quality: state.quality,
-      qualitySetting: state.qualitySetting,
-      watermark: state.watermark,
-      trueScale: state.trueScale,
-      weightKg: state.weightKg,
-      timeMs: clock.time,
-    });
-    shell?.render();
-    followAddress();
-    // Idle eligibility must see this frame's panel visibility before deciding to fade.
-    chrome.update(now, modes.mode, gestures.ui.pointer !== null);
-  },
-
-  end() {
-    // Optional warm-up must not retain programs belonging to replaceable base or
-    // mission owners. Defer until navigation returns to the persistent scene.
-    if (prewarmPending && !showcases.hasEntries && (modes.mode === 'focus' || modes.mode === 'solarView')) {
-      prewarmPending = false; // coalesce rapid quality requests
-      void pipeline.prewarm();
-    }
-    lastCpuMs = performance.now() - frame.cpuStart;
-    debug.frameStats?.frame(frame.now, lastCpuMs);
-  },
-};
-
-renderer.setAnimationLoop((now) => runFrame(phases, now));
+  // Names in the horizon view's sky (after the camera has moved this frame).
+  const horizonSky = mission.horizon && mission.base ? showcases.sky(mission.base.base.id) : null;
+  skyLabels.render(
+    horizonSky
+      ? horizonSky.labelPoints().map(({ id, world }) => ({ id, world, text: (SKY_MOONS.find((m) => m.id === id)?.name ?? BODIES.find((b) => b.id === id)!.name)[state.lang] }))
+      : [],
+    rig.camera,
+  );
+  overlay.onRender(now);
+  debug.update();
+  gestureHud.render(guided?.session.active ? {...gestures.ui,action:null,pointer:null} : gestures.ui, guided?.session.active ? {...extras.ui,action:null} : extras.ui, state.lang);
+  timeBar.render(clock, state.lang, state.timeBarOpen, now);
+  timeDial.render(extras.ui.dialActive, clock, state.lang);
+  credits.update(state.lang);
+  const hereSky = mission.base && (modes.mode === 'baseView' || mission.horizon) ? skyFor(mission.base.base.id) : null;
+  mission.setRocketNight(mission.base ? skyFor(mission.base.base.id).local.night : 0);
+  const cinematicAvailable = FLAGS.has('cinematic') && modes.mode === 'baseView' && mission.base?.base.id === 'jezero';
+  const spaceportAvailable = modes.mode === 'baseView' && mission.base?.base.id === 'cape';
+  spaceport.render(state.lang, state.quality === 'low', reducedMotion.matches,spaceportAvailable);
+  japanViewControls.render(state.lang,localSpaceport.active,localSpaceport.requested,localSpaceport.status,atJapan&&modes.mode==='docking');
+  basePanel.render(modes.mode === 'baseView' && !mission.horizon ? mission.base?.base ?? null : null, state.lang, mission.destination?.base.id ?? null, hereSky, build.enabled,
+    spaceportAvailable ? spaceport.root : cinematicAvailable ? cinematicControls.root : undefined);
+  cinematicControls.render(cinematicAvailable, !!mission.horizon, state.lang, cinematic.selected, cinematic.animating, reducedMotion.matches);
+  const buildStatus = build.active ? build.status() : null;
+  buildPanel.render(buildStatus && mission.base ? {
+    kind: build.kind, status: buildStatus, preview: build.preview(), best: state.baseLevels[mission.base.base.id] ?? 1,
+    canUndo: build.canUndo, canRedo: build.canRedo, dust: skyFor(mission.base.base.id).sol.dust,
+    touchHint: !state.buildHintSeen && coarsePointer.matches,
+  } : null, state.lang);
+  // Build camera: zoomed so a cell is at least ~44 px (52 with margin) in the free part of the screen.
+  if (build.active) {
+    const panel = buildPanelSize;
+    const sheet = panel.width > innerWidth * 0.9; // phones: a bottom sheet
+    const free = Math.min(sheet ? innerHeight - panel.height : innerHeight, sheet ? innerWidth : innerWidth - panel.width);
+    mission.buildFrame = THREE.MathUtils.clamp((CELL * free) / (4 * 52), 0.35, 1.4);
+  }
+  missionOverlay.render({
+    count: modes.mode === 'launch' ? mission.countdown?.count ?? null : null,
+    byHand: !(mission.countdown?.auto ?? true),
+    flyingTo: modes.mode === 'travel' ? mission.trip?.to.base.name[state.lang] ?? null : null,
+    horizon: mission.horizon && hereSky ? hereSky : null,
+    // Quantized so the overlay only rebuilds a few times a second.
+    docking: modes.mode === 'docking' && mission.dock
+      ? { altitude: Math.round((mission.dock.state.alt / mission.dock.startAlt) * 50) / 50, auto: mission.dock.auto || state.autoLand, sensitivity: state.steerSensitivity,telemetry:landingTelemetry(mission.dock.state,mission.dock.params) }
+      : null,
+  }, state.lang, guided?.session.active ?? false);
+  const readout = mission.readout();
+  missionHud.render(readout, readout && miniMap(), state.lang);
+  passportPanel.render(state.passportOpen, state.passport, state.lang, state.baseLevels);
+  weightPanel.render(state.weightOpen, state.weightKg, (state.selected ?? BODIES[state.focus]).id, state.lang);
+  hud.render({
+    lang: state.lang,
+    focused: BODIES[state.focus],
+    selected: state.selected,
+    status: state.status,
+    textures: system.textureStatus,
+    quality: state.quality,
+    qualitySetting: state.qualitySetting,
+    watermark: state.watermark,
+    trueScale: state.trueScale,
+    weightKg: state.weightKg,
+    timeMs: clock.time,
+  });
+  followAddress();
+  resumeOffer?.render(state.lang);
+  if(now-checkpointAt>1000){saveCheckpoint();checkpointAt=now;overlay.runtimeInfo=JSON.stringify(runtimeMetrics.report());}
+  // Idle eligibility must see this frame's panel visibility before deciding to fade.
+  const missionActive = modes.mode === 'launch' || modes.mode === 'travel' || modes.mode === 'docking';
+  document.body.classList.toggle('mission-active', missionActive);
+  if (document.body.dataset.mode !== modes.mode) document.body.dataset.mode = modes.mode;
+  cleanView.update(state.lang, modes.mode);
+  chrome.update(now, modes.mode, gestures.ui.pointer !== null);
+  if (cleanView.active) rig.setInsets({ top: 0, right: 0, bottom: 0, left: 0 });
+  // Optional warm-up must not retain programs belonging to replaceable base or
+  // mission owners. Defer until navigation returns to the persistent scene.
+  if (prewarmPending && !showcases.hasEntries && (modes.mode === 'focus' || modes.mode === 'solarView')) {
+    prewarmPending = false; // coalesce rapid quality requests
+    void pipeline.prewarm();
+  }
+  lastCpuMs = performance.now() - cpuStart;
+  const frameEnd = performance.now();
+  runtimeMetrics.render(frameEnd);
+  diagnostics?.frame(frameEnd, diagnosticsContext);
+  debug.frameStats?.frame(now, lastCpuMs);
+});
