@@ -2,6 +2,7 @@ import { config } from '../config';
 import type { GestureEngine } from '../gestures/engine';
 import type { ExtraGestures } from '../gestures/extras';
 import type { Intent, IntentBus } from '../intents';
+import { cameraEvents } from '../performance/cameraEvents';
 import { cameraErrorCode, startCamera, type CameraHandle } from '../tracking/camera';
 import type { HandTracker } from '../tracking/handTracker';
 import type { HandFrame } from '../tracking/types';
@@ -34,6 +35,9 @@ export interface TrackingDeps {
 
 const sessions = new WeakMap<HTMLVideoElement, TrackingSession>();
 let nextSessionId = 0;
+/** The newest session, for a diagnostics snapshot taken while the camera is already on. */
+let latest: TrackingSession | null = null;
+cameraEvents.provideSnapshot(() => latest?.snapshot() ?? null);
 
 /** Owns one camera/detector lifetime, including resources that arrive after cancellation. */
 export class TrackingSession {
@@ -46,11 +50,17 @@ export class TrackingSession {
   private stopLoop: (() => void) | null = null;
   private readonly onPageHide = () => this.dispose();
   /** A hidden page holds no camera. Coming back reopens nothing: only 🖐 Turn on hand control starts a new session. */
-  private readonly onVisibilityChange = () => { if (document.hidden) this.dispose(); };
+  private readonly onVisibilityChange = () => {
+    if (!document.hidden) return;
+    if (!this.stopped) cameraEvents.emit({ type: 'hidden-handled', sessionId: this.id });
+    this.dispose();
+  };
 
   constructor(private readonly video: HTMLVideoElement, private readonly deps: TrackingDeps) {
     sessions.get(video)?.dispose();
     sessions.set(video, this);
+    latest = this;
+    cameraEvents.emit({ type: 'session-created', sessionId: this.id });
     deps.state.status = { kind: 'loading', progress: 0 };
     window.addEventListener('pagehide', this.onPageHide);
     document.addEventListener('visibilitychange', this.onVisibilityChange);
@@ -64,6 +74,11 @@ export class TrackingSession {
 
   private current() {
     return !this.stopped && sessions.get(this.video) === this;
+  }
+
+  /** For the debug diagnostics: this session and the tracks it holds now. */
+  snapshot() {
+    return { sessionId: this.id, stopped: this.stopped, status: this.deps.state.status.kind, tracks: this.camera ? this.camera.stream.getTracks() : [] };
   }
 
   dispose(reason: StringKey = 'err.disconnected') {
@@ -80,7 +95,8 @@ export class TrackingSession {
       try { release(); } catch (e) { console.error('[tracking] cleanup', e); }
     }
     this.stopLoop = this.camera = this.tracker = null;
-    if (sessions.get(this.video) === this) {
+    const current = sessions.get(this.video) === this;
+    if (current) {
       sessions.delete(this.video);
       this.deps.gestures.reset();
       this.deps.extras.reset();
@@ -88,6 +104,7 @@ export class TrackingSession {
       try { this.deps.stopped?.(); } catch (e) { console.error('[tracking] cleanup', e); }
       this.deps.state.status = { kind: 'keyboard', reason };
     }
+    cameraEvents.emit({ type: 'session-disposed', sessionId: this.id, reason, current });
   }
 
   private async initialize() {
@@ -114,7 +131,7 @@ export class TrackingSession {
     });
 
     try {
-      const camera = await startCamera(video, config.camera, () => this.dispose('err.disconnected'), controller.signal);
+      const camera = await startCamera(video, config.camera, () => this.dispose('err.disconnected'), controller.signal, this.id);
       if (!this.current()) {
         camera.dispose();
         return;
@@ -145,6 +162,7 @@ export class TrackingSession {
       if (!this.current()) { stop(); return; }
       this.stopLoop = stop;
       deps.state.status = { kind: 'tracking', delegate: tracker.delegate };
+      cameraEvents.emit({ type: 'tracking-started', sessionId: this.id });
     } catch (e) {
       if (this.current()) {
         console.error('[tracker]', e);

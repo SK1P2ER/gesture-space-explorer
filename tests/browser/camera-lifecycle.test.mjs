@@ -701,3 +701,95 @@ lifecycle('the restart control is a named, focusable button with a visible focus
   assert.deepEqual(idle, { visibility: 'hidden', focused: false }, 'idle: the hidden control can still take focus');
   assert.deepEqual(await phone.evaluate(() => [window.__camera.calls, window.__camera.state().live]), [1, 0]);
 });
+
+// ---- Debug diagnostics (SYNTHETIC: Chromium's fake camera in a hidden desktop tab, not a phone). ----
+/** Opens the diagnostics panel and starts a session; the panel and its recorder load only now. */
+async function startDiagnostics(app) {
+  await app.until(() => window.__camera.point('#diagnostics-toggle')?.ok, null, 'the Diagnostics button');
+  await app.click('#diagnostics-toggle');
+  await app.until(() => window.__camera.point('#diagnostics-start')?.ok, null, 'the diagnostics panel');
+  await app.click('#diagnostics-start');
+  await app.until(() => document.querySelector('#diagnostics-rec')?.hidden === false, null, 'the recording indicator');
+}
+/** Stops the session and reads the frozen report from the panel's JSON view (no share sheet, no download). */
+async function stopDiagnostics(app) {
+  await app.click('#diagnostics-stop');
+  await app.until(() => window.__camera.point('#diagnostics-show-json')?.ok, null, 'the report');
+  await app.click('#diagnostics-show-json');
+  const text = await app.until(() => document.querySelector('#diagnostics-json')?.value || null, null, 'the JSON');
+  if (artifacts) await writeFile(join(artifacts, `${dev ? 'dev' : 'prod'}-diagnostics-${Date.now()}.json`), text);
+  return JSON.parse(text);
+}
+const verdicts = (report) => Object.fromEntries(report.assertions.map((a) => [a.id, a.verdict]));
+
+lifecycle('diagnostics (synthetic): started with the camera already on; hide, return, wait, restart: A2–A5 PASS, A1 instances PASS', {}, async (b) => {
+  const app = await openApp(b, '/?lang=en&debug&token=must-not-appear');
+  await app.tracking();
+  await startDiagnostics(app);
+  await app.hide();
+  await app.show();
+  // With ?debug the preview box stays up for the stats (by design): off means no camera image in it, not no box.
+  await app.until(() => document.querySelector('#status')?.dataset.kind === 'keyboard' && !document.querySelector('#hand-control').hidden, null, 'back: the restart control');
+  await delay(2500);
+  const back = await app.state();
+  off(back, 'back');
+  assert.equal(back.calls, 1, 'back: the camera was asked for again');
+  assert.equal(await app.evaluate(() => document.querySelector('#preview').classList.contains('stats-only')), true, 'back: the preview still shows a camera image');
+  await delay(8500); // A4 needs ten visible seconds before a restart
+  await app.click('#hand-control');
+  await restartedOnce(app, 2, 'restarted');
+  await delay(15500); // A5 judges a full 15 s window after the restart
+  const report = await stopDiagnostics(app);
+  const v = verdicts(report);
+  assert.deepEqual({ ...v, A1: undefined }, { A1: undefined, A2: 'PASS', A3: 'PASS', A4: 'PASS', A5: 'PASS' }, JSON.stringify(report.assertions, null, 1));
+  // A1: the hidden transition itself must be PASS. Overall it may be INCONCLUSIVE only by the reviewed rule that a
+  // foreground frame gap of 1 s or more with no visibility event could hide a suspension (software WebGL stalls here).
+  const a1 = report.assertions.find((a) => a.id === 'A1');
+  assert.ok(a1.instances.length > 0 && a1.instances.every((i) => i.verdict === 'PASS'), JSON.stringify(a1));
+  const gaps = report.events.filter((e) => e.type === 'unobserved-gap');
+  if (v.A1 !== 'PASS') {
+    assert.equal(v.A1, 'INCONCLUSIVE');
+    assert.ok(gaps.length > 0 && /unobserved frame gap/.test(a1.reason), JSON.stringify(a1));
+  } else assert.equal(gaps.length, 0);
+  assert.equal(report.schema, 'gse-diagnostics/1');
+  assert.equal(report.build.byteIdentity, 'NOT VERIFIED');
+  assert.match(report.build.entryChunk, dev ? /main\.ts$/ : /^index-[\w-]+\.js$/);
+  assert.equal(report.page.query.token, undefined, 'a query key off the allowlist was exported');
+  assert.equal(report.events[0].type, 'snapshot');
+  assert.ok(report.segments.length >= 2, 'segments around the hidden interval');
+  // The panel's own share or download is not in the report: it was frozen at Stop.
+  assert.equal(report.events.filter((e) => e.type === 'visibility').length, 2);
+});
+
+// An automatic camera request is injected as the app's own event (dev server only: the module is reachable by URL there).
+lifecycle('diagnostics (synthetic, injected request): a camera request after return with no restart fails A4', { skip: dev ? false : 'built app: the camera-event module is not reachable by URL; runs on the dev server' }, async (b) => {
+  const app = await openApp(b, '/?lang=en&debug');
+  await app.tracking();
+  await startDiagnostics(app);
+  await app.hide();
+  await app.show();
+  await app.evaluate(async () => { (await import('/src/performance/cameraEvents.ts')).cameraEvents.request(99); });
+  await delay(10500);
+  const report = await stopDiagnostics(app);
+  assert.equal(verdicts(report).A4, 'FAIL', JSON.stringify(report.assertions, null, 1));
+});
+
+lifecycle('diagnostics are absent without ?debug, and load only when opened with it', {}, async (b) => {
+  const plain = await openApp(b, '/?lang=en');
+  await plain.tracking();
+  await delay(1000);
+  const without = await plain.evaluate(() => ({
+    toggle: Boolean(document.querySelector('#diagnostics-toggle')),
+    panel: Boolean(document.querySelector('#diagnostics-panel')),
+    chunks: performance.getEntriesByType('resource').map((e) => e.name).filter((n) => /diagnostic/i.test(n)),
+  }));
+  assert.deepEqual(without, { toggle: false, panel: false, chunks: [] });
+  const debug = await openApp(b, '/?lang=en&debug');
+  await debug.tracking();
+  await delay(1000);
+  const closed = await debug.evaluate(() => performance.getEntriesByType('resource').map((e) => e.name).filter((n) => /diagnostic/i.test(n)));
+  assert.deepEqual(closed, [], 'the diagnostics code loaded before the panel was opened');
+  await debug.click('#diagnostics-toggle');
+  await debug.until(() => window.__camera.point('#diagnostics-start')?.ok, null, 'the panel, open and usable');
+  assert.ok(await debug.evaluate(() => performance.getEntriesByType('resource').some((e) => /diagnostic/i.test(e.name))), 'opening the panel loads its code');
+});

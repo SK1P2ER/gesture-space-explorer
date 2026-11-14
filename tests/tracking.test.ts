@@ -6,6 +6,7 @@ import { GestureEngine } from '../src/gestures/engine';
 import { ExtraGestures } from '../src/gestures/extras';
 import { keyToIntent } from '../src/input/keyboard';
 import { createIntentBus } from '../src/intents';
+import { cameraEvents, type CameraEvent } from '../src/performance/cameraEvents';
 import { createHandTracker, type HandTracker } from '../src/tracking/handTracker';
 import type { HandFrame } from '../src/tracking/types';
 import { Recorder } from '../src/ui/recorder';
@@ -617,5 +618,78 @@ describe('the camera and a hidden page', () => {
     setHidden(true);
     expect(counts).toEqual({ visibilitychange: 0, pagehide: 0 });
     expect(streams[5].tracks[0].readyState).toBe('ended');
+  });
+});
+
+// What the debug diagnostics see: camera.ts and tracking.ts report their lifecycle to an optional sink.
+// Fake camera and fake page: the order and the correlation of events, not a phone.
+describe('camera lifecycle events for diagnostics', () => {
+  let events: CameraEvent[];
+  const sink = (e: CameraEvent) => { events.push(e); };
+  const types = () => events.map((e) => e.type);
+  const setHidden = (hidden: boolean) => { page.hidden = hidden; page.dispatchEvent(new Event('visibilitychange')); };
+  beforeEach(() => { events = []; cameraEvents.attach(sink); });
+  afterEach(() => { cameraEvents.detach(sink); cameraEvents.reset(); });
+
+  it('a session reports its request, the tracks it got, that tracking started, and on hiding the stop and its confirmed state', async () => {
+    create.mockResolvedValueOnce(detector());
+    const session = start();
+    await session.ready;
+    expect(types()).toEqual(['session-created', 'gum-requested', 'gum-resolved', 'tracking-started']);
+    const [created, requested, resolved] = events as [Extract<CameraEvent, { type: 'session-created' }>, Extract<CameraEvent, { type: 'gum-requested' }>, Extract<CameraEvent, { type: 'gum-resolved' }>];
+    expect(requested.sessionId).toBe(created.sessionId);
+    expect(resolved.requestId).toBe(requested.requestId);
+    expect(resolved.tracks).toEqual([{ trackId: `${requested.requestId}.1`, kind: 'video', readyState: 'live' }]);
+    events = [];
+    setHidden(true);
+    expect(types()).toEqual(['hidden-handled', 'track-stop-requested', 'session-disposed']);
+    expect(events[1]).toEqual({ type: 'track-stop-requested', trackId: `${requested.requestId}.1`, readyStateAfter: 'ended' });
+    expect(events[2]).toMatchObject({ sessionId: created.sessionId, reason: 'err.disconnected', current: true });
+  });
+
+  it('hidden while the camera is still answering: the late answer is reported and released at once', async () => {
+    const permission = deferred<MediaStream>();
+    getUserMedia.mockReturnValueOnce(permission.promise);
+    create.mockResolvedValueOnce(detector());
+    const session = start();
+    await vi.waitFor(() => expect(types()).toContain('gum-requested'));
+    setHidden(true);
+    permission.resolve(stream.media);
+    await session.ready;
+    expect(types()).toEqual(['session-created', 'gum-requested', 'hidden-handled', 'session-disposed', 'gum-resolved', 'track-stop-requested']);
+    expect(events.at(-1)).toMatchObject({ readyStateAfter: 'ended' });
+    expect(cameraEvents.pendingRequests()).toEqual([]);
+  });
+
+  it('a refused camera is reported with its code, and nothing stays pending', async () => {
+    getUserMedia.mockRejectedValueOnce(new DOMException('Denied', 'NotAllowedError'));
+    create.mockResolvedValueOnce(detector());
+    await start().ready;
+    expect(events.find((e) => e.type === 'gum-rejected')).toMatchObject({ code: 'denied' });
+    expect(cameraEvents.pendingRequests()).toEqual([]);
+  });
+
+  it('a session started on a hidden page asks for nothing: no request event at all', async () => {
+    page.hidden = true;
+    await start().ready;
+    expect(types()).not.toContain('gum-requested');
+    expect(types()).toContain('hidden-handled');
+  });
+
+  it('a snapshot names the live session and its tracks, for diagnostics started later', async () => {
+    create.mockResolvedValueOnce(detector());
+    const session = start();
+    await session.ready;
+    const snap = cameraEvents.snapshot()!;
+    expect(snap).toMatchObject({ sessionId: session.id, stopped: false, status: 'tracking', pendingRequestIds: [] });
+    expect(snap.tracks).toEqual([stream.tracks[0]]);
+  });
+
+  it('with no sink attached nothing is reported, and the camera works as before', async () => {
+    cameraEvents.detach(sink);
+    create.mockResolvedValueOnce(detector());
+    await start().ready;
+    expect(events).toEqual([]);
+    expect(deps.state.status).toEqual({ kind: 'tracking', delegate: 'GPU' });
   });
 });

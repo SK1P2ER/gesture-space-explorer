@@ -21,6 +21,8 @@ import {ActiveVehicle} from './ui/activeVehicle';
 import {JapanViewControls} from './ui/japanViewControls';
 import {landingTelemetry} from './sim/landingTelemetry';
 import {RuntimeMetrics} from './performance/runtimeMetrics';
+import { cameraEvents } from './performance/cameraEvents';
+import type { DiagnosticsContext } from './performance/diagnostics';
 import { startTracking, type TrackingDeps } from './app/tracking';
 import { attachPageLifecycle } from './app/pageLifecycle';
 import { config } from './config';
@@ -445,6 +447,34 @@ attachKeyboardAndMouse(canvas, bus, config, pickAt, buildPointer);
 const debugUrl = new URLSearchParams(location.search).has('debug');
 document.querySelector('#version')!.textContent = `v${__APP_VERSION__}`;
 
+// ?debug → 🩺 Diagnostics, beside Copy report. The panel and its recorder load when first opened, and nothing is
+// recorded until Start. Without ?debug there is no button and no diagnostics code is fetched.
+interface DiagnosticsHooks { frame(t: number, context: () => DiagnosticsContext): void; timing(t: number, detectMs: number, processingMs: number): void }
+let diagnostics: DiagnosticsHooks | null = null;
+if (debugUrl) {
+  const copy = document.querySelector<HTMLButtonElement>('#preview .debug-copy')!;
+  const toggle = Object.assign(document.createElement('button'), { type: 'button', className: 'debug-action', id: 'diagnostics-toggle', textContent: '🩺 Diagnostics' });
+  toggle.hidden = copy.hidden;
+  copy.after(toggle);
+  const entryChunk = new URL(import.meta.url).pathname.split('/').pop() || null; // this module is the entry chunk
+  toggle.addEventListener('click', () => {
+    toggle.blur(); // keep Space / Enter for the scene
+    void import('./ui/diagnosticsPanel').then(({ toggleDiagnostics }) => toggleDiagnostics({ appVersion: __APP_VERSION__, entryChunk, setHooks: (hooks) => { diagnostics = hooks; } }));
+  });
+}
+const loadingPill = document.querySelector<HTMLElement>('#loading');
+/** What a diagnostics segment is keyed by; read only while a session is recording. */
+function diagnosticsContext(): DiagnosticsContext {
+  return {
+    mode: modes.mode, spaceport: localSpaceport.active,
+    phase: mission.countdown ? 'countdown' : mission.horizon ? 'horizon' : 'none',
+    camera: state.status.kind, tier: state.quality,
+    renderScale: localSpaceport.active ? Math.max(.6, governor.scale) : governor.scale,
+    pixelRatio: (localSpaceport.renderer ?? renderer).getPixelRatio(),
+    loading: loadingPill ? !loadingPill.hidden : false,
+  };
+}
+
 const credits = new CreditsDialog();
 document.querySelector('#credits-link')!.addEventListener('click', (e) => {
   e.preventDefault();
@@ -471,7 +501,7 @@ function gestureMessage(intent: Intent): string | null {
 }
 const trackingDeps: TrackingDeps = {
   state, bus, gestures, extras, overlay, recorder, gestureHud, gestureMessage,
-  timing:(...values)=>runtimeMetrics.tracking(...values),
+  timing:(...values)=>{runtimeMetrics.tracking(...values);diagnostics?.timing(values[0],values[1],values[2]);},
   // A count or a 👍 held when the camera stopped must be made again in the next session.
   stopped: () => { countdownGesture.reset(); guided?.cameraStopped(); },
   frameMode: () => modes.mode,
@@ -495,7 +525,10 @@ const trackingDeps: TrackingDeps = {
 startTracking(trackingDeps);
 // 🖐 Turn on hand control: a new session replaces whatever stopped (it never reopens the camera by itself).
 bus.on((intent) => {
-  if (intent.type === 'restartTracking' && !['loading', 'tracking'].includes(state.status.kind)) startTracking(trackingDeps);
+  if (intent.type !== 'restartTracking') return;
+  const accepted = !['loading', 'tracking'].includes(state.status.kind);
+  cameraEvents.emit({ type: 'restart-requested', accepted }); // for the debug diagnostics only
+  if (accepted) startTracking(trackingDeps);
 });
 
 // The mission HUD's map: the planets where they are now, the bases' worlds marked, the rocket and its route.
@@ -787,6 +820,8 @@ renderer.setAnimationLoop((now) => {
     void pipeline.prewarm();
   }
   lastCpuMs = performance.now() - cpuStart;
-  runtimeMetrics.render(performance.now());
+  const frameEnd = performance.now();
+  runtimeMetrics.render(frameEnd);
+  diagnostics?.frame(frameEnd, diagnosticsContext);
   debug.frameStats?.frame(now, lastCpuMs);
 });
