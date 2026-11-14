@@ -27,7 +27,7 @@ import { startTracking, type TrackingDeps } from './app/tracking';
 import { attachPageLifecycle } from './app/pageLifecycle';
 import { config } from './config';
 import { BODIES, reachFactor } from './data/bodies';
-import { BASES, baseById } from './data/bases';
+import { BASES, baseById, baseOn } from './data/bases';
 import { GestureEngine } from './gestures/engine';
 import { ExtraGestures } from './gestures/extras';
 import { attachKeyboardAndMouse } from './input/keyboard';
@@ -242,9 +242,11 @@ const mission = new Mission({
   report: (message) => overlay.report(message),
 });
 const basePanel = new BasePanel(bus.emit);
-const japanViewControls=new JapanViewControls(()=>{if(mission.base?.base.id!=='cape')mission.enter('cape');localSpaceport.enter();},()=>localSpaceport.map(),()=>localSpaceport.active?localSpaceport.reset():mission.resetJapanView());
+/** Set while the saved-mission offer is unanswered: true refuses an intent that would start, redirect or replace a journey. */
+let missionLocked:((intent:Intent)=>boolean)|null=null;
+const japanViewControls=new JapanViewControls(()=>{if(mission.base?.base.id!=='cape'){if(missionLocked?.({type:'enterBase',baseId:'cape'}))return;mission.enter('cape');}localSpaceport.enter();},()=>localSpaceport.map(),()=>localSpaceport.active?localSpaceport.reset():mission.resetJapanView());
 spaceport.root.prepend(japanViewControls.root);
-if (import.meta.env.DEV) Object.assign((window as unknown as { __app: object }).__app, { spaceport,japanDetail,localSpaceport,runtimeMetrics });
+if (import.meta.env.DEV) Object.assign((window as unknown as { __app: object }).__app, { spaceport,japanDetail,localSpaceport,runtimeMetrics,state });
 const missionOverlay = new MissionOverlay(bus.emit);
 const missionHud = new MissionHud();
 const showcases = new Showcases(system.bases);
@@ -403,6 +405,7 @@ const passportPanel = new PassportPanel(bus.emit);
 const countdownGesture = new CountdownGesture();
 bus.on(createIntentHandler({ state, modes, rig, clock, overlay, gestureHud, photo, mission, build, setFocus,
   beforeMission: (intent) => {
+    if (missionLocked?.(intent)) return true;
     if (guided?.intercept(intent)) return true;
     if (spaceport.active) return true;
     if(localSpaceport.active) {
@@ -572,11 +575,29 @@ let resumeOffer:ResumeMission|null=null;
 let checkpointAt=0;
 if(checkpointPending&&savedMission) {
   resumeOffer=new ResumeMission(savedMission,resume=>{
-    checkpointPending=false;resumeOffer=null;
+    checkpointPending=false;resumeOffer=null;missionLocked=null;
     if(resume){pendingLink=false;mission.resume(savedMission);localSpaceport.restore(savedMission.view??'globe');}
     else {writeCheckpoint(storage,null);guided?.discard();pendingLink=link.body!==undefined;}
     saveCheckpoint();
   });
+  // Until the offer is answered, nothing may start a different journey: checkpoints are not saved meanwhile,
+  // and Continue would restore the old mission over it. Viewing, camera and settings stay free.
+  const journey:readonly Intent['type'][]=['chooseDestination','launch','countdown','select','next','prev'];
+  /** The base this intent would go down to, resolved the way Mission.handle does in each mode. */
+  const entering=(intent:Intent,atBase:boolean)=>{
+    if(intent.type==='enterBase')return intent.baseId??(atBase?undefined:baseOn(BODIES[state.focus].id)?.id);
+    // Away from a base, selecting the body whose card is already open goes down to its base.
+    if(intent.type==='select'&&intent.bodyId&&!atBase&&state.selected?.id===intent.bodyId)return baseOn(intent.bodyId)?.id;
+    return undefined;
+  };
+  missionLocked=(intent)=>{
+    const atBase=modes.mode==='baseView'||modes.mode==='launch'||modes.mode==='build';
+    const target=entering(intent,atBase);
+    const refused=target!==undefined ? target!==savedMission.baseId
+      : intent.type==='toggleBuild'||(atBase&&journey.includes(intent.type));
+    if(refused)resumeOffer?.remind(state.lang);
+    return refused;
+  };
 }
 // No checkpoint is offered on this load (none saved, or the link names another base): a restored guided
 // journey has no native mission to continue, so it starts over before the link applies.
