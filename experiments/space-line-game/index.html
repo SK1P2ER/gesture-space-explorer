@@ -1,0 +1,1371 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#06111c">
+  <title>SPACE LINE · 隕石回避ミッション</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #06111b;
+      --panel: rgba(8, 24, 37, .88);
+      --line: rgba(75, 213, 232, .25);
+      --cyan: #66f1ff;
+      --cyan-soft: #37c6dc;
+      --muted: #8ca9b9;
+      --white: #e8f7fb;
+      --orange: #ffbf78;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      margin: 0;
+      color: var(--white);
+      background:
+        radial-gradient(ellipse at 56% 45%, rgba(12, 72, 96, .3), transparent 46%),
+        radial-gradient(ellipse at 8% 90%, rgba(18, 87, 118, .2), transparent 32%),
+        #050d16;
+      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+
+    button, a { font: inherit; }
+    button:focus-visible, a:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+
+    .shell {
+      width: min(1540px, 100%);
+      min-height: 100vh;
+      margin: auto;
+      padding: 18px 24px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .topbar {
+      min-height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 0 8px 13px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-mark {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      color: var(--cyan);
+      border: 1px solid rgba(102, 241, 255, .55);
+      transform: rotate(45deg);
+      box-shadow: 0 0 18px rgba(55, 198, 220, .16);
+    }
+    .brand-mark span { transform: rotate(-45deg); font-size: 15px; }
+    .brand-name { font-size: 15px; font-weight: 750; letter-spacing: .18em; }
+    .brand-sub { margin-top: 3px; color: var(--muted); font-size: 9px; letter-spacing: .18em; }
+
+    .steps { display: flex; align-items: center; gap: clamp(12px, 2.7vw, 42px); }
+    .step {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      color: #76909d;
+      font-size: 10px;
+      letter-spacing: .08em;
+      white-space: nowrap;
+    }
+    .step:not(:last-child)::after {
+      position: absolute;
+      left: calc(100% + 6px);
+      width: clamp(5px, 1.8vw, 26px);
+      height: 1px;
+      content: "";
+      background: rgba(102, 241, 255, .22);
+    }
+    .step-index { color: #a9c5cf; font-size: 9px; }
+    .step.active { color: var(--cyan); }
+    .step.active .step-index { color: var(--cyan); text-shadow: 0 0 12px var(--cyan); }
+    .live { display: flex; align-items: center; gap: 7px; color: #9fb7c3; font-size: 10px; white-space: nowrap; }
+    .live i { width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 10px var(--cyan); }
+    .camera-monitor { min-width: 190px; max-width: 270px; display: grid; grid-template-columns: 90px minmax(0, 1fr); align-items: center; gap: 9px; padding: 5px; border: 1px solid rgba(75, 213, 232, .24); background: rgba(5, 17, 27, .8); }
+    .camera-preview { display: block; width: 90px; height: 58px; object-fit: cover; transform: scaleX(-1); border: 1px solid rgba(102, 241, 255, .25); background: radial-gradient(ellipse at center, rgba(42, 105, 129, .35), #07121e); }
+    .camera-preview:not(.visible) { opacity: .4; }
+    .camera-status { min-height: 28px; color: #87a7b3; font-size: 9px; line-height: 1.55; }
+    @media (max-width: 700px) {
+      .camera-monitor { order: 4; width: 100%; max-width: none; grid-template-columns: 74px minmax(0, 1fr); }
+      .camera-preview { width: 74px; height: 48px; }
+    }
+
+    .meteor-game { display: flex; flex-direction: column; }
+    .meteor-head .route-title strong { display: block; margin-top: 5px; font-size: 19px; letter-spacing: .05em; }
+    .meteor-layout { min-height: 390px; display: grid; grid-template-columns: minmax(190px, 230px) minmax(0, 1fr) minmax(175px, 205px); }
+    .meteor-instructions, .meteor-status { padding: 18px; background: rgba(5, 17, 27, .7); }
+    .meteor-instructions { display: flex; flex-direction: column; gap: 10px; border-right: 1px solid var(--line); }
+    .meteor-instructions .section-label, .meteor-status .section-label { margin-bottom: 0; }
+    .meteor-instructions p { margin: 0; color: #b7cbd4; font-size: 11px; line-height: 1.8; }
+    .meteor-instructions .gesture-demo { height: 78px; }
+    .meteor-instructions .gesture-frame { width: 49px; height: 55px; font-size: 29px; }
+    .meteor-instructions .camera-status { min-height: 28px; }
+    .meteor-instructions .button { width: 100%; }
+    .meteor-instructions .camera-preview { order: 2; }
+    .meteor-stage { position: relative; min-width: 0; min-height: 390px; overflow: hidden; background: #050a14 url("space-background.svg") center 66% / cover; }
+    .meteor-stage::after { position: absolute; inset: 0; content: ""; pointer-events: none; background: linear-gradient(180deg, rgba(2, 8, 17, .15), transparent 42%, rgba(1, 8, 19, .28)); }
+    #meteorCanvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .meteor-hud { position: absolute; z-index: 1; top: 13px; left: 50%; min-width: 146px; padding: 8px 18px 9px; transform: translateX(-50%); border: 1px solid rgba(102, 241, 255, .48); background: rgba(3, 14, 25, .79); box-shadow: 0 0 25px rgba(27, 194, 225, .17), inset 0 0 17px rgba(48, 169, 197, .13); text-align: center; }
+    .meteor-hud span, .meteor-hud small { display: inline-block; color: #afd0dc; font-size: 8px; letter-spacing: .12em; }
+    .meteor-hud b { display: inline-block; margin: 0 7px; color: #e8fbff; font-size: 23px; font-variant-numeric: tabular-nums; letter-spacing: .06em; text-shadow: 0 0 12px rgba(102, 241, 255, .8); }
+    .dodge-state { margin-top: 2px; color: var(--cyan); font-size: 8px; letter-spacing: .16em; }
+    .dodge-overlay { position: absolute; z-index: 2; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(2, 9, 18, .35); text-align: center; }
+    .dodge-overlay[hidden] { display: none; }
+    .dodge-overlay-card { width: min(100%, 300px); padding: 20px; border: 1px solid rgba(102, 241, 255, .35); background: rgba(4, 17, 29, .89); box-shadow: 0 0 35px rgba(24, 136, 176, .16); }
+    .overlay-icon { color: var(--cyan); font-size: 25px; text-shadow: 0 0 15px var(--cyan); }
+    .dodge-overlay h2 { margin: 5px 0 8px; font-size: 18px; }
+    .dodge-overlay p { margin: 0 0 14px; color: #b4cbd5; font-size: 10px; line-height: 1.7; }
+    .dodge-overlay .button { width: 100%; }
+    .meteor-status { display: flex; flex-direction: column; gap: 12px; border-left: 1px solid var(--line); }
+    .mission-fact { display: flex; flex-direction: column; gap: 4px; padding-bottom: 9px; border-bottom: 1px solid rgba(75, 213, 232, .12); font-size: 9px; }
+    .mission-fact span { color: #9cb7c2; }
+    .mission-fact b { color: #ddedf2; font-size: 10px; font-weight: 500; }
+    .ship-mini { position: relative; height: 65px; display: grid; place-items: center; margin: 0 0 2px; border: 1px solid rgba(75, 213, 232, .15); background: radial-gradient(ellipse at 50% 70%, rgba(47, 159, 200, .17), transparent 57%); }
+    .ship-mini > span { font-size: 29px; filter: drop-shadow(0 0 7px rgba(102, 241, 255, .7)); }
+    .ship-mini div { position: absolute; right: 12%; bottom: 12px; left: 12%; display: flex; justify-content: space-around; }
+    .ship-mini i { width: 3px; height: 4px; border-radius: 50%; background: #77f4ff; box-shadow: 0 0 8px #48cfff; }
+    .meteor-status .metric-head { margin: 3px 0 -7px; }
+    .animation-slot { margin-top: 15px; padding: 18px; }
+    .animation-slot-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 13px; }
+    .animation-slot-heading h2 { margin: 5px 0 0; font-size: 17px; }
+    .animation-placeholder { min-height: 180px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; border: 1px dashed rgba(102, 241, 255, .34); background: radial-gradient(ellipse at 50% 80%, rgba(18, 88, 117, .2), transparent 65%), #050d17; text-align: center; }
+    .animation-placeholder[hidden] { display: none; }
+    .animation-placeholder > span { width: 38px; height: 38px; display: grid; place-items: center; padding-left: 3px; color: var(--cyan); border: 1px solid rgba(102, 241, 255, .55); border-radius: 50%; background: rgba(102, 241, 255, .07); }
+    .animation-placeholder p { margin: 4px 12px 0; color: #b7cbd4; font-size: 11px; }
+    .animation-placeholder small { color: #668b99; font-size: 8px; letter-spacing: .15em; }
+    .next-animation { display: block; width: 100%; max-height: 72vh; background: #02070c; }
+    .next-animation[hidden] { display: none; }
+
+    .layout {
+      flex: 1;
+      min-height: 550px;
+      display: grid;
+      grid-template-columns: minmax(210px, 250px) minmax(0, 1fr) minmax(220px, 270px);
+      gap: 14px;
+    }
+
+    .panel {
+      position: relative;
+      min-width: 0;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      background: linear-gradient(145deg, rgba(10, 29, 43, .9), rgba(4, 15, 25, .9));
+      box-shadow: inset 0 0 24px rgba(23, 106, 130, .07), 0 8px 32px rgba(0, 0, 0, .14);
+    }
+    .panel::before, .panel::after {
+      position: absolute;
+      z-index: 1;
+      width: 14px;
+      height: 14px;
+      content: "";
+      pointer-events: none;
+    }
+    .panel::before { top: -1px; left: -1px; border-top: 2px solid var(--cyan-soft); border-left: 2px solid var(--cyan-soft); }
+    .panel::after { right: -1px; bottom: -1px; border-right: 2px solid var(--cyan-soft); border-bottom: 2px solid var(--cyan-soft); }
+    .mission-screen { display: none; }
+    .mission-screen.active { display: block; }
+    .meteor-game.mission-screen.active { display: flex; }
+    .layout.mission-screen.active { display: grid; }
+
+    .left-panel { padding: 22px 18px 18px; display: flex; flex-direction: column; }
+    .eyebrow { color: var(--cyan); font-size: 9px; letter-spacing: .2em; }
+    h1 { margin: 8px 0 4px; font-size: clamp(23px, 2vw, 30px); letter-spacing: .06em; }
+    .title-en { color: #72aabb; font-size: 10px; letter-spacing: .16em; }
+    .intro { margin: 18px 0 21px; color: #bfd0d8; font-size: 12px; line-height: 1.9; }
+
+    .section-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 13px;
+      color: #cde7ec;
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .section-label::after { height: 1px; flex: 1; content: ""; background: var(--line); }
+    .control-card { padding: 14px; border: 1px solid rgba(69, 173, 194, .24); background: rgba(9, 33, 47, .55); }
+    .gesture-demo { height: 102px; display: grid; place-items: center; position: relative; }
+    .gesture-frame {
+      width: 60px;
+      height: 70px;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(102, 241, 255, .6);
+      border-radius: 9px;
+      box-shadow: 0 0 21px rgba(55, 198, 220, .12);
+      font-size: 35px;
+    }
+    .arrow { position: absolute; color: var(--cyan); font-size: 25px; animation: drift 1.6s ease-in-out infinite alternate; }
+    .arrow.left { left: 3px; }
+    .arrow.right { right: 3px; animation-delay: .4s; }
+    @keyframes drift { to { transform: translateX(5px); opacity: .58; } }
+    .instruction-list { display: grid; gap: 10px; margin: 13px 0 0; padding: 0; list-style: none; color: #a9c2cc; font-size: 10px; line-height: 1.65; }
+    .instruction-list li { display: flex; align-items: flex-start; gap: 8px; }
+    .instruction-list b { color: var(--cyan); font-size: 12px; }
+    .ship-info { display: grid; gap: 11px; margin-top: auto; padding-top: 22px; color: #a9bdc7; font-size: 10px; letter-spacing: .05em; }
+    .ship-info span { margin-right: 8px; color: var(--cyan); font-size: 9px; }
+
+    .stage-panel { display: flex; flex-direction: column; min-height: 0; }
+    .stage-head {
+      min-height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 17px;
+      border-bottom: 1px solid rgba(75, 213, 232, .18);
+    }
+    .route-title { font-size: 13px; font-weight: 650; letter-spacing: .07em; }
+    .route-title small { display: block; margin-top: 3px; color: #7fa8b6; font-size: 9px; font-weight: 400; letter-spacing: .12em; }
+    .difficulty {
+      padding: 5px 9px;
+      color: #a9dbc9;
+      border: 1px solid rgba(83, 211, 165, .3);
+      background: rgba(44, 134, 104, .12);
+      font-size: 9px;
+      letter-spacing: .08em;
+      white-space: nowrap;
+    }
+    .stage {
+      position: relative;
+      flex: 1;
+      min-height: 350px;
+      overflow: hidden;
+      background-color: #050a14;
+      background-image:
+        linear-gradient(rgba(93, 171, 190, .025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(93, 171, 190, .025) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(3, 10, 21, .08), rgba(3, 10, 21, .24)),
+        url("space-background.svg");
+      background-position: center, center, center, center;
+      background-size: 42px 42px, 42px 42px, cover, cover;
+      cursor: default;
+    }
+    .stage::before {
+      position: absolute;
+      inset: 0;
+      content: "";
+      pointer-events: none;
+      background: radial-gradient(ellipse, transparent 47%, rgba(1, 7, 13, .4) 100%);
+    }
+    .stage svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+    .route-shadow { fill: none; stroke: rgba(40, 199, 222, .1); stroke-width: 22; filter: blur(7px); }
+    .route-base { fill: none; stroke: rgba(69, 188, 208, .43); stroke-width: 3; stroke-dasharray: 2 9; stroke-linecap: round; }
+    .route-progress {
+      fill: none;
+      stroke: var(--cyan);
+      stroke-width: 3;
+      stroke-linecap: round;
+      filter: drop-shadow(0 0 5px rgba(102, 241, 255, .9));
+      transition: stroke-dashoffset .15s linear;
+    }
+    .checkpoint { fill: #0a1c29; stroke: #54dbea; stroke-width: 2; }
+    .checkpoint.passed { fill: var(--cyan); filter: drop-shadow(0 0 6px var(--cyan)); }
+    .endpoint-ring { fill: rgba(102, 241, 255, .1); stroke: var(--cyan); stroke-width: 2; }
+    .endpoint-core { fill: var(--cyan); filter: drop-shadow(0 0 8px var(--cyan)); }
+    .endpoint-label { fill: #b7d3dd; font: 11px "Segoe UI", sans-serif; letter-spacing: 1px; }
+    .start-label { fill: #b7d3dd; font: 11px "Segoe UI", sans-serif; letter-spacing: 1px; }
+    .cursor-halo { fill: rgba(102, 241, 255, .1); stroke: rgba(102, 241, 255, .54); stroke-width: 1; }
+    .cursor-dot { fill: #fff; filter: drop-shadow(0 0 8px var(--cyan)); }
+    .cursor-trail { fill: none; stroke: rgba(102, 241, 255, .62); stroke-width: 2; stroke-linecap: round; }
+    .start-pulse { transform-origin: 0 0; animation: pulse 2s ease-out infinite; }
+    @keyframes pulse { 0% { opacity: .8; transform: scale(.8); } 100% { opacity: 0; transform: scale(2.2); } }
+    .stage-hint {
+      position: absolute;
+      right: 14px;
+      bottom: 12px;
+      z-index: 2;
+      padding: 7px 10px;
+      color: #a9c4ce;
+      border: 1px solid rgba(83, 193, 212, .2);
+      background: rgba(5, 16, 25, .77);
+      font-size: 9px;
+      letter-spacing: .05em;
+      pointer-events: none;
+    }
+    .completion {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: none;
+      place-items: center;
+      padding: 24px;
+      background: rgba(2, 11, 19, .79);
+      text-align: center;
+    }
+    .completion.show { display: grid; }
+    .completion-box { max-width: 320px; }
+    .completion-icon { color: var(--cyan); font-size: 34px; text-shadow: 0 0 22px var(--cyan); }
+    .completion h2 { margin: 8px 0; font-size: 22px; }
+    .completion p { color: #a9c4ce; font-size: 12px; line-height: 1.7; }
+    .stage-footer {
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 9px 16px;
+      color: #8caab6;
+      border-top: 1px solid rgba(75, 213, 232, .17);
+      font-size: 10px;
+    }
+    .route-status { display: flex; align-items: center; gap: 8px; }
+    .status-light { width: 7px; height: 7px; border-radius: 50%; background: #e8aa58; box-shadow: 0 0 8px #e8aa58; }
+    .route-status.ready .status-light { background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
+    .route-status.done .status-light { background: #70efb6; box-shadow: 0 0 8px #70efb6; }
+    .progress-readout { color: #d3edf2; font-variant-numeric: tabular-nums; }
+
+    .right-panel { display: flex; flex-direction: column; }
+    .destination-card { min-height: 190px; padding: 17px; border-bottom: 1px solid var(--line); }
+    .planet-art {
+      position: relative;
+      height: 85px;
+      overflow: hidden;
+      margin: 13px 0 14px;
+      border: 1px solid rgba(135, 105, 88, .35);
+      background:
+        radial-gradient(ellipse at 70% 108%, rgba(239, 133, 71, .8), transparent 42%),
+        radial-gradient(ellipse at 62% 105%, rgba(141, 68, 49, .85), transparent 56%),
+        linear-gradient(180deg, #102637, #11212b 60%, #31231e);
+    }
+    .planet-art::before {
+      position: absolute;
+      right: 15%;
+      bottom: -43px;
+      width: 115px;
+      height: 115px;
+      content: "";
+      border-radius: 50%;
+      background:
+        radial-gradient(ellipse at 28% 35%, transparent 0 12%, rgba(80, 46, 39, .55) 13% 14%, transparent 15%),
+        radial-gradient(ellipse at 65% 58%, rgba(245, 151, 88, .6), rgba(113, 56, 46, .95) 57%, #402d2a 100%);
+      box-shadow: 0 0 23px rgba(255, 139, 76, .2);
+    }
+    .planet-art::after {
+      position: absolute;
+      right: 10%;
+      bottom: 5px;
+      left: 8%;
+      height: 16px;
+      content: "";
+      border-top: 1px solid rgba(197, 200, 187, .5);
+      background: linear-gradient(180deg, rgba(187, 190, 185, .3), rgba(10, 20, 25, .5));
+      clip-path: polygon(0 45%, 15% 15%, 26% 50%, 44% 0, 61% 40%, 78% 12%, 100% 45%, 100% 100%, 0 100%);
+    }
+    .destination-facts { display: grid; gap: 8px; color: #a9bdc7; font-size: 9px; }
+    .destination-facts div { display: flex; justify-content: space-between; gap: 8px; }
+    .destination-facts b { color: #d1e2e8; font-weight: 500; text-align: right; }
+    .status-card { padding: 16px; }
+    .status-banner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      min-height: 48px;
+      margin: 12px 0 16px;
+      color: #c4faff;
+      border: 1px solid rgba(76, 222, 237, .53);
+      background: linear-gradient(90deg, rgba(19, 112, 132, .34), rgba(12, 58, 76, .35));
+      box-shadow: inset 0 0 18px rgba(73, 226, 242, .1), 0 0 14px rgba(73, 226, 242, .08);
+      font-size: 12px;
+      letter-spacing: .08em;
+    }
+    .status-banner span { color: var(--cyan); font-size: 17px; }
+    .metric { margin: 13px 0; }
+    .metric-head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 7px; color: #a9bdc7; font-size: 9px; }
+    .metric-head b { color: #d3e8ec; font-weight: 500; font-variant-numeric: tabular-nums; }
+    .bar { height: 4px; overflow: hidden; background: rgba(108, 167, 181, .16); }
+    .bar i { display: block; width: 0; height: 100%; background: linear-gradient(90deg, #28bcd5, #8af7ff); box-shadow: 0 0 8px var(--cyan); transition: width .2s ease; }
+    .safe { color: #76e3bd !important; }
+    .action-row { display: grid; gap: 8px; margin-top: auto; padding: 15px 16px 16px; }
+    .button {
+      min-height: 39px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      padding: 9px 12px;
+      color: #cde8ed;
+      border: 1px solid rgba(87, 194, 212, .32);
+      background: rgba(10, 37, 51, .78);
+      text-decoration: none;
+      cursor: pointer;
+      transition: border-color .2s, background .2s, transform .2s;
+      font-size: 10px;
+      letter-spacing: .04em;
+    }
+    .button:hover { border-color: rgba(102, 241, 255, .8); background: rgba(16, 67, 83, .8); transform: translateY(-1px); }
+    .button.primary { color: #07151c; border-color: #75eff8; background: linear-gradient(100deg, #64dce9, #a2f6f7); font-weight: 700; }
+    .button.primary:hover { background: #b8fbfc; }
+    .button.secondary { min-height: 34px; color: #91aab4; border-color: rgba(87, 150, 164, .2); background: rgba(5, 17, 26, .45); }
+    .button:disabled { opacity: .45; cursor: wait; transform: none; }
+    .camera-preview.visible { opacity: 1; }
+
+    .bottom-nav {
+      display: grid;
+      grid-template-columns: minmax(150px, 1fr) minmax(250px, 1.6fr) minmax(150px, 1fr);
+      align-items: center;
+      gap: 15px;
+      min-height: 61px;
+      padding: 10px 16px;
+      border: 1px solid var(--line);
+      background: rgba(6, 20, 31, .75);
+    }
+    .nav-link {
+      color: #b6d2dc;
+      text-decoration: none;
+      font-size: 10px;
+      line-height: 1.5;
+    }
+    .nav-link:last-child { text-align: right; }
+    .nav-link span { display: block; color: #6f9cab; font-size: 8px; letter-spacing: .14em; }
+    .nav-link:hover { color: var(--cyan); }
+    .checkpoints { display: flex; align-items: center; justify-content: center; gap: 0; }
+    .checkpoint-item { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px; color: #7999a5; font-size: 8px; }
+    .checkpoint-item:not(:last-child)::after { position: absolute; top: 4px; left: calc(50% + 7px); width: calc(100% - 14px); height: 1px; content: ""; background: rgba(102, 241, 255, .3); }
+    .checkpoint-item i { z-index: 1; width: 9px; height: 9px; border: 1px solid #5ccddd; border-radius: 50%; background: #071722; }
+    .checkpoint-item.passed i { background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
+    .checkpoint-item.active { color: #d6faff; }
+    .checkpoint-item.active i { border-color: #d4fdff; box-shadow: 0 0 8px var(--cyan); }
+
+    @media (max-width: 1060px) {
+      .shell { padding: 14px; }
+      .meteor-layout { grid-template-columns: 190px minmax(0, 1fr); }
+      .meteor-status { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, 1fr); align-items: center; border-top: 1px solid var(--line); border-left: 0; }
+      .meteor-status .section-label { grid-column: 1 / -1; }
+      .meteor-status .ship-mini { display: none; }
+      .layout { grid-template-columns: 205px minmax(0, 1fr); }
+      .right-panel { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; }
+      .destination-card { border-right: 1px solid var(--line); border-bottom: 0; }
+      .action-row { align-content: end; }
+      .status-card { padding-bottom: 5px; }
+    }
+    @media (max-width: 700px) {
+      .shell { gap: 11px; padding: 11px; }
+      .topbar { flex-wrap: wrap; padding-bottom: 10px; }
+      .steps { order: 3; width: 100%; justify-content: space-between; gap: 8px; }
+      .step { font-size: 8px; }
+      .step:not(:last-child)::after { width: 7px; }
+      .live { font-size: 9px; }
+      .meteor-layout { grid-template-columns: minmax(0, 1fr); }
+      .meteor-instructions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; border-right: 0; border-bottom: 1px solid var(--line); }
+      .meteor-instructions .section-label, .meteor-instructions p { grid-column: 1 / -1; }
+      .meteor-instructions .gesture-demo { height: 62px; }
+      .meteor-instructions .camera-status { align-self: center; }
+      .meteor-instructions .camera-preview { grid-column: 1 / -1; width: min(100%, 340px); max-height: 90px; }
+      .meteor-instructions .button { min-height: 34px; }
+      .meteor-stage { min-height: 380px; }
+      .meteor-status { grid-template-columns: 1fr 1fr; }
+      .meteor-status .section-label, .meteor-status .dodge-result { grid-column: 1 / -1; }
+      .animation-placeholder { min-height: 140px; }
+      .layout { min-height: auto; grid-template-columns: 1fr; }
+      .left-panel { padding: 16px; }
+      .left-panel .intro { margin: 11px 0; }
+      .left-panel .control-card { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 6px; }
+      .control-card .section-label { grid-column: 1 / -1; margin: 0; }
+      .gesture-demo { height: 76px; }
+      .gesture-frame { width: 49px; height: 55px; font-size: 29px; }
+      .instruction-list { margin: 0; }
+      .ship-info { grid-template-columns: 1fr 1fr; margin-top: 14px; padding-top: 13px; }
+      .stage-panel { min-height: 440px; }
+      .stage { min-height: 320px; }
+      .right-panel { grid-column: auto; }
+      .destination-card { min-height: 175px; padding: 13px; }
+      .status-card { padding: 13px; }
+      .bottom-nav { grid-template-columns: 1fr 1.2fr 1fr; gap: 8px; padding: 10px; }
+      .nav-link { font-size: 9px; }
+      .checkpoints { gap: 0; }
+      .checkpoint-item { font-size: 7px; }
+    }
+    @media (max-width: 420px) {
+      .meteor-instructions { grid-template-columns: 1fr; }
+      .meteor-instructions .gesture-demo { display: none; }
+      .meteor-stage { min-height: 340px; }
+      .right-panel { grid-template-columns: 1fr; }
+      .destination-card { border-right: 0; border-bottom: 1px solid var(--line); }
+      .status-card { padding-bottom: 0; }
+      .action-row { padding-top: 8px; }
+      .stage-panel { min-height: 390px; }
+      .stage { min-height: 270px; }
+      .bottom-nav { grid-template-columns: 1fr 1fr; }
+      .checkpoints { order: 3; grid-column: 1 / -1; grid-row: 2; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand" aria-label="Space Line・22世紀の宇宙交通">
+        <div class="brand-mark"><span>✦</span></div>
+        <div><div class="brand-name">SPACE LINE</div><div class="brand-sub">22世紀の宇宙交通</div></div>
+      </div>
+      <nav class="steps" aria-label="ミッションの進行状況">
+        <div class="step"><span class="step-index">01</span> 出発準備</div>
+        <div class="step"><span class="step-index">02</span> 目的地選択</div>
+        <div class="step active" data-screen="meteor"><span class="step-index">03</span> 隕石回避</div>
+        <div class="step" data-screen="route"><span class="step-index">04</span> ルート案内</div>
+        <div class="step" data-screen="animation"><span class="step-index">05</span> 次のアニメーション</div>
+      </nav>
+      <div class="live"><i></i> FLIGHT SYSTEM ONLINE</div>
+      <div class="camera-monitor" aria-label="カメラのライブ映像">
+        <img class="camera-preview" id="cameraPreview" alt="OpenCVカメラの手のプレビュー">
+        <div class="camera-status" id="cameraStatus" aria-live="polite">カメラを自動起動しています…</div>
+      </div>
+    </header>
+
+    <section class="panel meteor-game mission-screen active" id="meteorScreen" aria-labelledby="meteorTitle">
+      <header class="stage-head meteor-head">
+        <div class="route-title"><span class="eyebrow">MINI GAME / MISSION 03</span><strong id="meteorTitle">隕石回避ミッション</strong><small>ASTEROID DODGE · 10 SECONDS</small></div>
+        <span class="difficulty">✦ 10秒間よけよう</span>
+      </header>
+      <div class="meteor-layout">
+        <aside class="meteor-instructions">
+          <div class="section-label">操作方法 <span style="color:#7096a3;font-size:9px;font-weight:400">CONTROL</span></div>
+          <p>カメラに向かって手を左右に動かし、飛んでくる隕石をよけましょう。10秒間ぶつからずに進めばクリアです。</p>
+          <div class="gesture-demo" aria-hidden="true">
+            <span class="arrow left">⬅</span><div class="gesture-frame">✋</div><span class="arrow right">➜</span>
+          </div>
+          <button class="button secondary" id="dodgeStartButton" type="button">▶ ミッション開始</button>
+        </aside>
+        <div class="meteor-stage" id="meteorStage">
+          <canvas id="meteorCanvas" aria-label="手を左右に動かして隕石をよけるゲーム"></canvas>
+          <div class="meteor-hud">
+            <div><span>残り時間</span><b id="dodgeTimer">10.0</b><small>SEC</small></div>
+            <div class="dodge-state" id="dodgeState">CAMERA READY</div>
+          </div>
+          <div class="dodge-overlay" id="dodgeOverlay">
+            <div class="dodge-overlay-card">
+              <span class="overlay-icon">✦</span>
+              <h2 id="dodgeTitle">隕石回避ミッション</h2>
+              <p id="dodgeMessage">カメラを準備しています。準備完了後、ミッションを開始してください。</p>
+              <button class="button primary" id="dodgeOverlayButton" type="button">ミッション開始</button>
+            </div>
+          </div>
+        </div>
+        <aside class="meteor-status">
+          <div class="section-label">ミッション状況 <span style="color:#7096a3;font-size:9px;font-weight:400">MISSION STATUS</span></div>
+          <div class="mission-fact"><span>▸ ミッション</span><b>隕石回避</b></div>
+          <div class="mission-fact"><span>▸ 挑戦時間</span><b>00:10 秒</b></div>
+          <div class="mission-fact"><span>▸ 操作方法</span><b>手を左右に移動</b></div>
+          <div class="ship-mini" aria-hidden="true"><span>🚀</span><div><i></i><i></i><i></i></div></div>
+          <div class="metric-head"><span>回避成功　DODGES</span><b id="dodgeCount">0</b></div>
+          <div class="bar"><i id="dodgeBar"></i></div>
+          <div class="camera-status dodge-result" id="dodgeResult" aria-live="polite">手を画面の中央に映してください。</div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="layout mission-screen" id="routeScreen" aria-label="ルート案内ゲーム">
+      <aside class="panel left-panel">
+        <div class="eyebrow">MISSION 04 / ROUTE GUIDANCE</div>
+        <h1>ルート案内</h1>
+        <div class="title-en">ROUTE GUIDANCE</div>
+        <p class="intro">指先で宇宙船を操作し、ランダムに生成されたルートをたどって地球から火星を目指しましょう。落ち着いて進めば、ミッション完了です。</p>
+
+        <div class="control-card">
+          <div class="section-label">操作方法 <span style="color:#7096a3;font-size:9px;font-weight:400">CONTROL</span></div>
+          <div class="gesture-demo" aria-hidden="true">
+            <span class="arrow left">⬅</span><div class="gesture-frame">✋</div><span class="arrow right">➜</span>
+          </div>
+          <ul class="instruction-list">
+            <li><b>✦</b><span>人差し指をルートに沿って動かします</span></li>
+            <li><b>◎</b><span>画面上部のカメラ映像で手を確認してください</span></li>
+            <li><b>✓</b><span>チェックポイントを通過してゴールを目指します</span></li>
+          </ul>
+        </div>
+
+        <div class="ship-info">
+          <div><span>SHIP</span>SL-01</div><div><span>MODE</span>ROUTE</div><div><span>MISSION</span>EARTH → MARS</div>
+        </div>
+      </aside>
+
+      <section class="panel stage-panel">
+        <header class="stage-head">
+          <div class="route-title">地球 → 目的地<small>EARTH TO TARGET PLANET</small></div>
+          <span class="difficulty">✦ やさしいルート</span>
+        </header>
+        <div class="stage" id="stage" aria-label="ルートゲームエリア">
+          <svg id="routeSvg" viewBox="0 0 1000 560" preserveAspectRatio="xMidYMid meet" role="img" aria-label="地球から火星へ向かうランダムルート">
+            <path id="routeShadow" class="route-shadow"></path>
+            <path id="routeBase" class="route-base"></path>
+            <path id="routeProgress" class="route-progress"></path>
+            <g id="checkpoints"></g>
+            <g id="endMarker">
+              <circle class="start-pulse" cx="0" cy="0" r="13" fill="none" stroke="#66f1ff" stroke-width="1"></circle>
+              <circle class="endpoint-ring" cx="0" cy="0" r="12"></circle>
+              <circle class="endpoint-core" cx="0" cy="0" r="4"></circle>
+              <text class="endpoint-label" x="18" y="-10">火星 · MARS</text>
+            </g>
+            <g id="startMarker">
+              <circle class="endpoint-ring" cx="0" cy="0" r="11"></circle>
+              <circle class="endpoint-core" cx="0" cy="0" r="3"></circle>
+              <text class="start-label" x="-4" y="30">地球 · EARTH</text>
+            </g>
+            <path id="cursorTrail" class="cursor-trail"></path>
+            <g id="cursor" visibility="hidden">
+              <circle class="cursor-halo" cx="0" cy="0" r="15"></circle>
+              <circle class="cursor-dot" cx="0" cy="0" r="4"></circle>
+            </g>
+          </svg>
+          <div class="stage-hint" id="stageHint">✦ 地球のスタート地点に移動して出発</div>
+          <div class="completion" id="completion">
+            <div class="completion-box">
+              <div class="completion-icon">✦</div>
+              <h2>火星に到着！</h2>
+              <p>宇宙船は無事に火星へ到着しました。次の旅へ進みましょう。</p>
+              <button class="button primary" id="continueButton" type="button">次の画面へ進む →</button>
+            </div>
+          </div>
+        </div>
+        <footer class="stage-footer">
+          <div class="route-status" id="routeStatus"><i class="status-light"></i><span id="statusText">出発待ち</span></div>
+          <div class="progress-readout">ルート進捗 <span id="progressText">0%</span></div>
+        </footer>
+      </section>
+
+      <aside class="panel right-panel">
+        <section class="destination-card">
+          <div class="section-label">火星 <span style="color:#7096a3;font-size:9px;font-weight:400">MARS</span></div>
+          <div class="planet-art" role="img" aria-label="火星基地のイメージ"></div>
+          <div class="destination-facts">
+            <div><span>↔　距離</span><b>約 78,000,000 km</b></div>
+            <div><span>◷　飛行時間</span><b>約12分（シミュレーション）</b></div>
+            <div><span>⚑　ミッション</span><b>探査 / 観測 / 研究</b></div>
+          </div>
+        </section>
+        <section class="status-card">
+          <div class="section-label">飛行状況 <span style="color:#7096a3;font-size:9px;font-weight:400">FLIGHT STATUS</span></div>
+          <div class="status-banner"><span>»</span> ルート案内中 <span>»</span></div>
+          <div class="metric">
+            <div class="metric-head"><span>通過チェックポイント　CHECKPOINT</span><b id="checkpointText">0 / 5</b></div>
+            <div class="bar"><i id="checkpointBar"></i></div>
+          </div>
+          <div class="metric">
+            <div class="metric-head"><span>ルート進捗　ROUTE PROGRESS</span><b id="sideProgress">0%</b></div>
+            <div class="bar"><i id="progressBar"></i></div>
+          </div>
+          <div class="metric">
+            <div class="metric-head"><span>衝突リスク　COLLISION RISK</span><b class="safe">◈ 低 LOW</b></div>
+          </div>
+        </section>
+        <div class="action-row">
+          <button class="button secondary" id="newRouteButton" type="button">↻ 新しいルート</button>
+        </div>
+      </aside>
+    </section>
+
+    <section class="panel animation-slot mission-screen" id="nextAnimationSlot" aria-labelledby="animationTitle">
+      <div class="animation-slot-heading">
+        <div><div class="eyebrow">MISSION 05 / NEXT SEQUENCE</div><h2 id="animationTitle">次のアニメーション</h2></div>
+        <span class="difficulty">CONTINUE PLAYBACK</span>
+      </div>
+      <div class="animation-placeholder" id="animationPlaceholder">
+        <span aria-hidden="true">▶</span>
+        <p>ルート案内の完了後、ここで次のアニメーションを再生します。</p>
+        <small>SPACE RESERVED FOR THE NEXT ANIMATION</small>
+      </div>
+      <video class="next-animation" id="nextAnimation" controls playsinline preload="metadata" hidden></video>
+    </section>
+
+    <nav class="bottom-nav" aria-label="学習フローのナビゲーション">
+      <a class="nav-link" id="previousLink" href="#previous-step">←　前のステップへ<span>PREVIOUS STEP</span></a>
+      <div class="checkpoints" id="checkpointNav" aria-label="ルートチェックポイント"></div>
+      <a class="nav-link" id="nextLink" href="#next-video">次の動画へ　→<span>NEXT VIDEO</span></a>
+    </nav>
+  </main>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const svgNS = "http://www.w3.org/2000/svg";
+      const routeSvg = document.getElementById("routeSvg");
+      const stage = document.getElementById("stage");
+      const routeShadow = document.getElementById("routeShadow");
+      const routeBase = document.getElementById("routeBase");
+      const routeProgress = document.getElementById("routeProgress");
+      const checkpointGroup = document.getElementById("checkpoints");
+      const cursor = document.getElementById("cursor");
+      const cursorTrail = document.getElementById("cursorTrail");
+      const completion = document.getElementById("completion");
+      const cameraPreview = document.getElementById("cameraPreview");
+      const cameraStatus = document.getElementById("cameraStatus");
+      const meteorCanvas = document.getElementById("meteorCanvas");
+      const meteorContext = meteorCanvas.getContext("2d");
+      const meteorStage = document.getElementById("meteorStage");
+      const dodgeOverlay = document.getElementById("dodgeOverlay");
+      const nextAnimation = document.getElementById("nextAnimation");
+      const animationPlaceholder = document.getElementById("animationPlaceholder");
+      const navConfig = {
+        previousUrl: "",
+        nextVideoUrl: "",
+        ...(window.SpaceLineGameConfig || {})
+      };
+      const sampleCount = 500;
+      const checkpointsTotal = 5;
+      const samples = [];
+      const cursorHistory = [];
+      let progressIndex = 0;
+      let started = false;
+      let completed = false;
+      let cameraActive = false;
+      let handPoll = 0;
+      let previewPoll = 0;
+      let handPollBusy = false;
+      let dodgeMode = "ready";
+      let dodgeStartedAt = 0;
+      let lastDodgeFrame = 0;
+      let lastMeteorSpawn = 0;
+      let dodgeFrame = 0;
+      let shipX = .5;
+      let shipTargetX = .5;
+      let lastHandAt = 0;
+      let dodgeCount = 0;
+      let meteors = [];
+      let meteorStars = [];
+      let activeScreen = "meteor";
+
+      function make(tag, attributes) {
+        const element = document.createElementNS(svgNS, tag);
+        for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, value);
+        return element;
+      }
+
+      function bezier(a, b, c, d, t) {
+        const u = 1 - t;
+        const u2 = u * u;
+        const t2 = t * t;
+        return {
+          x: u2 * u * a.x + 3 * u2 * t * b.x + 3 * u * t2 * c.x + t2 * t * d.x,
+          y: u2 * u * a.y + 3 * u2 * t * b.y + 3 * u * t2 * c.y + t2 * t * d.y
+        };
+      }
+
+      function createRoute() {
+        const anchors = [
+          { x: 104, y: 460 },
+          { x: 290, y: 385 + Math.random() * 45 },
+          { x: 470, y: 250 + Math.random() * 60 },
+          { x: 675, y: 210 + Math.random() * 80 },
+          { x: 890, y: 92 }
+        ];
+        const points = [];
+        for (let segment = 0; segment < anchors.length - 1; segment++) {
+          const a = anchors[segment];
+          const d = anchors[segment + 1];
+          const dx = d.x - a.x;
+          const dy = d.y - a.y;
+          const bend = (Math.random() - .5) * 55;
+          const b = { x: a.x + dx * .34, y: a.y + dy * .28 + bend };
+          const c = { x: a.x + dx * .68, y: a.y + dy * .72 - bend };
+          for (let step = 0; step < 100; step++) points.push(bezier(a, b, c, d, step / 100));
+        }
+        points.push(anchors[anchors.length - 1]);
+        samples.splice(0, samples.length, ...points);
+        const path = samples.map((point, index) => `${index ? "L" : "M"}${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(" ");
+        for (const element of [routeShadow, routeBase, routeProgress]) element.setAttribute("d", path);
+        const length = routeBase.getTotalLength();
+        routeProgress.style.strokeDasharray = `${length}`;
+        routeProgress.style.strokeDashoffset = `${length}`;
+        document.getElementById("startMarker").setAttribute("transform", `translate(${anchors[0].x} ${anchors[0].y})`);
+        document.getElementById("endMarker").setAttribute("transform", `translate(${anchors[anchors.length - 1].x} ${anchors[anchors.length - 1].y})`);
+        renderCheckpoints();
+        progressIndex = 0;
+        started = false;
+        completed = false;
+        cursorHistory.length = 0;
+        cursor.setAttribute("visibility", "hidden");
+        cursorTrail.setAttribute("d", "");
+        completion.classList.remove("show");
+        stage.setAttribute("aria-label", "地球から火星へ向かうランダムルート");
+        updateProgress();
+        setStatus("出発待ち", "✦ 地球のスタート地点に移動して出発");
+      }
+
+      function renderCheckpoints() {
+        checkpointGroup.replaceChildren();
+        const nav = document.getElementById("checkpointNav");
+        nav.replaceChildren();
+        for (let i = 1; i <= checkpointsTotal; i++) {
+          const index = Math.round(samples.length * i / (checkpointsTotal + 1));
+          const point = samples[index];
+          checkpointGroup.appendChild(make("circle", {
+            cx: point.x, cy: point.y, r: 7, class: "checkpoint", "data-index": index
+          }));
+          const item = document.createElement("div");
+          item.className = "checkpoint-item";
+          item.dataset.index = String(index);
+          item.innerHTML = `<i></i><span>CP${i}</span>`;
+          nav.appendChild(item);
+        }
+      }
+
+      function setStatus(message, hint) {
+        document.getElementById("statusText").textContent = message;
+        document.getElementById("stageHint").textContent = hint;
+        document.getElementById("routeStatus").className = `route-status${started ? " ready" : ""}${completed ? " done" : ""}`;
+      }
+
+      function updateProgress() {
+        const fraction = progressIndex / (samples.length - 1);
+        const percent = Math.floor(fraction * 100);
+        const length = routeBase.getTotalLength();
+        routeProgress.style.strokeDashoffset = `${length * (1 - fraction)}`;
+        document.getElementById("progressText").textContent = `${percent}%`;
+        document.getElementById("sideProgress").textContent = `${percent}%`;
+        document.getElementById("progressBar").style.width = `${percent}%`;
+        const passed = Math.min(checkpointsTotal, Math.floor(fraction * (checkpointsTotal + 1)));
+        document.getElementById("checkpointText").textContent = `${passed} / ${checkpointsTotal}`;
+        document.getElementById("checkpointBar").style.width = `${passed / checkpointsTotal * 100}%`;
+        checkpointGroup.querySelectorAll(".checkpoint").forEach((point) => {
+          point.classList.toggle("passed", Number(point.dataset.index) <= progressIndex);
+        });
+        document.getElementById("checkpointNav").querySelectorAll(".checkpoint-item").forEach((item) => {
+          const index = Number(item.dataset.index);
+          item.classList.toggle("passed", index <= progressIndex);
+          item.classList.toggle("active", index > progressIndex && index - progressIndex < 85);
+        });
+      }
+
+      function handPoint(x, y) {
+        const rect = stage.getBoundingClientRect();
+        const screenPoint = routeSvg.createSVGPoint();
+        screenPoint.x = rect.left + (1 - x) * rect.width;
+        screenPoint.y = rect.top + y * rect.height;
+        const local = screenPoint.matrixTransform(routeSvg.getScreenCTM().inverse());
+        return { x: local.x, y: local.y };
+      }
+
+      function moveCursor(point) {
+        if (completed) return;
+        cursor.setAttribute("visibility", "visible");
+        cursor.setAttribute("transform", `translate(${point.x} ${point.y})`);
+        cursorHistory.push(point);
+        if (cursorHistory.length > 38) cursorHistory.shift();
+        cursorTrail.setAttribute("d", cursorHistory.map((p, index) => `${index ? "L" : "M"}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" "));
+
+        let closestIndex = 0;
+        let closestDistance = Infinity;
+        for (let i = Math.max(0, progressIndex - 12); i < samples.length; i++) {
+          const dx = samples[i].x - point.x;
+          const dy = samples[i].y - point.y;
+          const distance = dx * dx + dy * dy;
+          if (distance < closestDistance) {
+            closestDistance = distance;
+            closestIndex = i;
+          }
+        }
+        const nearRoute = closestDistance <= 76 * 76;
+        if (!started) {
+          const start = samples[0];
+          if (Math.hypot(start.x - point.x, start.y - point.y) < 70) {
+            started = true;
+            setStatus("ルート案内中", "光るルートに沿って火星へ進みましょう");
+          } else {
+            setStatus("出発待ち", "✦ 地球のスタート地点に移動して出発");
+          }
+        }
+        if (started && nearRoute && closestIndex >= progressIndex - 12) {
+          progressIndex = Math.max(progressIndex, closestIndex);
+          updateProgress();
+          setStatus("ルート案内中", "光るルートに沿って火星へ進みましょう");
+        } else if (started && !nearRoute) {
+          setStatus("ルートを探索中", "✦ 光るルートに戻ると再開できます");
+        }
+        if (progressIndex >= samples.length - 15 && closestDistance < 52 * 52) finishRoute();
+      }
+
+      function finishRoute() {
+        if (completed) return;
+        completed = true;
+        progressIndex = samples.length - 1;
+        updateProgress();
+        setStatus("火星に到着しました", "✓ ミッション完了！次の旅へ進みましょう");
+        completion.classList.add("show");
+        dispatchNavigation("route-complete", { progress: 100 });
+        window.setTimeout(() => {
+          if (completed && activeScreen === "route") showMissionScreen("animation");
+        }, 1400);
+      }
+
+      function dispatchNavigation(name, detail) {
+        window.dispatchEvent(new CustomEvent(`spaceline:${name}`, { detail }));
+      }
+
+      function resizeMeteorCanvas() {
+        const bounds = meteorStage.getBoundingClientRect();
+        const scale = window.devicePixelRatio || 1;
+        meteorCanvas.width = Math.round(bounds.width * scale);
+        meteorCanvas.height = Math.round(bounds.height * scale);
+        meteorContext.setTransform(scale, 0, 0, scale, 0, 0);
+        meteorStars = Array.from({ length: Math.round(bounds.width * bounds.height / 5000) }, () => ({
+          x: Math.random() * bounds.width,
+          y: Math.random() * bounds.height,
+          radius: .4 + Math.random() * 1.1,
+          alpha: .2 + Math.random() * .6
+        }));
+        drawMeteorScene(performance.now());
+      }
+
+      function drawMeteorScene(now) {
+        const context = meteorContext;
+        const width = meteorCanvas.clientWidth;
+        const height = meteorCanvas.clientHeight;
+        if (!width || !height) return;
+
+        context.clearRect(0, 0, width, height);
+        for (const star of meteorStars) {
+          const twinkle = .78 + Math.sin(now / 580 + star.x) * .22;
+          context.fillStyle = `rgba(218, 241, 255, ${star.alpha * twinkle})`;
+          context.beginPath();
+          context.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+          context.fill();
+        }
+
+        const horizon = height * .13;
+        const shipY = height * .83;
+        const lane = context.createLinearGradient(0, horizon, 0, height);
+        lane.addColorStop(0, "rgba(36, 178, 223, .015)");
+        lane.addColorStop(1, "rgba(30, 147, 195, .16)");
+        context.fillStyle = lane;
+        context.beginPath();
+        context.moveTo(width * .48, horizon);
+        context.lineTo(width * .52, horizon);
+        context.lineTo(width * .91, height);
+        context.lineTo(width * .09, height);
+        context.closePath();
+        context.fill();
+
+        context.save();
+        context.shadowBlur = 12;
+        context.shadowColor = "#48dfff";
+        context.strokeStyle = "rgba(85, 232, 255, .75)";
+        context.lineWidth = 2;
+        for (const edge of [.09, .91]) {
+          context.beginPath();
+          context.moveTo(width * .5, horizon);
+          context.lineTo(width * edge, height);
+          context.stroke();
+        }
+        context.restore();
+
+        const earthGlow = context.createRadialGradient(width * .5, height * 1.08, 3, width * .5, height * 1.08, width * .56);
+        earthGlow.addColorStop(0, "rgba(97, 207, 255, .4)");
+        earthGlow.addColorStop(.28, "rgba(33, 134, 219, .18)");
+        earthGlow.addColorStop(1, "rgba(5, 16, 43, 0)");
+        context.fillStyle = earthGlow;
+        context.fillRect(0, height * .7, width, height * .3);
+        context.strokeStyle = "rgba(112, 220, 255, .56)";
+        context.lineWidth = 2;
+        context.beginPath();
+        context.ellipse(width * .5, height * 1.04, width * .52, height * .2, 0, Math.PI, Math.PI * 2);
+        context.stroke();
+
+        for (const meteor of meteors) drawMeteor(context, meteor, width, height, now);
+        drawPlayerShip(context, shipX * width, shipY, Math.min(1, width / 560), now);
+      }
+
+      function drawMeteor(context, meteor, width, height, now) {
+        const x = meteor.x * width;
+        const y = meteor.y * height;
+        const radius = meteor.radius * height;
+        context.save();
+        context.translate(x, y);
+        context.rotate(meteor.rotation + now / 1800);
+        context.shadowColor = "rgba(255, 103, 70, .8)";
+        context.shadowBlur = radius * .55;
+        const rock = context.createRadialGradient(-radius * .3, -radius * .4, radius * .08, 0, 0, radius);
+        rock.addColorStop(0, "#c8d0d5");
+        rock.addColorStop(.38, "#687580");
+        rock.addColorStop(.78, "#303b47");
+        rock.addColorStop(1, "#111a27");
+        context.fillStyle = rock;
+        context.beginPath();
+        meteor.shape.forEach((point, index) => {
+          const px = point.x * radius;
+          const py = point.y * radius;
+          if (index === 0) context.moveTo(px, py);
+          else context.lineTo(px, py);
+        });
+        context.closePath();
+        context.fill();
+        context.shadowBlur = 0;
+        context.fillStyle = "rgba(8, 15, 25, .48)";
+        for (const crater of meteor.craters) {
+          context.beginPath();
+          context.ellipse(crater.x * radius, crater.y * radius, crater.radius * radius, crater.radius * radius * .68, crater.rotation, 0, Math.PI * 2);
+          context.fill();
+          context.strokeStyle = "rgba(224, 234, 239, .13)";
+          context.lineWidth = 1;
+          context.stroke();
+        }
+        context.restore();
+      }
+
+      function drawPlayerShip(context, x, y, scale, now) {
+        const flicker = .8 + Math.sin(now / 75) * .2;
+        context.save();
+        context.translate(x, y);
+        context.scale(scale, scale);
+        context.shadowColor = "#4bdfff";
+        context.shadowBlur = 20;
+        context.fillStyle = `rgba(78, 223, 255, ${flicker})`;
+        for (const offset of [-11, 11]) {
+          context.beginPath();
+          context.moveTo(offset - 3, 11);
+          context.lineTo(offset, 29 + Math.random() * 5);
+          context.lineTo(offset + 3, 11);
+          context.closePath();
+          context.fill();
+        }
+        context.shadowBlur = 8;
+        const hull = context.createLinearGradient(-24, -16, 24, 23);
+        hull.addColorStop(0, "#f5feff");
+        hull.addColorStop(.38, "#86d9ec");
+        hull.addColorStop(.68, "#537d9c");
+        hull.addColorStop(1, "#e5faff");
+        context.fillStyle = hull;
+        context.beginPath();
+        context.moveTo(0, -27);
+        context.lineTo(9, -8);
+        context.lineTo(24, 15);
+        context.lineTo(8, 11);
+        context.lineTo(0, 19);
+        context.lineTo(-8, 11);
+        context.lineTo(-24, 15);
+        context.lineTo(-9, -8);
+        context.closePath();
+        context.fill();
+        context.shadowBlur = 10;
+        context.fillStyle = "#69eaff";
+        context.beginPath();
+        context.ellipse(0, 0, 5, 9, 0, 0, Math.PI * 2);
+        context.fill();
+        context.restore();
+      }
+
+      function spawnMeteor(now) {
+        const shape = Array.from({ length: 10 }, (_, index) => {
+          const angle = index / 10 * Math.PI * 2;
+          const radius = .72 + Math.random() * .3;
+          return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
+        });
+        meteors.push({
+          x: .12 + Math.random() * .76,
+          y: -.08,
+          radius: .033 + Math.random() * .018,
+          speed: .32 + Math.random() * .14,
+          rotation: Math.random() * Math.PI * 2,
+          shape,
+          craters: Array.from({ length: 3 }, () => ({
+            x: (Math.random() - .5) * .8,
+            y: (Math.random() - .5) * .8,
+            radius: .1 + Math.random() * .14,
+            rotation: Math.random() * Math.PI
+          }))
+        });
+        lastMeteorSpawn = now;
+      }
+
+      function updateDodge(now) {
+        const width = meteorCanvas.clientWidth;
+        const height = meteorCanvas.clientHeight;
+        const delta = Math.min((now - lastDodgeFrame) / 1000, .05);
+        lastDodgeFrame = now;
+        shipX += (shipTargetX - shipX) * Math.min(1, delta * 8);
+
+        if (now - lastMeteorSpawn > 720) spawnMeteor(now);
+        const shipY = height * .83;
+        const shipRadius = 19 * Math.min(1, width / 560);
+        for (const meteor of meteors) {
+          meteor.y += meteor.speed * delta;
+          const dx = meteor.x * width - shipX * width;
+          const dy = meteor.y * height - shipY;
+          const meteorRadius = meteor.radius * height;
+          if (Math.abs(dy) < meteorRadius + shipRadius && Math.abs(dx) < meteorRadius * .78 + shipRadius) {
+            endDodgeGame(false);
+            return;
+          }
+        }
+
+        const before = meteors.length;
+        meteors = meteors.filter((meteor) => meteor.y < 1.08);
+        if (meteors.length < before) {
+          dodgeCount += before - meteors.length;
+          document.getElementById("dodgeCount").textContent = String(dodgeCount);
+        }
+
+        const elapsed = (now - dodgeStartedAt) / 1000;
+        const remaining = Math.max(0, 10 - elapsed);
+        document.getElementById("dodgeTimer").textContent = remaining.toFixed(1);
+        document.getElementById("dodgeBar").style.width = `${(elapsed / 10) * 100}%`;
+        if (remaining === 0) {
+          endDodgeGame(true);
+          return;
+        }
+        drawMeteorScene(now);
+        dodgeFrame = requestAnimationFrame(updateDodge);
+      }
+
+      function syncDodgeOverlay() {
+        const title = document.getElementById("dodgeTitle");
+        const message = document.getElementById("dodgeMessage");
+        const button = document.getElementById("dodgeOverlayButton");
+        const sideButton = document.getElementById("dodgeStartButton");
+        dodgeOverlay.hidden = dodgeMode === "running";
+
+        if (dodgeMode === "ready") {
+          title.textContent = "隕石回避ミッション";
+          message.textContent = cameraActive
+            ? "カメラに手が映っています。準備ができたら10秒間のミッションを始めましょう。"
+            : "カメラを準備しています。少しお待ちください。";
+          button.textContent = "ミッション開始";
+          button.disabled = !cameraActive;
+          sideButton.textContent = "▶ ミッション開始";
+          sideButton.disabled = !cameraActive;
+          document.getElementById("dodgeState").textContent = cameraActive ? "CAMERA READY" : "CAMERA OFFLINE";
+        } else if (dodgeMode === "won") {
+          title.textContent = "ミッション成功！";
+          message.textContent = `10秒間の回避に成功しました。隕石を${dodgeCount}個よけました。`;
+          button.textContent = "ルート案内へ進む";
+          button.disabled = false;
+          sideButton.textContent = "ルート案内へ進む →";
+          sideButton.disabled = false;
+          document.getElementById("dodgeState").textContent = "MISSION COMPLETE";
+        } else if (dodgeMode === "lost") {
+          title.textContent = "隕石に衝突！";
+          message.textContent = "大丈夫。手を左右に動かして、もう一度挑戦しましょう。";
+          button.textContent = "もう一度挑戦";
+          button.disabled = !cameraActive;
+          sideButton.textContent = "↻ もう一度挑戦";
+          sideButton.disabled = !cameraActive;
+          document.getElementById("dodgeState").textContent = "MISSION FAILED";
+        }
+      }
+
+      function startDodgeGame() {
+        if (!cameraActive) {
+          document.getElementById("dodgeResult").textContent = "カメラを準備しています。少しお待ちください。";
+          syncDodgeOverlay();
+          return;
+        }
+        if (performance.now() - lastHandAt > 1800) {
+          document.getElementById("dodgeResult").textContent = "カメラに手を映してから、ミッションを開始してください。";
+          return;
+        }
+        cancelAnimationFrame(dodgeFrame);
+        dodgeMode = "running";
+        dodgeStartedAt = performance.now();
+        lastDodgeFrame = dodgeStartedAt;
+        lastMeteorSpawn = dodgeStartedAt;
+        meteors = [];
+        dodgeCount = 0;
+        document.getElementById("dodgeTimer").textContent = "10.0";
+        document.getElementById("dodgeCount").textContent = "0";
+        document.getElementById("dodgeBar").style.width = "0%";
+        document.getElementById("dodgeResult").textContent = "手を左右に動かして隕石をよけてください！";
+        syncDodgeOverlay();
+        dodgeFrame = requestAnimationFrame(updateDodge);
+      }
+
+      function endDodgeGame(won) {
+        if (dodgeMode !== "running") return;
+        cancelAnimationFrame(dodgeFrame);
+        dodgeMode = won ? "won" : "lost";
+        if (won) {
+          document.getElementById("dodgeTimer").textContent = "0.0";
+          document.getElementById("dodgeBar").style.width = "100%";
+          document.getElementById("dodgeResult").textContent = "成功！ルート案内ミッションへ進みましょう。";
+          window.setTimeout(() => {
+            if (dodgeMode === "won" && activeScreen === "meteor") continueToRoute();
+          }, 1400);
+        } else {
+          document.getElementById("dodgeResult").textContent = "もう一度挑戦できます。";
+        }
+        drawMeteorScene(performance.now());
+        syncDodgeOverlay();
+        dispatchNavigation("meteor-complete", { success: won, dodges: dodgeCount, durationSeconds: 10 });
+      }
+
+      const meteorResizeObserver = new ResizeObserver(resizeMeteorCanvas);
+      meteorResizeObserver.observe(meteorStage);
+      function continueToRoute() {
+        showMissionScreen("route");
+      }
+
+      function showMissionScreen(name) {
+        const screens = {
+          meteor: document.getElementById("meteorScreen"),
+          route: document.getElementById("routeScreen"),
+          animation: document.getElementById("nextAnimationSlot")
+        };
+        if (!Object.prototype.hasOwnProperty.call(screens, name)) {
+          throw new TypeError(`Unknown mission screen: ${name}`);
+        }
+        activeScreen = name;
+        Object.entries(screens).forEach(([screenName, element]) => {
+          const active = screenName === name;
+          element.classList.toggle("active", active);
+          element.setAttribute("aria-hidden", String(!active));
+        });
+        document.querySelectorAll(".steps .step[data-screen]").forEach((step) => {
+          const active = step.dataset.screen === name;
+          step.classList.toggle("active", active);
+          if (active) step.setAttribute("aria-current", "step");
+          else step.removeAttribute("aria-current");
+        });
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        dispatchNavigation("screen-change", { screen: name });
+        if (name === "animation" && nextAnimation.getAttribute("src")) playNextAnimation();
+      }
+
+      document.getElementById("dodgeStartButton").addEventListener("click", () => {
+        if (dodgeMode === "won") continueToRoute();
+        else startDodgeGame();
+      });
+      document.getElementById("dodgeOverlayButton").addEventListener("click", () => {
+        if (dodgeMode === "won") continueToRoute();
+        else startDodgeGame();
+      });
+
+      function navigate(kind) {
+        const isNext = kind === "next";
+        const callbackName = isNext ? "onNextVideo" : "onPreviousStep";
+        const url = isNext ? navConfig.nextVideoUrl : navConfig.previousUrl;
+        const detail = { url: url || null, completed, progress: Math.floor(progressIndex / (samples.length - 1) * 100) };
+        dispatchNavigation(isNext ? "next-video" : "previous-step", detail);
+        if (typeof navConfig[callbackName] === "function") {
+          navConfig[callbackName](detail);
+          return;
+        }
+        if (url) window.location.assign(url);
+      }
+
+      function playNextAnimation() {
+        animationPlaceholder.hidden = true;
+        nextAnimation.hidden = false;
+        nextAnimation.play().catch((error) => {
+          console.error("Unable to play the next animation:", error);
+        });
+      }
+
+      document.getElementById("previousLink").addEventListener("click", (event) => {
+        event.preventDefault();
+        navigate("previous");
+      });
+      document.getElementById("nextLink").addEventListener("click", (event) => {
+        event.preventDefault();
+        navigate("next");
+      });
+      document.getElementById("continueButton").addEventListener("click", () => showMissionScreen("animation"));
+      document.getElementById("newRouteButton").addEventListener("click", createRoute);
+      async function startCamera() {
+        if (cameraActive) return;
+        cameraStatus.textContent = "Python + OpenCVでカメラを自動起動しています…";
+        try {
+          const response = await fetch("/api/camera/start", { method: "POST" });
+          const state = await response.json();
+          if (!response.ok) throw new Error(state.error || `カメラを起動できませんでした（HTTP ${response.status}）`);
+          cameraActive = true;
+          handPoll = window.setInterval(readHandPosition, 50);
+          previewPoll = window.setInterval(refreshCameraPreview, 300);
+          refreshCameraPreview();
+          cameraPreview.classList.add("visible");
+          cameraStatus.textContent = "カメラ接続済み · 手を左右に動かして操作できます";
+          syncDodgeOverlay();
+        } catch (error) {
+          cameraStatus.textContent = `カメラを起動できません：${error.message}`;
+          console.error("Unable to start hand tracking:", error);
+          syncDodgeOverlay();
+        }
+      }
+
+      async function readHandPosition() {
+        if (!cameraActive || handPollBusy) return;
+        handPollBusy = true;
+        try {
+          const response = await fetch("/api/hand", { cache: "no-store" });
+          const state = await response.json();
+          if (!response.ok) throw new Error(state.error || `手のデータを取得できませんでした（HTTP ${response.status}）`);
+          if (!state.running) {
+            if (state.error) throw new Error(state.error);
+            return;
+          }
+          if (state.hand) {
+            lastHandAt = performance.now();
+            shipTargetX = Math.max(.12, Math.min(.88, 1 - state.hand.x));
+            document.getElementById("dodgeResult").textContent = "手を検出中 · 左右に動かして船を操作";
+            if (dodgeMode !== "running") moveCursor(handPoint(state.hand.x, state.hand.y));
+          } else {
+            cameraStatus.textContent = "手が映るのを待っています · カメラに手を映してください";
+            document.getElementById("dodgeResult").textContent = "手を画面の中央に映してください。";
+          }
+        } catch (error) {
+          cameraStatus.textContent = `Pythonのジェスチャーサービスでエラーが発生しました：${error.message}`;
+          console.error("Unable to read hand position:", error);
+          window.clearInterval(handPoll);
+          window.clearInterval(previewPoll);
+          cameraActive = false;
+          cancelAnimationFrame(dodgeFrame);
+          dodgeMode = "ready";
+          meteors = [];
+          cameraPreview.removeAttribute("src");
+          cameraPreview.classList.remove("visible");
+          navigator.sendBeacon("/api/camera/stop");
+          syncDodgeOverlay();
+        } finally {
+          handPollBusy = false;
+        }
+      }
+
+      function refreshCameraPreview() {
+        if (cameraActive) cameraPreview.src = `/camera.jpg?t=${Date.now()}`;
+      }
+
+      window.addEventListener("pagehide", () => {
+        if (cameraActive) navigator.sendBeacon("/api/camera/stop");
+      }, { once: true });
+      nextAnimation.addEventListener("ended", () => {
+        dispatchNavigation("animation-ended", { src: nextAnimation.currentSrc });
+      });
+      window.SpaceLineGame = {
+        setNavigation(options = {}) {
+          if (typeof options.previousUrl === "string") navConfig.previousUrl = options.previousUrl;
+          if (typeof options.nextVideoUrl === "string") navConfig.nextVideoUrl = options.nextVideoUrl;
+          if (typeof options.onPreviousStep === "function") navConfig.onPreviousStep = options.onPreviousStep;
+          if (typeof options.onNextVideo === "function") navConfig.onNextVideo = options.onNextVideo;
+        },
+        setNextAnimation(url, options = {}) {
+          if (typeof url !== "string" || !url.trim()) throw new TypeError("アニメーションのURLを指定してください。");
+          nextAnimation.src = url;
+          nextAnimation.hidden = false;
+          animationPlaceholder.hidden = true;
+          if (options.autoplay || (completed && activeScreen === "animation")) playNextAnimation();
+        },
+        newRoute: createRoute
+      };
+
+      createRoute();
+      resizeMeteorCanvas();
+      syncDodgeOverlay();
+      startCamera();
+    })();
+  </script>
+</body>
+</html>
