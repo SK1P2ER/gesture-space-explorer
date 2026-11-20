@@ -34,6 +34,6 @@ Worlds and bodies have explicit owners. Dispose a body when its local simulation
 
 ## Build and use
 
-The CMake project pins Jolt Physics 5.3.0 to an exact source commit and enables no WebAssembly SIMD requirement. Install Emscripten 3.1.64, CMake 3.24 or newer, and Ninja, then run `npm run physics:test`. This builds the modularized ES module and `.wasm` into ignored `public/physics/` output, then runs the actual Embind module in Node. `npm run physics:native:test` builds the same facade against native Jolt and runs its C++ smoke test without Emscripten.
+The CMake project pins Jolt Physics 5.6.0 to an exact source commit and enables no WebAssembly SIMD requirement. Install Emscripten, CMake 3.24 or newer, and Ninja, then run `npm run physics:test`. This builds the modularized ES module and `.wasm` into ignored `public/physics/` output, then runs the actual Embind module in Node. `npm run physics:native:test` builds the same facade against native Jolt and runs its C++ smoke test without Emscripten.
 
 After `npm run physics:build`, a browser caller can use `loadJoltWorldFromUrl('/physics/gse_physics.js', options)` from `src/physics/joltWasm.ts`. The module is lazy and is not included in the normal app build unless generated first. The current landing/travel behavior still does not use this rigid-body simulation; keep the presentation path until the physics path has dedicated end-to-end product integration.

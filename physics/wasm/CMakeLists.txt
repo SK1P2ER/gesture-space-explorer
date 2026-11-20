@@ -34,7 +34,7 @@ set(TARGET_VIEWER OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
   JoltPhysics
   GIT_REPOSITORY https://github.com/jrouwe/JoltPhysics.git
-  GIT_TAG v5.3.0
+  GIT_TAG v5.6.0
   GIT_SHALLOW TRUE
   SOURCE_SUBDIR Build
 )
@@ -46,8 +46,8 @@ execute_process(
   RESULT_VARIABLE JOLT_PHYSICS_GIT_RESULT
 )
 if(NOT JOLT_PHYSICS_GIT_RESULT EQUAL 0 OR
-   NOT JOLT_PHYSICS_COMMIT STREQUAL "0373ec0dd762e4bc2f6acdb08371ee84fa23c6db")
-  message(FATAL_ERROR "Jolt Physics v5.3.0 must resolve to the pinned source commit.")
+   NOT JOLT_PHYSICS_COMMIT STREQUAL "e77f175595e64cb44218cc9d9d56fc365ad0e36a")
+  message(FATAL_ERROR "Jolt Physics v5.6.0 must resolve to the pinned source commit.")
 endif()
 
 add_library(gse_physics STATIC gse_physics.cpp)
