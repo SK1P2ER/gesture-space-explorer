@@ -1,4 +1,5 @@
 {
+  "buildCommand": "node --version && npm run build",
   "headers": [
     {
       "source": "/(.*)",
