@@ -293,11 +293,34 @@ test('guided prototype: Burmese passenger review, destination and automatic laun
   await open({path:'/?flags=astrolife,guided&base=jezero&lang=my',viewport:{width:390,height:844}});
   await statusKind('keyboard');
   await page.waitForFunction(()=>!document.querySelector('#base-panel').hidden);
-  const action=page.locator('#guided-mission>button');
-  await action.click();await action.click();
-  await page.locator('#guided-mission>div button').first().click();
+  const guided = page.locator('#guided-mission');
+  const waitForStage = stage => page.locator(`#guided-mission[data-stage="${stage}"]`).waitFor();
+  const action = guided.locator(':scope > button');
+  await waitForStage('idle');
   await action.click();
-  await page.locator('#mission-overlay.is-flight').waitFor({state:'visible',timeout:60000});
+  await waitForStage('review');
+  await action.click();
+  await waitForStage('destination');
+
+  const destination = guided.locator(':scope > div button').first();
+  await destination.click();
+  await guided.locator('button[aria-pressed="true"]').waitFor();
+  await action.click();
+  await waitForStage('outbound');
+
+  try {
+    await page.locator('#mission-overlay.is-flight').waitFor({ state:'visible', timeout:60000 });
+  } catch (error) {
+    const state = await page.evaluate(() => ({
+      stage: document.querySelector('#guided-mission')?.getAttribute('data-stage'),
+      overlay: document.querySelector('#mission-overlay')?.className,
+      overlayHidden: document.querySelector('#mission-overlay')?.hidden,
+      countdown: document.querySelector('#mission-overlay .count')?.textContent,
+      guidedInstruction: document.querySelector('#guided-mission .guided-instruction')?.textContent,
+      bodyClasses: document.body.className,
+    }));
+    throw new Error(`Guided journey did not reach visible flight: ${JSON.stringify(state)}`, { cause: error });
+  }
   assert.equal(await page.locator('#guided-mission').isVisible(),true);
   const gap=await page.evaluate(()=>document.querySelector('#mission-hud').getBoundingClientRect().top-document.querySelector('header.hud').getBoundingClientRect().bottom);
   assert.ok(gap>=0,`guided header overlaps mission HUD by ${-gap}px`);
