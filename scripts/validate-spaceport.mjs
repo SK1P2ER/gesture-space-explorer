@@ -25,7 +25,7 @@ assert.equal(asset.readUInt32LE(8), asset.length, 'Truncated GLB');
 assert.ok(asset.length <= 6 * 1024 * 1024, 'Web model exceeds 6 MiB budget');
 assert.equal(hash(asset), manifest.asset_sha256, 'Asset hash differs from validated export');
 assert.equal(hash(siteBytes), manifest.site_sha256, 'Collision metadata differs from validated export');
-assert.equal(manifest.source,'Space_Line_P2_9_no_polish.blend','Unexpected source asset');
+assert.equal(manifest.source,'Space_Line_P2_4_Coastal_Release.blend','Unexpected source asset');
 assert.match(manifest.source_sha256 ?? '', /^[0-9a-f]{64}$/, 'Manifest must record the source blend hash');
 if (checkSource) {
   const blend = new URL(`assets/spaceport-m03/${manifest.source}`, root);
