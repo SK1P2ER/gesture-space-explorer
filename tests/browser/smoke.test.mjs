@@ -45,7 +45,7 @@ afterEach(async () => {
  * A fresh browser on the app. `camera`: 'denied' (keyboard mode), or 'fake' (Chromium's fake camera,
  * every stream kept in window.__cameraStreams). Quality starts on Low unless `storage` says otherwise.
  */
-async function open({ path = '/', camera = 'denied', viewport = { width: 1100, height: 760 }, phone = false, storage = {}, setup, permissions = [] } = {}) {
+async function open({ path = '/', camera = 'denied', viewport = { width: 1100, height: 760 }, phone = false, storage = {}, savedLanguage = "en", setup, permissions = [] } = {}) {
   browser = await chromium.launch({ headless: true, args: camera === 'fake' ? ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] : [] });
   // A protected Vercel preview lets automation in with its bypass secret (Deployment Protection).
   const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
@@ -59,12 +59,12 @@ async function open({ path = '/', camera = 'denied', viewport = { width: 1100, h
   problems = [];
   page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
   page.on('response', (r) => { if (r.status() >= 400 && !page.__expectedFailure?.(r.url())) problems.push(`${r.status()} ${r.url()}`); });
-  await page.addInitScript(({ camera, storage }) => {
+  await page.addInitScript(({ camera, storage, savedLanguage }) => {
     localStorage.setItem('gse.quality', 'low');
     localStorage.setItem('gse.passport', JSON.stringify({ jezero: Date.UTC(2026, 0, 1), tranquility: Date.UTC(2026, 0, 1) }));
     // These checks read English messages: a saved English preference (a new visit defaults to Japanese). A test's own
     // storage, or a lang= in its link, still decides.
-    localStorage.setItem('gse.lang', 'en');
+    if (savedLanguage) localStorage.setItem('gse.lang', savedLanguage);
     for (const [k, v] of Object.entries(storage)) localStorage.setItem(k, v);
     window.__cameraStreams = [];
     const acquire = navigator.mediaDevices?.getUserMedia?.bind(navigator.mediaDevices);
@@ -74,7 +74,7 @@ async function open({ path = '/', camera = 'denied', viewport = { width: 1100, h
       window.__cameraStreams.push(stream);
       return stream;
     };
-  }, { camera, storage });
+  }, { camera, storage, savedLanguage });
   await setup?.(page);
   await page.goto(`${baseURL}${path}`, { waitUntil: 'domcontentloaded' });
 }
@@ -92,6 +92,17 @@ test('starts in keyboard mode without a camera, with its version and no errors',
   assert.match(await text('#status'), /Keyboard mode/);
   assert.equal(await text('#version'), `v${version}`);
   assert.equal(await page.locator('#hand-control').isVisible(), true); // the camera can be retried
+});
+
+test('defaults a first visit to Japanese, while a language link still wins', async () => {
+  await open({ savedLanguage: null });
+  await statusKind('keyboard');
+  assert.equal(await page.locator('html').getAttribute('lang'), 'ja');
+  assert.match(await text('#status'), /キーボード操作/);
+
+  await page.goto(baseURL + '/?lang=my');
+  await statusKind('keyboard');
+  assert.equal(await page.locator('html').getAttribute('lang'), 'my');
 });
 
 test('privacy: a model that fails after the camera is granted stops the camera', async () => {

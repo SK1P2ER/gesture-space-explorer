@@ -1,7 +1,8 @@
 {
   "name": "Gesture Space Explorer",
   "short_name": "Space Explorer",
-  "description": "Control a 3D Solar System with hand gestures. Runs fully on-device.",
+  "lang": "ja",
+  "description": "手のジェスチャーで3D太陽系を探索できます。すべての処理は端末上で行われます。",
   "start_url": "/",
   "scope": "/",
   "display": "fullscreen",
