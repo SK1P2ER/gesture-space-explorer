@@ -107,6 +107,7 @@ function setup(enabled = true) {
   const modes = new ModeMachine();
   for (const m of ['focus', 'baseView'] as Mode[]) modes.go(m);
   const state = createState();
+  state.lang = 'en'; // These assertions deliberately verify English messages.
   const flashes: string[] = [];
   const build = new Build({
     state, modes, enabled,

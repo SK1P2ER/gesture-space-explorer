@@ -4,7 +4,7 @@ import type { Passport } from '../sim/passport';
 import type { Body, Lang } from '../data/bodies';
 import { autoStartTier, currentDevice, initialQualitySetting, type Quality, type QualitySetting } from '../quality';
 import type { TrackingStatus } from '../ui/hud';
-import { KEYS, readFlag, readPassport, readSensitivity, readWeight, storage } from './settings';
+import { KEYS, readFlag, readPassport, readSensitivity, readWeight, readLanguage, storage } from './settings';
 
 /** Everything the app shows that isn't the scene or the clock. Changed only by intent handling. */
 export interface AppState {
@@ -51,7 +51,7 @@ export function createState(): AppState {
     qualitySetting,
     focus: 0,
     selected: null,
-    lang: 'en',
+    lang: readLanguage(),
     status: { kind: 'loading', progress: 0 },
     watermark: readFlag(KEYS.watermark, true),
     trueScale: readFlag(KEYS.trueScale, false),

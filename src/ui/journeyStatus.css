@@ -1,0 +1,122 @@
+/* SPCE-LINE Orbital Journey (Sprint 2): the journey status pill and the arrival card (Tanegashima → Jezero only). */
+#journey-status, #journey-arrival {
+  position: fixed; left: 50%; transform: translateX(-50%); z-index: 7; box-sizing: border-box;
+  color: var(--fg); background: rgba(8, 14, 28, .92); border: 1px solid var(--border);
+  font: 600 .95rem/1.45 system-ui, 'Myanmar Text', 'Noto Sans Myanmar', sans-serif; text-align: center;
+}
+#journey-status[hidden], #journey-arrival[hidden], #journey-retry[hidden] { display: none; }
+#journey-status {
+  top: calc(var(--header-bottom, 64px) + 10px);
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 2px 12px;
+  width: max-content; max-width: min(460px, calc(100vw - 32px)); padding: 8px 16px; border-radius: 999px;
+  pointer-events: none; animation: journey-in .35s ease-out;
+}
+#journey-status:lang(my), #journey-arrival:lang(my) { line-height: 1.8; }
+#journey-status[data-phase='failed'] { border-color: var(--warn); border-radius: 16px; pointer-events: auto; }
+#journey-status:focus { outline: none; }
+#journey-status:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.journey-text { overflow-wrap: anywhere; }
+/* The route ("Tanegashima → Jezero Dome") during the flight and preparation: a small line above the status. */
+.journey-route { flex-basis: 100%; color: #9fb4cc; font-size: .74rem; font-weight: 500; letter-spacing: .02em; overflow-wrap: anywhere; }
+.journey-route[hidden] { display: none; }
+#journey-status:not([data-phase='failed']) .journey-text::before {
+  content: ''; display: inline-block; box-sizing: border-box; width: .65em; height: .65em;
+  margin-inline-end: .6em; border-radius: 50%; background: #9fe3f5;
+}
+#journey-status[data-phase='preparing'] .journey-text::before {
+  background: transparent; border: 2px solid #9fe3f5; border-right-color: transparent;
+  vertical-align: -.05em; animation: journey-spin 1s linear infinite;
+}
+.journey-retry, .journey-explore {
+  min-height: 48px; min-width: 48px; padding: 0 18px; border-radius: 12px; cursor: pointer; pointer-events: auto;
+  font: inherit; font-weight: 700; line-height: 1.3;
+}
+.journey-retry { color: var(--fg); background: transparent; border: 1px solid var(--warn); min-height: 44px; }
+#journey-arrival {
+  top: calc(var(--header-bottom, 64px) + 12px);
+  width: min(420px, calc(100vw - 32px)); padding: 14px 18px 16px; border-radius: 16px; border-color: #8fe0cc61;
+  background: linear-gradient(145deg, #14243bf5, #0b1526f5); text-align: start;
+  box-shadow: 0 10px 34px #0007; animation: journey-in .35s ease-out;
+}
+/* Leads with the place (large), then its world (secondary), then the one action. The ✓ badge stays small. */
+.journey-arrived { margin: 0; color: #a6e5d8; font-size: .74rem; font-weight: 600; }
+#journey-arrival h2 { margin: 2px 0 0; font-size: clamp(1.3rem, 2.8vw, 1.75rem); font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+#journey-arrival .journey-planet { margin: 2px 0 12px; color: #b3c6dd; font-size: .9rem; font-weight: 500; overflow-wrap: anywhere; }
+.journey-explore { display: block; width: 100%; color: #102a43; background: #9fe3f5; border: 0; padding: 10px 18px; }
+.journey-explore:hover { background: #c1effb; }
+.journey-explore:focus-visible, .journey-retry:focus-visible { outline: 2px solid #e6f5ff; outline-offset: 3px; }
+/* The arrival card's Explore action opens the same view. */
+body[data-journey='arrived'] #base-panel .horizon { display: none; }
+/* While the card is the next step, the base overview (description, gravity, local time, sunrise/sunset, sky) stays
+   in the panel's Overview tab, quieter: dimmed and smaller, the description cut to two lines. Hover or focus brings it
+   back in full. Nothing is removed from the accessibility tree. */
+body[data-journey='arrived'] #base-panel:not(:hover):not(:focus-within) { opacity: .78; }
+body[data-journey='arrived'] #base-panel .base-eyebrow { display: none; }
+body[data-journey='arrived'] #base-panel .base-heading h2 { font-size: 1.02rem; margin-bottom: 4px; }
+body[data-journey='arrived'] #base-panel:not(:focus-within) .base-description {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+  color: #a9b8c9; font-size: .76rem; margin-bottom: 10px;
+}
+body[data-journey='arrived'] #base-panel dl { font-size: .7rem; padding-top: 10px; }
+body[data-journey='arrived'] #base-panel :is(dt, dd) { color: #9aabbe; }
+body[data-journey='arrived'] #base-panel .base-tabs { margin: 12px 0; }
+/* Short landscape: the card takes the right-hand column; the folded panel keeps its title and actions below it. */
+@media (orientation: landscape) and (max-height: 500px) {
+  /* The card already names the base: the folded panel shows its handle (Overview opens from it) and its actions. */
+  body[data-journey='arrived'] #base-panel[data-collapsed='true'] :is(.base-heading, .base-tabs) { display: none; }
+  body[data-journey='arrived'] #base-panel[data-collapsed='true'] .base-view-actions { margin-top: 2px; padding-right: 36px; }
+  body[data-journey='arrived'] #base-panel[data-collapsed='true'] > .close { top: 18px; }
+  /* The ✓ badge moves to the card's top corner, so the card stays short beside the world. */
+  body[data-journey-layout='land'] #journey-arrival { padding: 8px 14px 10px; }
+  body[data-journey-layout='land'] #journey-arrival .journey-arrived { position: absolute; top: 9px; inset-inline-end: 14px; }
+  body[data-journey-layout='land'] #journey-arrival h2 { padding-inline-end: 6.5em; }
+  body[data-journey-layout='land'] #journey-arrival:lang(my) { line-height: 1.6; }
+}
+/* During destination preparation, match the visual treatment to the native disabled state. */
+#base-panel button[data-journey-held]:disabled { opacity: .55; filter: saturate(.35); cursor: not-allowed; }
+.journey-sr { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+
+/* During a mission launch the pill sits in the launch dialog, just above its dock (clear of Skip / Close at the top). */
+#spaceport-view #journey-status { position: absolute; top: auto; bottom: calc(var(--sp-band-bottom, 0px) + 12px); z-index: 5; }
+
+/* What shows near the top sits below the journey: the toast (stamp, touchdown) and the mission overlay. */
+body.journey-on:not(.mission-active) #gesture-flash { top: calc(var(--journey-bottom, 18%) + 10px); }
+/* Phones: the card sits low, so the toast goes just above it (never over Explore). */
+body[data-journey='arrived'][data-journey-layout='phone']:not(.mission-active) #gesture-flash {
+  top: auto; bottom: calc(var(--journey-above, 40%) + 10px); max-width: calc(100vw - 32px);
+}
+body.journey-on #mission-overlay:not(.horizon) { top: max(16%, calc(var(--journey-bottom, 0px) + 8px)); }
+
+@media (max-width: 700px) {
+  #journey-status { font-size: .82rem; padding: 6px 12px; }
+  #journey-arrival { padding: 12px 14px 14px; }
+  #journey-arrival h2 { font-size: 1.25rem; }
+  #journey-arrival .journey-planet { margin-bottom: 10px; }
+}
+@media (max-height: 500px) {
+  #journey-status { top: calc(var(--header-bottom, 48px) + 6px); font-size: .8rem; padding: 4px 12px; }
+  #journey-arrival { top: calc(var(--header-bottom, 48px) + 6px); width: min(360px, calc(100vw - 32px)); padding: 8px 14px 10px; }
+  #journey-arrival h2 { font-size: 1.15rem; margin: 0; }
+  #journey-arrival .journey-planet { margin: 0 0 6px; font-size: .8rem; }
+  .journey-route { display: none; }
+  .journey-explore { min-height: 44px; padding: 6px 14px; }
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  body[data-journey='arrived']:not(.mission-active) #gesture-flash {
+    top: auto; bottom: calc(10px + var(--sab, 0px)); left: auto; right: calc(16px + var(--sar, 0px));
+    max-width: calc(50vw - 24px - var(--sar, 0px)); translate: 50% 0;
+  }
+  body[data-journey='arrived']:not(.mission-active):has(#preview:not([hidden])) #gesture-flash {
+    right: calc(106px + var(--sar, 0px)); max-width: calc(50vw - 108px - var(--sar, 0px));
+  }
+  body[data-journey='arrived']:not(.mission-active):has(#preview.tucked:not([hidden])) #gesture-flash {
+    right: calc(58px + var(--sar, 0px)); max-width: calc(50vw - 60px - var(--sar, 0px));
+  }
+}
+@keyframes journey-in { from { opacity: 0; transform: translate(-50%, -6px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes journey-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  #journey-status, #journey-arrival { animation: none; }
+  #journey-status[data-phase='preparing'] .journey-text::before { animation: none; border-right-color: #9fe3f5; }
+}
+body.clean-view :is(#journey-status, #journey-arrival) { display: none !important; }

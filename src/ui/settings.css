@@ -1,0 +1,89 @@
+/* A compact persistent dock, with infrequent controls in a separate drawer. */
+footer.hud.bottom .footer-links {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: none;
+}
+footer.hud.bottom .footer-links > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: #111e30ed;
+  color: #d9e3f0;
+  border: 1px solid #ffffff1c;
+  font-size: .8rem;
+}
+footer.hud.bottom #menu { display: inline-flex; }
+footer.hud.bottom .footer-links > button:hover,
+footer.hud.bottom .footer-links > button:focus-visible { background: #1b2c43; border-color: #8ba5c0; }
+body.menu-open footer.hud.bottom { z-index: 30; }
+body footer.hud.bottom #footer-menu {
+  position: fixed;
+  left: calc(20px + var(--sal, 0px));
+  bottom: calc(100px + var(--sab, 0px));
+  display: grid;
+  gap: 14px;
+  width: min(340px, calc(100vw - 40px - var(--sal, 0px) - var(--sar, 0px)));
+  min-width: 0;
+  max-height: calc(100dvh - 150px - var(--sat, 0px) - var(--sab, 0px));
+  padding: 22px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: 20px;
+  border: 1px solid #7791b13b;
+  background: #0e1a2bf7;
+  box-shadow: 0 22px 70px #0008;
+  pointer-events: auto;
+  text-shadow: none;
+}
+body footer.hud.bottom #footer-menu[hidden] { display: none !important; }
+#footer-menu .settings-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+#footer-menu h2 { margin: 0; font-size: 1.1rem; font-weight: 600; letter-spacing: -.02em; color: #f2f6fc; }
+body footer.hud.bottom #settings-close {
+  width: 34px;
+  min-height: 34px;
+  padding: 0;
+  border-radius: 10px;
+  text-align: center;
+  font-size: 1.3rem;
+}
+#footer-menu .settings-label { margin: 0; color: #93a8c1; font-size: .68rem; text-transform: uppercase; letter-spacing: .12em; }
+#footer-menu .settings-options { display: grid; grid-template-columns: 1fr; gap: 8px; }
+body footer.hud.bottom #footer-menu .settings-options > button,
+body footer.hud.bottom #footer-menu .settings-options > a {
+  display: block !important;
+  min-height: 40px;
+  width: 100%;
+  padding: 10px 12px;
+  text-align: left;
+  border-radius: 10px;
+  border: 1px solid #ffffff13;
+  background: #18283c;
+  color: #d7e2ef;
+  font-size: .83rem;
+  text-decoration: none;
+  line-height: 1.4;
+}
+body footer.hud.bottom #footer-menu .settings-options > :hover,
+body footer.hud.bottom #footer-menu .settings-options > :focus-visible { background: #223851; border-color: #8ca9c5; }
+body footer.hud.bottom #footer-menu button[aria-pressed='false'] { opacity: .8; }
+body footer.hud.bottom #footer-menu #help:not([hidden]) {
+  display: block !important;
+  max-width: none;
+  margin: 0;
+  padding-top: 10px;
+  color: #a9bad0;
+  font-size: .75rem;
+  line-height: 1.7;
+  border-top: 1px solid #ffffff13;
+}
+@media (max-width: 640px), (max-height: 500px) {
+  footer.hud.bottom .footer-links { gap: 6px; }
+  footer.hud.bottom .footer-links > button { min-height: 44px; padding: 8px 10px; font-size: .75rem; }
+  body footer.hud.bottom #footer-menu { left: calc(12px + var(--sal, 0px)); bottom: calc(104px + var(--sab, 0px)); width: min(340px, calc(100vw - 24px - var(--sal, 0px) - var(--sar, 0px))); }
+}

@@ -1,4 +1,5 @@
 import type { BuildKind } from './sim/buildRules';
+import type { LandmarkId } from './app/jezeroLandmarks';
 // Every input source (keyboard, mouse, gestures) emits Intents.
 // The scene and UI only ever react to Intents — never to raw input.
 
@@ -41,6 +42,8 @@ export type Intent =
   | { type: 'toggleTimeBar'; open?: boolean } // compact screens: the time pill ⇄ the full time bar
   | { type: 'toggleHorizon' } // O at a showcase base: the horizon view, standing on the ground
   | { type: 'goldenHour' } // 🌅: to the next local sunset at this base, in the horizon view
+  | { type: 'frameLandmark'; id: LandmarkId } // Explore's Landmarks list: frame one landmark (camera only, never the clock)
+  | { type: 'landmarkOverview' } // Explore's "Back to overview": the Explore pose saved before the first landmark
   // Build mode (?flags=build): K in and out, the palette, grab / move / drop, turn, remove, undo / redo.
   | { type: 'toggleBuild' }
   | { type: 'buildPick'; kind: BuildKind }

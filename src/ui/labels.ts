@@ -5,6 +5,7 @@ import { labelText } from './kind';
 
 const tmp = new THREE.Vector3();
 const screenUp = new THREE.Vector3();
+const visualScale=new THREE.Vector3();
 
 /**
  * Name labels above at most two planets: the active (focused/selected) one,
@@ -21,14 +22,15 @@ export class PlanetLabels {
 
   private place(el: HTMLElement, nodes: BodyNode[], camera: THREE.Camera, id: string | null, lang: Lang) {
     const node = id ? nodes.find((n) => n.body.id === id) : undefined;
-    if (!node) {
+    if (!node || !(node.presentation?node.presentation.visible:node.anchor.visible)) {
       el.hidden = true;
       return;
     }
     // Anchor just above the planet's top edge (in screen terms).
-    node.mesh.getWorldPosition(tmp);
+    (node.presentation??node.mesh).getWorldPosition(tmp);
     screenUp.set(0, 1, 0).applyQuaternion(camera.quaternion); // camera's up, in world space
-    tmp.addScaledVector(screenUp, node.body.radius * node.tilt.scale.x * 1.25);
+    const radius=node.presentation?node.presentation.getWorldScale(visualScale).x:node.body.radius*node.tilt.scale.x;
+    tmp.addScaledVector(screenUp,radius*1.25);
     tmp.project(camera);
     if (tmp.z > 1 || Math.abs(tmp.x) > 1.2 || Math.abs(tmp.y) > 1.2) {
       el.hidden = true;

@@ -1,0 +1,318 @@
+/* Launch preview, Direction A "cinematic dock" (owner, 2026-11-20). The 3D stage fills the dialog; a top bar,
+   a place card, a help panel and one bottom dock float over it.
+
+   Item 3 tokens (scoped to the preview). Two colour roles, each backed by a shape or label as well as colour:
+     amber (--sp-play)  playback and the launch itself: ▶ / ❚❚ / ↻, the timeline fill, the current phase (filled dot,
+                        bold label), ignition.
+     cyan  (--sp-hand)  where input is aimed: gesture focus, the dwell ring and armed outline, keyboard focus, the
+                        selected view and place (outline + tint + aria-pressed).
+   Contrast of the text and focus tokens over the worst backdrops (daylight sky, the ignition flame, white) is checked
+   in tests/spaceportContrast.test.ts, which reads this block. */
+#spaceport-view {
+  /* type scale */
+  --sp-text-xs: .75rem; --sp-text-sm: .875rem; --sp-text-md: 1rem; --sp-text-lg: 1.125rem;
+  /* spacing, radii, targets */
+  --sp-space-1: 4px; --sp-space-2: 8px; --sp-space-3: 12px; --sp-space-4: 16px; --sp-gap: 16px;
+  --sp-radius-sm: 10px; --sp-radius: 16px; --sp-radius-lg: 20px; --sp-target: 44px;
+  /* surfaces */
+  --sp-panel: rgb(11 22 36 / .88); --sp-surface-solid: #0c1726; --sp-scrim: rgb(3 11 21 / .72); --sp-zone-bg: rgb(11 22 36 / .8);
+  --sp-line: rgb(255 255 255 / .14); --sp-tint: rgb(255 255 255 / .08);
+  /* text */
+  --sp-text: #eef3f8; --sp-muted: #b9c7d6; --sp-body: #cbd7e3; --sp-ink: #0b1522;
+  /* roles */
+  --sp-play: #f0b46c; --sp-play-hover: #f6c78d; --sp-on-play: #1a1206; --sp-play-tint: rgb(240 180 108 / .16);
+  --sp-hand: #5cd2f2; --sp-on-hand: #04161d; --sp-hand-tint: rgb(92 210 242 / .18); --sp-hand-text: #c8f1ff;
+  /* focus: a cyan ring on a dark halo, so it reads over the sky and over the flame */
+  --sp-focus: var(--sp-hand); --sp-halo: rgb(3 11 21 / .92);
+  --sp-fade: .15s; --sp-pulse: .45s;
+  box-sizing: border-box; position: fixed; inset: 0; width: 100vw; height: 100dvh; max-width: none; max-height: none;
+  margin: 0; padding: 0; border: 0; background: var(--sp-ink); color: var(--sp-text); overflow: hidden; line-height: 1.5;
+}
+#spaceport-view:lang(my) { line-height: 1.8; }
+#spaceport-view[open] { display: block; }
+#spaceport-view::backdrop { background: #030b15; }
+#spaceport-view [hidden] { display: none !important; }
+#spaceport-view button { box-sizing: border-box; min-height: var(--sp-target); padding: 0 14px; border: 1px solid var(--sp-line); border-radius: 12px; background: transparent; color: var(--sp-text); font: inherit; font-size: var(--sp-text-sm); line-height: 1.3; cursor: pointer; }
+#spaceport-view button:hover:not(:disabled) { background: var(--sp-tint); }
+/* Buttons that sit on their own dark panel (top bar, Retry) keep it on hover and tint it, so their text keeps its
+   contrast over a bright sky (the plain 8% tint alone measured 1.5:1 over the Overview sky). */
+#spaceport-view :is(.spaceport-heading button, .spaceport-retry):hover:not(:disabled) { background: linear-gradient(var(--sp-tint), var(--sp-tint)), var(--sp-panel); }
+#spaceport-view button:disabled { opacity: .5; cursor: wait; }
+#spaceport-view :is(button,input,a,canvas,summary):focus-visible { outline: 2px solid var(--sp-focus); outline-offset: 2px; box-shadow: 0 0 0 6px var(--sp-halo); }
+.spaceport-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.spaceport-glass, .spaceport-heading h2, #spaceport-view .spaceport-heading button, #spaceport-about, #spaceport-inspection, .spaceport-dock, .spaceport-coach, .spaceport-notice, .spaceport-status {
+  background: var(--sp-panel); border: 1px solid var(--sp-line); backdrop-filter: blur(10px);
+}
+
+.spaceport-stage { position: absolute; inset: 0; overflow: hidden; background: #9fc7df; }
+.spaceport-stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+/* Loading/error message and Retry: 42% down, but never so low that Retry reaches the dock (short landscape). */
+.spaceport-status { position: absolute; left: 50%; top: min(42%, calc(100% - var(--sp-band-bottom, 0px) - 132px)); transform: translate(-50%, -50%); margin: 0; padding: var(--sp-space-4) 22px; border-radius: 12px; text-align: center; }
+#spaceport-view .spaceport-retry { position: absolute; left: 50%; top: calc(min(42%, calc(100% - var(--sp-band-bottom, 0px) - 132px)) + 56px); transform: translateX(-50%); background: var(--sp-panel); }
+
+/* Top column: bar, then the hint, the help panel (right) and the place card (left) below it */
+.spaceport-top { position: absolute; left: var(--sp-gap); right: var(--sp-gap); top: max(var(--sp-gap), env(safe-area-inset-top)); display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-space-3); pointer-events: none; }
+.spaceport-top > * { pointer-events: auto; flex: 0 0 auto; }
+/* The column stops above the dock (--sp-band-bottom, set by the view): a card that doesn't fit scrolls instead of
+   sliding under the dock. */
+.spaceport-top { bottom: calc(var(--sp-band-bottom, 0px) + 8px); }
+#spaceport-view .spaceport-top > :is(#spaceport-inspection, #spaceport-about) { flex: 0 1 auto; min-height: 56px; overflow-y: auto; }
+.spaceport-heading { align-self: stretch; display: flex; align-items: center; gap: var(--sp-radius-sm); pointer-events: none; }
+.spaceport-heading > * { pointer-events: auto; }
+.spaceport-heading h2 { margin: 0 auto 0 0; min-width: 0; padding: 9px var(--sp-space-4); border-radius: 14px; font-size: var(--sp-text-md); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.spaceport-heading button { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-space-2); position: relative; }
+#spaceport-view .spaceport-icon { width: var(--sp-target); padding: 0; }
+#spaceport-view .spaceport-close { white-space: nowrap; }
+#spaceport-skip-launch { border-color: var(--sp-play) !important; color: #ffe2bb !important; }
+
+/* Help panel (hint, parked vehicle, performance, credits) */
+#spaceport-about { position: relative; align-self: flex-end; width: min(380px, 100%); max-height: 55dvh; overflow-y: auto; box-sizing: border-box; padding: 14px var(--sp-space-4); border-radius: var(--sp-radius); }
+.spaceport-hint, .spaceport-credits { margin: 0 0 var(--sp-space-2); font-size: var(--sp-text-xs); color: var(--sp-muted); }
+.spaceport-credits { margin: var(--sp-space-2) 0 0; }
+/* 44 px touch height from padding that does not change the line (the link is inline text). */
+.spaceport-credits a { color: #bfdcf4; padding: 14px 4px; margin: -14px -4px; }
+.spaceport-performance { font-size: var(--sp-text-xs); }
+.spaceport-performance summary { cursor: pointer; color: #cfdbe7; min-height: var(--sp-target); display: flex; align-items: center; }
+.spaceport-performance output { display: block; margin: 6px 0; }
+
+/* Place card. Desktop and portrait: name and the full description. Short landscape (below): name, a one-sentence
+   summary and Details, which opens the description in its own panel. It fades in briefly (no movement). */
+#spaceport-inspection { position: relative; width: min(380px, 100%); box-sizing: border-box; padding: 14px 52px 14px var(--sp-space-4); border-radius: var(--sp-radius); }
+#spaceport-inspection:not([hidden]) { animation: spaceport-fade var(--sp-fade) ease-out; }
+#spaceport-inspection h3 { margin: 0 0 var(--sp-space-1); font-size: var(--sp-text-lg); }
+#spaceport-inspection p { margin: 0; font-size: var(--sp-text-sm); color: var(--sp-body); }
+#spaceport-view .spaceport-card-close { position: absolute; right: 6px; top: 6px; width: var(--sp-target); padding: 0; border: 0; display: inline-flex; align-items: center; justify-content: center; }
+#spaceport-inspection :is(.spaceport-place-summary, .spaceport-details-open) { display: none; }
+@keyframes spaceport-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* "Sequence complete": a brief amber-edged status centred just above the dock, between the side zones; it takes no
+   input and no layout space, so no control moves. ▶ itself says Replay. */
+.spaceport-complete { position: absolute; z-index: 2; left: 50%; bottom: calc(var(--sp-band-bottom, 0px) + 12px); transform: translateX(-50%); margin: 0; max-width: min(420px, 100vw - 2 * (150px + 2 * var(--sp-gap))); width: max-content; box-sizing: border-box; padding: var(--sp-space-2) var(--sp-space-4); border-radius: 999px; background: var(--sp-surface-solid); border: 2px solid var(--sp-play); color: var(--sp-text); font-size: var(--sp-text-sm); font-weight: 700; text-align: center; pointer-events: none; visibility: hidden; }
+.spaceport-complete[data-shown='true'] { visibility: visible; animation: spaceport-fade var(--sp-fade) ease-out; }
+#spaceport-view[data-motion='reduce'] .spaceport-complete { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { #spaceport-view .spaceport-complete { animation: none !important; } }
+@media (max-width: 640px) { .spaceport-complete { max-width: calc(100vw - 2 * (68px + 2 * var(--sp-gap))); } }
+/* The final phase marker's own completion cell (used in short landscape only). */
+.spaceport-marker-done { display: none; font-weight: 700; }
+.spaceport-marker-done::before { content: '✓ '; }
+/* Short landscape (owner review 2026-11-21): the floating status covered the rocket's final shot, so the message
+   takes the final phase marker's place in the dock instead, for the same 3.5 s. Its cell is reserved all the time, so
+   the dock and every target keep their size and place. The hidden announcer speaks in every layout. */
+@media (max-height: 500px) and (min-width: 641px) {
+  #spaceport-view .spaceport-complete { display: none; }
+  #spaceport-view .spaceport-marker .spaceport-marker-done { display: block; visibility: hidden; }
+  #spaceport-view[data-complete='true'] .spaceport-marker[data-phase='ascent'] .spaceport-marker-label { visibility: hidden; }
+  #spaceport-view[data-complete='true'] .spaceport-marker[data-phase='ascent'] .spaceport-marker-done { visibility: visible; }
+}
+
+/* Details panel: the full description with room to read; everything behind it is inert. */
+/* An opaque reading surface (owner review, 2026-11-21: nothing behind may show through), sized to its text up to the
+   window; a scrim dims the inert preview around it. The timeline and dock keep their glass. */
+.spaceport-details { position: absolute; z-index: 3; left: 50%; top: max(var(--sp-gap), env(safe-area-inset-top)); max-height: calc(100dvh - 2 * var(--sp-gap)); transform: translateX(-50%); width: min(640px, 100vw - 2 * var(--sp-gap)); box-sizing: border-box; overflow-y: auto; box-shadow: 0 0 0 100vmax var(--sp-scrim); padding: var(--sp-space-3) var(--sp-space-4) var(--sp-space-4); border-radius: var(--sp-radius-lg); background: var(--sp-surface-solid); border: 1px solid var(--sp-line); animation: spaceport-fade var(--sp-fade) ease-out; }
+.spaceport-details-head { display: flex; align-items: flex-start; gap: var(--sp-space-3); margin-bottom: var(--sp-space-2); }
+.spaceport-details h3 { flex: 1 1 auto; margin: 0; padding-top: 8px; font-size: var(--sp-text-lg); }
+.spaceport-details p { margin: 0; font-size: var(--sp-text-md); color: var(--sp-body); max-width: 60ch; }
+#spaceport-view .spaceport-details-close { flex: 0 0 auto; display: inline-flex; align-items: center; gap: var(--sp-space-2); position: relative; }
+#spaceport-view[data-details='open'] .spaceport-zone { display: none !important; }
+
+/* Dock */
+.spaceport-dock { position: absolute; left: 50%; bottom: max(var(--sp-gap), env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(1180px, 100vw - 2 * var(--sp-gap)); box-sizing: border-box; padding: var(--sp-radius-sm) var(--sp-space-4) 14px; border-radius: var(--sp-radius-lg); display: flex; flex-direction: column; gap: var(--sp-space-2); max-height: 60dvh; overflow-y: auto; overscroll-behavior: contain; }
+.spaceport-transport { display: flex; align-items: flex-start; gap: var(--sp-space-4); }
+.spaceport-track { position: relative; flex: 1 1 auto; min-width: 0; }
+#spaceport-timeline { display: block; width: 100%; height: 28px; margin: 0; accent-color: var(--sp-play); cursor: pointer; }
+.spaceport-markers { position: relative; height: var(--sp-target); margin: 0 var(--sp-space-2); }
+#spaceport-view .spaceport-marker { position: absolute; top: 0; left: calc(var(--at) * 100%); min-height: var(--sp-target); padding: var(--sp-radius-sm) 6px 0; border: 0; border-radius: 6px; background: transparent; font-size: var(--sp-text-xs); color: var(--sp-muted); white-space: nowrap; transform: translateX(-6px); }
+#spaceport-view .spaceport-marker::before { content: ''; position: absolute; left: 5px; top: 0; width: 2px; height: 8px; background: currentColor; }
+/* Phase markers (amber = the launch): future = thin muted tick; past = amber tick; current = filled amber dot, bold
+   amber label on a pill; scrub (while dragging or stepping the timeline) = hollow dot, bold light label on a light
+   pill. The label and a hidden bold copy share one grid cell, so no state changes a marker's size. */
+#spaceport-view .spaceport-marker { display: grid; justify-items: start; align-content: start; min-width: var(--sp-target); transition: color var(--sp-fade), background-color var(--sp-fade); }
+.spaceport-marker > span { grid-area: 1 / 1; }
+.spaceport-reserve { visibility: hidden; font-weight: 700; }
+/* and a regular copy: in Burmese the regular weight can be the wider one (လွှတ်တင်စင် 70.4 px regular, 69.4 px bold) */
+#spaceport-view .spaceport-reserve-regular { font-weight: 400; }
+#spaceport-view .spaceport-marker[data-state='past']::before { background: var(--sp-play); }
+#spaceport-view .spaceport-marker:is([data-state='current'], [data-state='scrub'])::before { left: 1px; width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box; }
+#spaceport-view .spaceport-marker[data-state='current'] { color: var(--sp-play); background: var(--sp-play-tint); }
+#spaceport-view .spaceport-marker[data-state='current']::before { background: var(--sp-play); }
+#spaceport-view .spaceport-marker[data-state='scrub'] { color: var(--sp-text); background: rgb(255 255 255 / .12); }
+#spaceport-view .spaceport-marker[data-state='scrub']::before { background: transparent; border: 2px solid var(--sp-text); }
+#spaceport-view .spaceport-marker:is([data-state='current'], [data-state='scrub']) .spaceport-marker-label { font-weight: 700; }
+/* Phase readout: all names stacked in one cell (the size of the longest), the scrub time in a fixed slot. */
+.spaceport-phase { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; padding-top: 2px; font-size: var(--sp-text-sm); text-align: right; }
+.spaceport-phase-names { display: grid; justify-items: end; font-weight: 700; color: var(--sp-play); white-space: nowrap; }
+.spaceport-phase-names > span { grid-area: 1 / 1; visibility: hidden; }
+.spaceport-phase[data-phase='ready'] [data-for='ready'], .spaceport-phase[data-phase='arms'] [data-for='arms'],
+.spaceport-phase[data-phase='ignition'] [data-for='ignition'], .spaceport-phase[data-phase='ascent'] [data-for='ascent'] { visibility: visible; }
+.spaceport-phase[data-scrub='true'] .spaceport-phase-names { color: var(--sp-text); }
+.spaceport-phase-time { min-width: 6ch; min-height: 1.5em; font-size: var(--sp-text-xs); color: var(--sp-muted); font-variant-numeric: tabular-nums; visibility: hidden; }
+.spaceport-phase[data-scrub='true'] .spaceport-phase-time { visibility: visible; }
+.spaceport-dock-row { display: flex; align-items: center; gap: var(--sp-space-3); }
+.spaceport-dock-row button { position: relative; }
+/* The primary action (amber): one width for play, pause, resume and replay (all labels share one cell). */
+#spaceport-view .spaceport-play { flex: 0 0 auto; min-height: 52px; padding: 0 22px 0 var(--sp-space-4); border: 0; border-radius: 26px; background: var(--sp-play); color: var(--sp-on-play); font-weight: 700; display: inline-flex; align-items: center; gap: var(--sp-radius-sm); white-space: nowrap; }
+#spaceport-view .spaceport-play:hover:not(:disabled) { background: var(--sp-play-hover); }
+.spaceport-play-icon { display: inline-flex; }
+.spaceport-play-label { display: grid; justify-items: start; }
+.spaceport-play-label > span { grid-area: 1 / 1; visibility: hidden; }
+.spaceport-play[data-state='play'] [data-for='play'], .spaceport-play[data-state='pause'] [data-for='pause'],
+.spaceport-play[data-state='resume'] [data-for='resume'], .spaceport-play[data-state='replay'] [data-for='replay'] { visibility: visible; }
+/* Views (cyan = selected): a 2 px border on every view (transparent until selected) keeps the sizes equal. */
+.spaceport-cameras { flex: 0 0 auto; display: inline-flex; gap: var(--sp-space-1); padding: var(--sp-space-1); border-radius: 14px; background: var(--sp-tint); }
+#spaceport-view .spaceport-cameras button { min-height: var(--sp-target); border: 2px solid transparent; border-radius: var(--sp-radius-sm); white-space: nowrap; color: #d3dee9; display: inline-grid; place-items: center; }
+.spaceport-view > span { grid-area: 1 / 1; }
+#spaceport-view .spaceport-cameras button[aria-pressed='true'] { border-color: var(--sp-hand); background: var(--sp-hand-tint); color: var(--sp-text); font-weight: 700; }
+/* Desktop: the chips ask for their whole natural width, so when they don't fit beside play and the views the
+   group moves to a second dock row (owner, 2026-11-21: never cut a chip, never shorten Burmese); on that row they
+   wrap if they still don't fit. Every chip stays fully visible, so every chip can be a gesture target. */
+.spaceport-dock-row { flex-wrap: wrap; }
+.spaceport-landmarks { flex: 1 1 max-content; min-width: 0; display: flex; flex-wrap: wrap; justify-content: safe flex-end; gap: var(--sp-space-2); }
+#spaceport-view .spaceport-chip { flex: 0 0 auto; border-radius: 22px; white-space: nowrap; }
+#spaceport-view .spaceport-chip[aria-pressed='true'] { border-color: var(--sp-hand); background: var(--sp-hand-tint); color: var(--sp-hand-text); }
+
+/* Hand mode (item 2). Everything here shows only while a hand is seen (data-hand="on"). It sits above the dock and the
+   details panel, so the ring and cursor show on any target; only the side zones take pointer input. */
+.spaceport-hand { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+.spaceport-hand > * { position: absolute; }
+#spaceport-view[data-hand='off'] .spaceport-hand > * { display: none !important; }
+/* Side zones: at the bottom of the band between the top bar and the dock (never under either, and clear of the place
+   card above them, which they once covered on desktop and phones). Their position depends only on the bar and dock. */
+#spaceport-view .spaceport-zone { pointer-events: auto; top: calc(var(--sp-band-top, 0px) + 12px); bottom: calc(var(--sp-band-bottom, 0px) + 12px); margin: auto 0 0; width: 150px; height: auto; max-height: min(340px, 42dvh); padding: 0 var(--sp-radius-sm); border-radius: 24px; border: 2px solid rgb(255 255 255 / .38); background: var(--sp-zone-bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; font-weight: 700; }
+.spaceport-zone-prev { left: var(--sp-gap); }
+.spaceport-zone-next { right: var(--sp-gap); }
+.spaceport-zone-place { font-size: var(--sp-text-xs); font-weight: 400; color: var(--sp-muted); }
+/* Gesture states (cyan), on the target itself (ring-on-target, owner 2026-11-20): dwelling = thin outline and the ring
+   filling; armed = a steady 3 px outline and the full ring, unchanged while 👍 is held (the 👍 prompt fills instead);
+   accepted = one brief pulse. Reduced motion keeps the ring, outline and text and drops the pulse. */
+#spaceport-view [data-gesture='focus'] { box-shadow: 0 0 0 2px rgb(92 210 242 / .6); }
+#spaceport-view [data-gesture='armed'], #spaceport-view [data-gesture='confirm'] { box-shadow: 0 0 0 3px var(--sp-hand), 0 0 24px rgb(92 210 242 / .45); }
+#spaceport-view [data-gesture-pulse='on']::after { content: ''; position: absolute; inset: -3px; border-radius: inherit; pointer-events: none; animation: spaceport-pulse var(--sp-pulse) ease-out 1 both; }
+@keyframes spaceport-pulse { from { box-shadow: 0 0 0 0 rgb(92 210 242 / .7); } to { box-shadow: 0 0 0 14px rgb(92 210 242 / 0); } }
+.spaceport-ring { pointer-events: none; }
+.spaceport-ring svg { width: 100%; height: 100%; overflow: visible; }
+.spaceport-ring rect { fill: none; stroke: var(--sp-hand); stroke-width: 3px; vector-effect: non-scaling-stroke; stroke-dasharray: calc(var(--progress) * 100) 100; }
+/* The 👍 hold on the target itself (short landscape, owner review 2026-11-21): an inner ring that fills while 👍 is
+   held, inside the steady dwell ring. Elsewhere the 👍 prompt above the target fills instead. */
+.spaceport-ring .spaceport-ring-hold { display: none; stroke: var(--sp-hand-text); stroke-width: 4px; stroke-dasharray: calc(var(--hold, 0) * 100) 100; }
+.spaceport-cursor { left: 0; top: 0; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: var(--sp-text); border: 3px solid var(--sp-ink); box-shadow: 0 0 0 1px rgb(255 255 255 / .6); }
+/* The 👍 prompt over the armed target; the hold toward its action fills it from the left (--hold, 0..1). */
+.spaceport-thumb { margin: 0; transform: translate(-50%, -100%); padding: var(--sp-space-1) var(--sp-radius-sm); border-radius: 14px; border: 2px solid var(--sp-hand); color: var(--sp-ink); font-size: 1.1rem; background: linear-gradient(to right, var(--sp-hand) calc(var(--hold, 0) * 100%), var(--sp-text) 0); }
+/* One hint area: it keeps its place while the camera runs (hidden without a hand), so the place card below never
+   jumps; without a camera it takes no space. Every hint variant shares one grid cell, so the area is the size of the
+   longest one and only the current one shows. Burmese wraps. */
+#spaceport-view[data-hand='off'] .spaceport-coach { visibility: hidden; }
+#spaceport-view[data-hand='off']:not([data-tracking='on']) .spaceport-coach { display: none; }
+.spaceport-coach { position: relative; align-self: center; margin: 0; max-width: min(560px, 100%); box-sizing: border-box; padding: var(--sp-space-2) var(--sp-space-4); border-radius: var(--sp-radius); text-align: center; font-size: var(--sp-text-sm); display: flex; flex-direction: column; }
+.spaceport-hints { display: grid; font-weight: 700; }
+.spaceport-hints > span { grid-area: 1 / 1; visibility: hidden; opacity: 0; transition: opacity var(--sp-fade), visibility 0s var(--sp-fade); }
+.spaceport-coach[data-hint='point'] [data-hint='point'], .spaceport-coach[data-hint='hold'] [data-hint='hold'],
+.spaceport-coach[data-hint='release'] [data-hint='release'] { visibility: visible; opacity: 1; transition: opacity var(--sp-fade), visibility 0s; }
+.spaceport-coach:is([data-hint='hold'], [data-hint='release']) { border-color: var(--sp-hand); }
+.spaceport-coach[data-hint='hold'] .spaceport-hints { color: var(--sp-hand-text); }
+.spaceport-coach-home { color: var(--sp-muted); font-size: var(--sp-text-xs); }
+.spaceport-notice { left: 50%; top: 42%; transform: translate(-50%, -50%); margin: 0; padding: var(--sp-space-3) 18px; border-radius: var(--sp-radius); font-weight: 700; white-space: nowrap; }
+.spaceport-home { left: 50%; top: 42%; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 44px; background: conic-gradient(var(--sp-hand) calc(var(--progress) * 360deg), rgb(255 255 255 / .15) 0); -webkit-mask: radial-gradient(circle, transparent 0 46px, #000 47px); mask: radial-gradient(circle, transparent 0 46px, #000 47px); }
+#spaceport-view[data-purpose='mission'] .spaceport-hand { display: none; }
+
+/* A mission launch shows the rocket only: no camera choices, places or performance. */
+#spaceport-view:not([data-purpose='preview']) :is(.spaceport-cameras, .spaceport-landmarks, .spaceport-lighting, #spaceport-inspection, .spaceport-performance, .spaceport-parked) { display: none; }
+
+/* Reduced motion (the app setting or the system's): state changes are instant; no fade, no pulse. Ring progress, the
+   armed outline, the 👍 fill and all text stay. */
+#spaceport-view[data-motion='reduce'] :is(.spaceport-marker, .spaceport-hints > span) { transition: none !important; }
+#spaceport-view[data-motion='reduce'] :is(#spaceport-inspection, .spaceport-details) { animation: none !important; }
+#spaceport-view[data-motion='reduce'] [data-gesture-pulse='on']::after { animation: none !important; display: none; }
+@media (prefers-reduced-motion: reduce) {
+  #spaceport-view :is(.spaceport-marker, .spaceport-hints > span) { transition: none !important; }
+  #spaceport-view :is(#spaceport-inspection, .spaceport-details) { animation: none !important; }
+  #spaceport-view [data-gesture-pulse='on']::after { animation: none !important; display: none; }
+}
+
+@media (max-width: 640px) {
+  #spaceport-view { --sp-gap: 12px; }
+  .spaceport-heading { gap: var(--sp-space-2); }
+  /* Wrap the title to a second line instead of cutting it short (owner: never shorten a label) */
+  .spaceport-heading { align-items: flex-start; }
+  .spaceport-heading h2 { font-size: var(--sp-text-sm); padding: var(--sp-radius-sm) var(--sp-space-3); white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.4; }
+  #spaceport-view:lang(my) .spaceport-heading h2 { line-height: 1.8; padding-block: 6px; }
+  #spaceport-view .spaceport-close { width: var(--sp-target); padding: 0; }
+  .spaceport-close-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  #spaceport-view[data-purpose='mission'] .spaceport-heading { flex-wrap: wrap; }
+  #spaceport-view[data-purpose='mission'] .spaceport-heading h2 { flex-basis: 100%; }
+  .spaceport-dock { left: 0; right: 0; bottom: 0; transform: none; width: auto; border-radius: var(--sp-radius-lg) var(--sp-radius-lg) 0 0; border-width: 1px 0 0; padding: var(--sp-radius-sm) var(--sp-space-3) max(12px, env(safe-area-inset-bottom)); }
+  .spaceport-phase { display: none; }
+  .spaceport-markers { height: auto; margin: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-space-1); }
+  /* Touch: the range input is a 44 px hit area. The 8 px above reach into the dock's padding, so the track (drawn centred)
+     stays where it was; the markers below move down 8 px and keep their own 44 px. */
+  #spaceport-timeline { height: var(--sp-target); margin: -8px 0 0; }
+  #spaceport-view .spaceport-marker { position: relative; left: auto; transform: none; white-space: normal; text-align: left; padding: var(--sp-radius-sm) 2px 2px var(--sp-space-2); font-size: var(--sp-text-xs); line-height: 1.35; }
+  #spaceport-view:lang(my) .spaceport-marker { line-height: 1.6; }
+  #spaceport-view .spaceport-marker::before { left: 8px; }
+  /* Phone: the views get a full-width row of their own; play and the scrolling place chips share the next */
+  .spaceport-dock-row { flex-wrap: wrap; gap: var(--sp-space-2); }
+  .spaceport-cameras { order: -1; flex: 1 1 100%; min-width: 0; }
+  #spaceport-view .spaceport-cameras button { flex: 1 1 auto; min-width: 0; padding: 0 3px; font-size: var(--sp-text-xs); white-space: normal; }
+  #spaceport-view .spaceport-play { min-height: 48px; padding: 0 var(--sp-space-4) 0 var(--sp-space-3); }
+  /* Phone: one sideways-scrolling row; only fully visible chips may become gesture targets (owner, 2026-11-21). */
+  .spaceport-landmarks { flex: 1 1 0; flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; padding-bottom: 2px; }
+  /* Portrait phone: the zones sit at the bottom of the band, just above the dock, clear of the full-width place card
+     (centred, they covered its text). Their position depends only on the bar and the dock, so it never moves. */
+  #spaceport-view .spaceport-zone { width: 68px; max-height: 220px; margin: auto 0 0; padding: 0 var(--sp-space-1); border-radius: 18px; font-size: var(--sp-text-xs); }
+  .spaceport-zone-place { display: none; }
+  .spaceport-coach { align-self: stretch; font-size: var(--sp-text-xs); }
+}
+@media (max-height: 500px) {
+  .spaceport-dock { padding-top: 6px; padding-bottom: var(--sp-space-2); gap: var(--sp-space-1); }
+  .spaceport-markers { height: 36px; }
+}
+/* Short landscape (a phone on its side, e.g. 844×390): a two-row dock. The markers sit in four equal columns, so long
+   labels wrap instead of running into each other, and they carry the phase text as on a phone. Play, the views and
+   one sideways-scrolling row of chips share the second row.
+   Item 3: the bar becomes one row of a grid with the hint in its middle (the bar's own box steps aside with
+   display: contents), so the hint no longer takes a row of its own; the home tip (✋) is left out here for room. The
+   place card spans the band between the side zones: name, Details and close on one line, then a one-sentence summary;
+   Details opens the full description in the panel. */
+@media (max-height: 500px) and (min-width: 641px) {
+  .spaceport-phase { display: none; }
+  .spaceport-markers { height: auto; margin: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-space-1); }
+  /* Touch, short landscape: the range input is a 44 px hit area; the dock has 6 px of top padding, so it reaches 6 px up
+     (the track sits 2 px lower) and the markers move down 10 px, keeping their own 44 px. */
+  #spaceport-timeline { height: var(--sp-target); margin: -6px 0 0; }
+  #spaceport-view .spaceport-marker { position: relative; left: auto; transform: none; white-space: normal; text-align: left; padding: var(--sp-radius-sm) 2px 2px var(--sp-space-2); line-height: 1.35; }
+  #spaceport-view:lang(my) .spaceport-marker { line-height: 1.6; }
+  #spaceport-view .spaceport-marker::before { left: 8px; }
+  #spaceport-view .spaceport-marker:is([data-state='current'], [data-state='scrub'])::before { left: 4px; }
+  .spaceport-dock-row { flex-wrap: nowrap; gap: var(--sp-space-2); }
+  /* The fourth camera uses spare horizontal padding, leaving room for a complete place chip in the scroll row. */
+  #spaceport-view .spaceport-cameras button { padding-inline: 6px; }
+  #spaceport-view .spaceport-play { min-height: 48px; padding: 0 var(--sp-space-2); }
+  .spaceport-landmarks { flex: 1 1 0; flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; padding-bottom: 2px; }
+  #spaceport-view .spaceport-zone { width: 120px; }
+  /* No floating 👍 prompt here: above a zone it covered the bar (the Close label). The hint already asks for 👍, and
+     the hold fills the inner ring on the target. */
+  #spaceport-view .spaceport-thumb { display: none !important; }
+  .spaceport-ring .spaceport-ring-hold { display: inline; }
+
+  /* Columns: title · hint (flexible) · skip · help · reset · close. Every item has its own column, so the buttons stay
+     at the right whether or not the hint is shown, and "1 / -1" spans the whole width. */
+  .spaceport-top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto auto auto; grid-template-rows: auto minmax(0, 1fr); column-gap: var(--sp-radius-sm); row-gap: var(--sp-space-3); align-items: start; align-content: start; }
+  .spaceport-heading { display: contents; }
+  .spaceport-heading h2 { grid-row: 1; grid-column: 1; margin: 0; }
+  .spaceport-heading > button { grid-row: 1; }
+  #spaceport-view .spaceport-heading > [data-ui='spaceport-lighting'] { grid-column: 3; white-space: nowrap; }
+  #spaceport-view .spaceport-heading > #spaceport-skip-launch { grid-column: 4; }
+  #spaceport-view .spaceport-heading > [data-ui='spaceport-help'] { grid-column: 5; }
+  #spaceport-view .spaceport-heading > [data-ui='spaceport-reset'] { grid-column: 6; }
+  #spaceport-view .spaceport-heading > .spaceport-close { grid-column: 7; }
+  .spaceport-coach { grid-row: 1; grid-column: 2; justify-self: center; align-self: start; max-width: 100%; padding-block: 6px; }
+  .spaceport-coach-home { display: none; }
+  #spaceport-view .spaceport-top > #spaceport-about { grid-row: 2; grid-column: 1 / -1; justify-self: end; max-height: 100%; }
+  #spaceport-view .spaceport-top > #spaceport-inspection { grid-row: 2; grid-column: 1 / -1; justify-self: center; max-height: 100%;
+    width: min(540px, 100vw - 2 * (120px + var(--sp-gap) + var(--sp-space-3)));
+    display: grid; grid-template-columns: minmax(0, 1fr) auto auto; column-gap: var(--sp-space-2); align-items: center; padding: 6px 6px 10px var(--sp-space-4); }
+  #spaceport-inspection h3 { grid-column: 1; grid-row: 1; margin: 0; font-size: var(--sp-text-md); }
+  #spaceport-inspection .spaceport-details-open { display: inline-flex; grid-column: 2; grid-row: 1; align-items: center; border-color: var(--sp-hand); color: var(--sp-hand-text); font-weight: 700; position: relative; }
+  #spaceport-view #spaceport-inspection .spaceport-card-close { position: relative; right: auto; top: auto; grid-column: 3; grid-row: 1; }
+  #spaceport-inspection .spaceport-place-description { display: none; }
+  #spaceport-inspection .spaceport-place-summary { display: block; grid-column: 1 / -1; grid-row: 2; padding-right: var(--sp-space-2); }
+}

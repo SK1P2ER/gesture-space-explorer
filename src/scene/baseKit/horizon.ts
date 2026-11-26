@@ -39,7 +39,17 @@ void main() {
   vec3 horizon = vec3(0.74, 0.55, 0.36);
   vec3 zenith = vec3(0.50, 0.34, 0.22);
   vec3 sky = mix(horizon, zenith, pow(h, 0.6));
-  float toSun = max(dot(d, normalize(sunDir)), 0.0);
+  vec3 s = normalize(sunDir);
+  float toSun = max(dot(d, s), 0.0);
+  // Golden hour on Mars (the Sun below ~25°): the dusty sky deepens to a rose-butterscotch overhead and away from the
+  // Sun, with a warm amber band along the horizon on the Sun's side.
+  float dusk = 1.0 - smoothstep(2.0, 25.0, sunElevation);
+  vec3 duskSky = mix(vec3(0.62, 0.36, 0.22), vec3(0.24, 0.15, 0.13), pow(h, 0.5));
+  sky = mix(sky, duskSky, dusk * (1.0 - night));
+  vec2 flatD = normalize(d.xz + vec2(1e-5, 0.0));
+  vec2 flatS = normalize(s.xz + vec2(1e-5, 0.0));
+  float sunSide = 0.5 + 0.5 * dot(flatD, flatS);
+  sky += dusk * (1.0 - night) * vec3(0.30, 0.13, 0.03) * pow(1.0 - h, 5.0) * sunSide * sunSide;
   // Mars' sunsets are blue around the Sun (fine dust scatters blue forward).
   float low = 1.0 - smoothstep(0.0, 18.0, sunElevation);
   sky = mix(sky, vec3(0.24, 0.40, 0.68), low * pow(toSun, 3.0) * 0.9);
@@ -48,7 +58,11 @@ void main() {
   sky += up * (vec3(1.0, 0.97, 0.92) * pow(toSun, 3000.0) * 1.2 + vec3(0.05, 0.05, 0.06) * pow(toSun, 80.0));
   // Twilight darkens toward night, when the dome clears to the stars.
   sky *= mix(1.0, 0.25, night);
-  gl_FragColor = vec4(sky, 1.0 - night);
+  // Night: a faint cool skyglow stays low over the horizon, so the base's silhouette still separates from the sky.
+  float a = 1.0 - night;
+  float glow = night * pow(1.0 - h, 6.0) * 0.6;
+  sky = mix(sky, vec3(0.10, 0.12, 0.19), glow / (a + glow + 1e-4));
+  gl_FragColor = vec4(sky, a + glow * (1.0 - a));
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;

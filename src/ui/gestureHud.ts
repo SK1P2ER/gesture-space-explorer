@@ -58,4 +58,11 @@ export class GestureHud {
     clearTimeout(this.flashTimer);
     this.flashTimer = window.setTimeout(() => (this.flashEl.hidden = true), FLASH_MS);
   }
+
+  /** Immediately clear any active flash toast (used when deferring a stamp toast as the destination picker opens). */
+  hideFlash() {
+    clearTimeout(this.flashTimer);
+    this.flashEl.hidden = true;
+    this.flashEl.classList.remove('show');
+  }
 }

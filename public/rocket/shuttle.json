@@ -1,0 +1,19 @@
+{
+  "source": "rocket-launch.blend",
+  "sha256": "7310e193a50404bc456c19ee4843633472aeb2a85cf7c9382b05e7245c1ca9ff",
+  "height": 0.95,
+  "orbiterGround": 0.05606557068640657,
+  "orbiterCenterZ": 0.06080259893061839,
+  "variants": {
+    "high": {
+      "triangles": 14974,
+      "meshes": 2,
+      "bytes": 1485708
+    },
+    "low": {
+      "triangles": 4977,
+      "meshes": 2,
+      "bytes": 626304
+    }
+  }
+}

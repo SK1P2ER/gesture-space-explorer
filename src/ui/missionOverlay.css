@@ -1,0 +1,316 @@
+/* Mission controls use their own quiet deck, leaving the rocket unobstructed. */
+.active-vehicle-label[data-yield] { visibility:hidden; } /* it would cover a control (ActiveVehicle keepClear) */
+.active-vehicle-label { position:fixed; transform:translate(-50%,24px); z-index:8; padding:4px 9px; border:1px solid #71cfcb; border-radius:20px; color:#b4fff0; background:#102c36e8; pointer-events:none; font-size:.7rem; }
+.japan-view-controls { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
+.spaceport-view-caption { flex-basis:100%; margin:0 0 6px; color:#b7c7d4; font-size:.75rem; line-height:1.5; }
+#local-spaceport { position:fixed; inset:0; z-index:1; }
+#local-spaceport[hidden] { display:none; }
+#spaceport-ground-canvas { width:100%; height:100%; display:block; touch-action:none; cursor:grab; }
+body.local-spaceport-view .hud,body.local-spaceport-view #base-panel { z-index:3; }
+body.local-spaceport-view #scene { visibility:hidden; }
+body.local-spaceport-view :is(#labels,#sky-labels,#focus,#loading) { visibility:hidden; }
+.spaceport-navigation { position:fixed; top:calc(var(--header-bottom,90px) + 12px); right:16px; z-index:15; width:min(185px,calc(50vw - 24px)); }
+.spaceport-navigation button { min-height:44px; width:100%; white-space:normal; }
+body.photo-mode .spaceport-navigation { visibility:hidden; }
+.japan-view-controls button { flex:1 1 120px; min-width:0; min-height:44px; white-space:normal; line-height:1.5; }
+.japan-site-marker { position:fixed; z-index:8; transform:translate(-50%,-50%); max-width:calc(100vw - 32px); padding:9px 14px; border:1px solid #c0c9cf; border-radius:20px; color:#eef4f5; background:#152531ef; font-size:.75rem; cursor:pointer; }
+.japan-site-marker::before {content:'●';color:#e4bf8d;margin-right:7px;}
+body.clean-view .japan-site-marker,body.photo-mode .japan-site-marker { visibility:hidden; }
+body.clean-view .active-vehicle-label, body.photo-mode .active-vehicle-label, body.photo-mode .mission-resume { visibility:hidden; }
+.mission-resume { position:fixed; left:16px; bottom:100px; z-index:35; width:min(340px,calc(100vw - 64px)); padding:16px; border:1px solid #71cfcb88; border-radius:16px; color:#ecf1f8; background:#101d2cf5; box-shadow:0 8px 30px #0006; }
+.mission-resume p { font-size:.85rem; line-height:1.6; margin:0 0 12px; }
+.mission-resume button { margin:4px; min-height:44px; }
+/* A refused journey action points at the choice: a warmer edge and one short line, no motion. */
+.mission-resume.remind { border-color:#ffd38a; }
+.mission-resume .resume-hint { margin:8px 0 0; font-size:.8rem; color:#ffd38a; }
+#mission-overlay {
+  top: auto;
+  bottom: calc(100px + var(--sab, 0px));
+  width: min(440px, calc(100vw - 40px));
+  text-shadow: none;
+  pointer-events: none;
+  color: var(--fg, #ecf1f8);
+}
+/* The horizon view's sky card is opaque and sits over header controls: it takes its own taps. */
+#mission-overlay.horizon { pointer-events: auto; }
+#mission-overlay .mission-card {
+  padding: 20px;
+  border: 1px solid rgba(172, 193, 222, .18);
+  border-radius: 20px;
+  background: rgba(11, 20, 35, .96);
+  box-shadow: 0 12px 40px #0004;
+  pointer-events: auto;
+}
+#mission-overlay .mission-eyebrow {
+  margin: 0 0 6px;
+  color: #9fb3cd;
+  font-size: .66rem;
+  font-weight: 650;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+#mission-overlay .mission-title { margin: 0; font-size: 1.3rem; line-height: 1.35; font-weight: 600; }
+#mission-overlay.is-landing { inset: 0; width: 100%; transform: none; }
+#mission-overlay.is-landing .mission-actions {
+  position: absolute;
+  top: max(calc(24px + var(--sat, 0px)), calc(var(--header-bottom, 0px) + 12px));
+  right: calc(24px + var(--sar, 0px));
+  left: auto;
+  bottom: auto;
+  transform: none;
+  width: min(320px, calc(100vw - 48px - var(--sal, 0px) - var(--sar, 0px)));
+  max-height: calc(100dvh - 48px - var(--sat, 0px) - var(--sab, 0px));
+  padding: 14px;
+  text-align: left;
+  pointer-events: none;
+}
+#mission-overlay.is-landing .landing-heading { min-height: 44px; padding-inline-end: 7rem; margin: 0 0 8px; font-size: .95rem; line-height: 1.5; overflow-wrap: anywhere; }
+#mission-overlay .altitude-label { display: flex; justify-content: space-between; gap: 8px; color: #b4c3d5; font-size: .75rem; margin: 0 0 6px; }
+#mission-overlay .altitude-value { color: #ecf1f8; font-variant-numeric: tabular-nums; }
+#mission-overlay .landing-telemetry { margin:8px 0; font-size:.7rem; line-height:1.5; color:#b4c3d5; font-variant-numeric:tabular-nums; }
+#mission-overlay .landing-alignment { margin:8px 0; font-size:.8rem; line-height:1.5; color:#8fe0cc; overflow-wrap:anywhere; }
+#mission-overlay .landing-alignment:empty { display: none; }
+#mission-overlay [data-alignment='correct'], #mission-overlay [data-alignment='missed'] { color:#ffc58f; }
+#mission-overlay .altitude { width: 100%; height: 5px; margin: 0 0 10px; border-radius: 8px; background: #c4d6ed1c; }
+#mission-overlay .altitude .fill { background: #71cfcb; border-radius: inherit; }
+#mission-overlay .buttons { display: grid; grid-template-columns: 1fr; gap: 8px; }
+#mission-overlay.is-landing .buttons { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+#mission-overlay button.chip {
+  min-height: 44px;
+  padding: 11px 16px;
+  color: #e7edf6;
+  background: #203048;
+  border: 1px solid #a3badb24;
+  border-radius: 11px;
+  font: inherit;
+  font-size: .8rem;
+  font-weight: 550;
+  cursor: pointer;
+}
+#mission-overlay button.chip:hover { background: #2b3d57; }
+#mission-overlay button.chip:focus-visible { outline: 2px solid #88ddd7; outline-offset: 3px; }
+#mission-overlay button.auto-land { color: #161a23; background: var(--action, #f28c57); border-color: var(--action, #f28c57); font-weight: 700; }
+#mission-overlay button.auto-land:hover { background: #ffc58f; }
+#mission-overlay button.auto-land[aria-pressed="true"] { color: #e5fffb; background: #19433f; border-color: #6bbeb052; }
+#mission-overlay.is-landing button.chip { min-width: 0; padding: 8px 10px; border-radius: 24px; line-height: 1.5; white-space: normal; overflow-wrap: anywhere; }
+#mission-overlay.is-landing :is(button, summary) { pointer-events: auto; }
+#mission-overlay .landing-help > summary {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: max-content;
+  max-width: 7rem;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 10px 8px;
+  border: 1px solid #a3badb24;
+  border-radius: 22px;
+  color: #d3e1ef;
+  font-size: .78rem;
+  line-height: 1.5;
+  text-align: center;
+  list-style-position: inside;
+  cursor: pointer;
+}
+#mission-overlay .landing-help > summary:focus-visible { outline: 2px solid #88ddd7; outline-offset: 3px; }
+#mission-overlay .landing-help[open] > summary { background: #203048; }
+#mission-overlay .landing-help-content { max-height: 24dvh; overflow-y: auto; overscroll-behavior: contain; margin-top: 12px; padding-top: 8px; border-top: 1px solid #a3badb24; pointer-events: auto; }
+#mission-overlay .landing-help-content .hint { margin-top: 8px; }
+#mission-overlay .hint { margin: 14px 0 0; color: #9eafc5; font-size: .72rem; line-height: 1.6; }
+#mission-overlay .flying { margin: 10px 0 18px; font-size: 1.1rem; font-weight: 550; line-height: 1.45; }
+#mission-overlay .skip { min-width: 140px; }
+/* Flying: one compact line above the rocket, beside the mission HUD. Only Skip takes input; drags reach the scene. */
+#mission-overlay.is-flight { top: max(16%, calc(12px + var(--sat, 0px))); bottom: auto; width: max-content; max-width: calc(100vw - 384px - var(--sal, 0px) - var(--sar, 0px)); }
+#mission-overlay.is-flight .flight-card { display: flex; align-items: center; gap: 12px; padding: 5px 5px 5px 16px; border-radius: 27px; background: rgba(11, 20, 35, .72); box-shadow: none; pointer-events: none; text-align: left; }
+#mission-overlay.is-flight .flying { margin: 0; font-size: .95rem; line-height: 1.35; overflow-wrap: anywhere; }
+#mission-overlay.is-flight .skip { flex: none; min-width: 0; border-radius: 22px; }
+#mission-overlay.is-countdown { top: 26%; bottom: auto; }
+#mission-overlay.is-countdown .count { color: #ffb46f; font-weight: 550; text-shadow: 0 4px 30px #0009; }
+#mission-overlay.is-countdown .hint { color: #e2e9f3; text-shadow: 0 2px 8px #000; }
+#mission-overlay.horizon { top: calc(80px + var(--sat, 0px)); bottom: auto; background: rgba(11, 20, 35, .96); border-radius: 18px; }
+
+@media (max-width: 640px) {
+  #mission-overlay.is-landing {
+    inset: 0;
+    width: 100%;
+    transform: none;
+  }
+  #mission-overlay .mission-title { font-size: 1rem; }
+  #mission-overlay.is-landing .mission-actions {
+    position: absolute;
+    top: auto;
+    left: calc(16px + var(--sal, 0px));
+    right: calc(16px + var(--sar, 0px));
+    bottom: calc(var(--footer-h, 0px) + 16px + var(--sab, 0px));
+    width: auto;
+    transform: none;
+    padding: 12px;
+  }
+  #mission-overlay.is-landing .hint { font-size: .71rem; }
+  #mission-overlay.is-flight { top: auto; bottom: calc(20px + var(--sab, 0px)); max-width: calc(100vw - 32px - var(--sal, 0px) - var(--sar, 0px)); } /* the HUD holds the top left: below the rocket here */
+  #mission-overlay.is-countdown { top: 25%; bottom: auto; }
+  #mission-overlay.is-countdown .count { font-size: 5rem; }
+}
+
+@media (max-height: 500px) and (min-width: 641px) {
+  #mission-overlay.is-landing .mission-actions { top: calc(16px + var(--sat, 0px)); bottom: auto; left: auto; right: calc(16px + var(--sar, 0px)); transform: none; width: min(300px, 42vw); max-height: calc(100dvh - 32px - var(--sat, 0px) - var(--sab, 0px)); padding: 12px; }
+  #mission-overlay.is-landing .mission-eyebrow { display: none; }
+  #mission-overlay.is-landing .mission-title { font-size: 1rem; }
+  #mission-overlay.is-landing .buttons { grid-template-columns: 1fr 1fr; }
+  #mission-overlay.is-landing button.chip { min-height: 44px; font-size: .78rem; padding: 8px; }
+  #mission-overlay.is-landing .hint { font-size: .65rem; margin-top: 8px; }
+  #mission-overlay .altitude { margin-bottom: 10px; }
+}
+
+/* Exploring on foot (the horizon view): one slim edge card with the place, a persistent Return to orbit, a brief
+   look-around hint, the near-sunset action (what it does said before it is used) and the sky facts folded away. The
+   ground and sky stay clear; the card sits below the header (phones, desktop) or in the right column (short landscape). */
+#mission-overlay.explore {
+  top: calc(var(--header-bottom, 64px) + 8px); bottom: auto;
+  width: min(440px, calc(100vw - 32px - var(--sal, 0px) - var(--sar, 0px)));
+  padding: 8px 10px 8px 14px; border-radius: 14px; box-sizing: border-box;
+  background: rgba(11, 20, 35, .9); border: 1px solid var(--border); text-align: start; text-shadow: none;
+}
+#mission-overlay.explore .explore-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+#mission-overlay.explore .explore-title { flex: 1 1 10em; min-width: 0; margin: 0; font-size: 1.1rem; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
+#mission-overlay.explore .explore-body { color: var(--muted); font-size: .8em; font-weight: 500; }
+#mission-overlay.explore button { margin: 0; }
+#mission-overlay.explore .explore-return {
+  flex: none; min-height: 44px; padding: 4px 14px; border-radius: 22px; font: inherit; font-size: .9rem; font-weight: 700;
+  color: #102a43; background: #9fe3f5; border: 0; cursor: pointer; max-width: 100%; white-space: normal; line-height: 1.3;
+}
+#mission-overlay.explore .explore-return:hover { background: #c1effb; }
+#mission-overlay.explore :is(.explore-return, .explore-preset, .restore-time, summary, .landmarks-toggle, .explore-landmark, .landmark-overview):focus-visible { outline: 2px solid #e6f5ff; outline-offset: 3px; }
+#mission-overlay.explore .explore-hint { margin: 6px 0 0; font-size: .85rem; color: #cfe9f5; overflow-wrap: anywhere; }
+#mission-overlay.explore .explore-hint[hidden] { display: none; }
+/* Jezero's time group: local time and the active preset, Day / Golden Hour / Night, what they do, Restore. */
+#mission-overlay.explore .explore-time { margin-top: 8px; padding-top: 6px; border-top: 1px solid #ffffff1a; }
+#mission-overlay.explore .explore-time-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin: 0 0 4px; font-size: .8rem; color: var(--muted); }
+#mission-overlay.explore .explore-local { color: var(--fg); font-weight: 700; font-variant-numeric: tabular-nums; font-size: .95rem; }
+#mission-overlay.explore .explore-active { color: #ffd08a; font-weight: 600; }
+#mission-overlay.explore .explore-time-short { display: none; }
+#mission-overlay.explore .explore-active:empty { display: none; }
+#mission-overlay.explore .explore-presets { display: flex; gap: 6px; }
+#mission-overlay.explore .explore-preset {
+  flex: 1 1 0; min-width: 0; min-height: 44px; padding: 4px 8px; border-radius: 12px; font: inherit; font-size: .82rem; line-height: 1.25;
+  color: var(--fg); background: #ffffff0d; border: 1px solid #ffffff33; cursor: pointer; white-space: normal; overflow-wrap: anywhere;
+}
+#mission-overlay.explore .explore-preset:hover { background: #ffffff1f; }
+#mission-overlay.explore .explore-preset[aria-pressed='true'] { color: #2a1700; background: #ffc56b; border-color: #ffd89a; font-weight: 700; }
+#mission-overlay.explore .preset-icon { display: inline-block; line-height: 1; }
+#mission-overlay.explore .explore-preset[aria-pressed='true'] .preset-icon { padding: 2px 3px; border-radius: 999px; background: #2a1700; }
+#mission-overlay.explore .explore-preset[aria-disabled='true'] { opacity: .5; cursor: not-allowed; }
+#mission-overlay.explore .explore-golden-note { display: block; margin-top: 4px; font-size: .76rem; color: var(--muted); overflow-wrap: anywhere; }
+#mission-overlay.explore .restore-time {
+  display: flex; align-items: center; justify-content: center; gap: .4em; box-sizing: border-box; width: 100%; min-height: 44px;
+  margin-top: 6px; padding: 4px 12px; border-radius: 12px; border: 1px solid #ffc845; background: #2a2108f2; color: #ffe3a3;
+  font: inherit; font-size: .82rem; font-weight: 700; line-height: 1.3; white-space: normal; overflow-wrap: anywhere; cursor: pointer;
+}
+#mission-overlay.explore .restore-time[hidden] { display: none; }
+#mission-overlay.explore .restore-time:hover { background: #3a2d0bf2; border-color: #ffd66e; }
+#mission-overlay.explore .restore-icon { flex: none; }
+/* Jezero's Landmarks: a folding list (folded on phones), the framed landmark pressed and described, Back to overview
+   (an outlined frame button, unlike the filled Return to orbit pill; it sits on the toggle's row so it stays in reach
+   with the list folded). */
+#mission-overlay.explore .explore-landmarks { margin-top: 6px; padding-top: 2px; border-top: 1px solid #ffffff1a; }
+#mission-overlay.explore .explore-landmarks-row { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; }
+#mission-overlay.explore .landmarks-toggle {
+  flex: 1 1 auto; min-width: 0; min-height: 44px; display: flex; align-items: center; gap: 6px; padding: 2px 4px 2px 0;
+  color: var(--fg); background: none; border: 0; border-radius: 10px; font: inherit; font-size: .86rem; font-weight: 650; line-height: 1.3;
+  text-align: start; cursor: pointer;
+}
+#mission-overlay.explore .landmarks-toggle::before { content: '▸'; color: var(--muted); font-size: .8em; }
+#mission-overlay.explore .explore-landmarks.is-open .landmarks-toggle::before { content: '▾'; }
+#mission-overlay.explore .landmarks-text { display: flex; flex-wrap: wrap; gap: 0 6px; min-width: 0; }
+#mission-overlay.explore .landmarks-label { white-space: nowrap; }
+#mission-overlay.explore .landmarks-current { color: #8fe0cc; font-weight: 600; overflow-wrap: anywhere; }
+#mission-overlay.explore .landmarks-current::before { content: '· '; }
+#mission-overlay.explore :is(.landmarks-current:empty, .explore-landmarks.is-open .landmarks-current) { display: none; }
+#mission-overlay.explore .landmark-overview {
+  flex: none; margin-inline-start: auto; display: inline-flex; align-items: center; gap: .4em; box-sizing: border-box; max-width: 100%; min-height: 44px; padding: 4px 12px;
+  color: #d6f4ff; background: transparent; border: 1px solid #9fe3f5aa; border-radius: 10px; font: inherit; font-size: .8rem; font-weight: 650;
+  line-height: 1.3; white-space: normal; overflow-wrap: anywhere; text-align: start; cursor: pointer;
+}
+#mission-overlay.explore .landmark-overview:hover { background: #9fe3f51f; border-color: #c1effb; }
+#mission-overlay.explore .landmark-overview[hidden] { display: none; }
+#mission-overlay.explore .overview-icon { flex: none; }
+#mission-overlay.explore .explore-landmark-list[hidden] { display: none; }
+/* One row, shared evenly; a long name wraps between words, never inside one (min-content), and a row that cannot
+   hold them wraps. */
+#mission-overlay.explore .landmark-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+#mission-overlay.explore .explore-landmark {
+  flex: 1 1 0; min-width: min-content; min-height: 44px; padding: 4px 8px; border-radius: 12px; font: inherit; font-size: .8rem; line-height: 1.25;
+  color: var(--fg); background: #ffffff0d; border: 1px solid #ffffff33; white-space: normal; overflow-wrap: break-word; cursor: pointer;
+}
+#mission-overlay.explore .explore-landmark:hover { background: #ffffff1f; }
+/* The framed one: filled teal and bold (aria-pressed says it too). */
+#mission-overlay.explore .explore-landmark[aria-pressed='true'] { color: #04221c; background: #8fe0cc; border-color: #c4f3e7; font-weight: 700; box-shadow: inset 0 0 0 1px #04221c55; }
+#mission-overlay.explore .landmark-detail { margin: 4px 0 2px; font-size: .78rem; line-height: 1.4; color: var(--muted); overflow-wrap: anywhere; }
+#mission-overlay.explore .landmark-detail[hidden] { display: none; }
+#mission-overlay.explore .landmark-name { color: var(--fg); font-weight: 700; margin-inline-end: .5em; }
+html[lang='my'] #mission-overlay.explore :is(.landmarks-toggle, .explore-landmark, .landmark-overview) { line-height: 1.5; }
+#mission-overlay.explore .explore-sky { margin-top: 4px; font-size: .82rem; }
+#mission-overlay.explore .explore-sky summary {
+  display: flex; align-items: center; gap: 6px; min-height: 44px; color: var(--muted); cursor: pointer; list-style: none;
+}
+#mission-overlay.explore .explore-sky summary::-webkit-details-marker { display: none; }
+#mission-overlay.explore .explore-sky summary::before { content: '▸'; font-size: .8em; }
+#mission-overlay.explore .explore-sky[open] summary::before { content: '▾'; }
+#mission-overlay.explore .explore-sky .sky { margin: 0 0 4px; font-size: .82rem; }
+#mission-overlay.explore .explore-sr { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+html[lang='my'] #mission-overlay.explore { line-height: 1.6; }
+/* The place's name is in the card: the base readout (base, fuel) steps aside while exploring. */
+body.horizon #mission-hud { display: none; }
+/* Toasts (a stamp, "no sunset soon") sit below the card, never over Return to orbit. */
+body.horizon:not(.mission-active) #gesture-flash { top: calc(var(--explore-bottom, 30%) + 10px); bottom: auto; max-width: calc(100vw - 32px); }
+
+@media (max-width: 640px) {
+  #mission-overlay.explore { left: calc(12px + var(--sal, 0px)); right: calc(12px + var(--sar, 0px)); width: auto; transform: none; }
+  #mission-overlay.explore .explore-title { font-size: 1rem; }
+}
+/* Phones (portrait and short landscape): the time group is compact so the card stays clear of the middle of the view,
+   where a framed landmark sits. */
+@media (max-width: 640px), (orientation: landscape) and (max-height: 500px) {
+  #mission-overlay.explore .explore-time { margin-top: 4px; }
+  #mission-overlay.explore .explore-time { margin-top: 2px; padding-top: 2px; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 8px; row-gap: 2px; align-items: center; }
+  #mission-overlay.explore .explore-time-head { grid-column: 1; grid-row: 1; margin: 0; min-height: 24px; align-items: center; }
+  #mission-overlay.explore .explore-presets { grid-column: 1 / -1; grid-row: 2; }
+  #mission-overlay.explore .explore-golden-note { grid-column: 1 / -1; grid-row: 3; margin-top: 0; }
+  /* Restore shares the local-time row; the row's "Local solar time" word steps out of sight (still its group's name). */
+  #mission-overlay.explore .restore-time { grid-column: 2; grid-row: 1; margin-top: 0; }
+  #mission-overlay.explore.has-restore .explore-time-label { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  /* ...and a short visible "Local" keeps the shown time read as local time. */
+  #mission-overlay.explore.has-restore .explore-time-short { display: inline; }
+  #mission-overlay.explore.has-restore .explore-time-head { flex-wrap: nowrap; white-space: nowrap; }
+  /* Once a preset is on, Restore takes the explanation's row (what the presets do was said before the first one). */
+  #mission-overlay.explore.has-restore .explore-golden-note { display: none; }
+}
+/* Short landscape: the right column, below Clean view (its bottom is 64px; 8px gap); the left of the view stays for the land. */
+@media (orientation: landscape) and (max-height: 500px) {
+  #mission-overlay.explore {
+    top: calc(72px + var(--sat, 0px)); left: auto; right: calc(16px + var(--sar, 0px)); transform: none;
+    width: min(340px, 44vw); max-height: calc(100dvh - 72px - var(--sat, 0px) - var(--sab, 0px) - 8px); overflow-y: auto; padding: 6px 8px 6px 12px;
+  }
+  #mission-overlay.explore .explore-title { font-size: .95rem; flex-basis: 6em; }
+  #mission-overlay.explore .explore-time { margin-top: 2px; padding-top: 2px; }
+  /* The card scrolls here: the place and Return to orbit stay at its top (sticky), what scrolls goes under them. */
+  #mission-overlay.explore .explore-bar { position: sticky; top: -6px; z-index: 1; margin: -6px -8px 0 -12px; padding: 6px 8px 2px 12px; background: rgb(11, 20, 35); border-radius: 14px 14px 0 0; }
+  /* The time group comes right under the place and Return to orbit, so presets and Restore stay above the camera
+     preview; the look hint and the folded sky facts follow (they scroll in the card when the preview is open). */
+  #mission-overlay.explore { display: flex; flex-direction: column; }
+  #mission-overlay.explore .explore-bar { order: 0; }
+  #mission-overlay.explore .explore-time { order: 1; }
+  #mission-overlay.explore .explore-landmarks { order: 2; margin-top: 4px; }
+  #mission-overlay.explore .explore-hint { order: 3; }
+  #mission-overlay.explore .explore-sky { order: 4; }
+  #mission-overlay.explore .explore-sky summary { min-height: 44px; }
+  /* The camera preview sits bottom right: the card ends above it, reserving room for a preview up to 126px tall and
+     16px up (what is below the first rows scrolls in the card). */
+  body:has(#preview:not([hidden])) #mission-overlay.explore { max-height: calc(100dvh - 72px - var(--sat, 0px) - 126px - 16px - 10px - var(--sab, 0px)); }
+  body.horizon:not(.mission-active) #gesture-flash { top: calc(var(--header-bottom, 64px) + 8px); left: calc((100vw - min(340px, 44vw) - 32px) / 2); max-width: calc(100vw - min(340px, 44vw) - 64px); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  #mission-overlay.explore .explore-hint:not([hidden]) { animation: explore-hint-in .3s ease-out; }
+  #mission-overlay.explore .restore-time:not([hidden]) { animation: explore-hint-in .25s ease-out; }
+}
+@keyframes explore-hint-in { from { opacity: 0; } to { opacity: 1; } }

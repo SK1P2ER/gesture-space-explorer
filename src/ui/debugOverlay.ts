@@ -36,6 +36,7 @@ export class DebugOverlay {
   resolutionInfo = '—';
   /** Set by main each frame: the Quality setting, and in Auto what it has learned. */
   tierInfo = '—';
+  runtimeInfo = '';
   /** Recovered "can't happen" states, newest last; kept while debug is off so turning it on shows them. */
   readonly incidents: string[] = [];
 
@@ -56,6 +57,7 @@ export class DebugOverlay {
       `link    ${location.href}`,
       `device  ${navigator.userAgent} · ${innerWidth}×${innerHeight} @ ${devicePixelRatio}x`,
       this.stats.textContent ?? '',
+      this.runtimeInfo,
     ].join('\n');
   }
 
@@ -119,11 +121,19 @@ export class DebugOverlay {
     this.syncVisibility();
   }
 
+  /** The camera is off: no empty preview to suggest otherwise, and no hand left over from its last frame. */
+  hide() {
+    this.cameraShown = false;
+    this.lastFrame = null;
+    this.syncVisibility();
+  }
+
   /** Shown with the camera, or in debug mode without it (the stats and the Copy report button only). */
   private syncVisibility() {
     this.root.hidden = !this.cameraShown && !this.debug;
     this.root.classList.toggle('stats-only', this.debug && !this.cameraShown);
-    this.copyButton.hidden = !this.debug;
+    // The Copy report button, and the Diagnostics button beside it when the page opened with ?debug.
+    for (const button of this.root.querySelectorAll<HTMLElement>('.debug-copy, .debug-action')) button.hidden = !this.debug;
   }
 
   onFrame(frame: HandFrame, detectMs: number) {

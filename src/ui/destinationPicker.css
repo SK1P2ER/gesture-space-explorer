@@ -1,0 +1,329 @@
+/* Opt-in 3D destination picker (?flags=picker3d). It lives in the scene-label layer (#labels is z-index 2) and is
+   placed in the free band between the HUD and the panels, so it never needs to sit above them. */
+#destination-picker { position: fixed; inset: 0; z-index: 2; pointer-events: none; }
+#destination-picker[hidden], #picker-entry[hidden], #picker-entry [hidden], #destination-picker .picker-card [hidden] { display: none; }
+#destination-picker .picker-target, #destination-picker .picker-card { position: absolute; left: 0; top: 0; pointer-events: auto; }
+#destination-picker .picker-target {
+  min-width: 64px; min-height: 44px; padding: 6px 13px;
+  border: 1.5px solid #a3badb55; border-radius: 22px; background: #0c1524eb; color: var(--fg, #ecf1f8);
+  font: inherit; font-size: .84rem; font-weight: 600; line-height: 1.3; white-space: normal; overflow-wrap: anywhere; cursor: pointer;
+  box-shadow: 0 4px 14px #0006; backdrop-filter: blur(8px);
+}
+#destination-picker .picker-target[hidden] { display: none; }
+/* State in more than colour: hover gets a dashed outline + hollow progress ring; selected gets ✓ + solid teal border; confirming gets warm amber border + hollow progress ring. */
+#destination-picker .picker-target[data-state="hover"] {
+  border-color: #9fc8ff; outline: 2px dashed #9fc8ff; outline-offset: 2px; background: #132540f2;
+}
+#destination-picker .picker-target[data-state="selected"] {
+  border: 2px solid #8fe0cc; font-weight: 700; background: #103235f5; box-shadow: 0 0 0 2px #8fe0cc38, 0 6px 18px #0008;
+}
+#destination-picker .picker-target[data-state="confirming"] {
+  border: 2px solid #ffc58f; font-weight: 700; background: #2c2416f5; box-shadow: 0 0 0 2px #ffc58f44, 0 6px 18px #0008;
+}
+/* Hollow progress ring (👆 steady pointing or 👍 confirming) beside the planet name, never over the orb. */
+#destination-picker .picker-target[data-state="hover"] {
+  padding-right: 36px;
+  background-image:
+    radial-gradient(circle closest-side, #132540 58%, transparent 62%),
+    conic-gradient(#9fc8ff calc(var(--p, 0) * 1%), #ffffff29 0);
+  background-size: 18px 18px, 18px 18px; background-repeat: no-repeat; background-position: right 10px center;
+}
+#destination-picker .picker-target[data-state="confirming"] {
+  padding-right: 36px;
+  background-image:
+    radial-gradient(circle closest-side, #2c2416 58%, transparent 62%),
+    conic-gradient(#ffc58f calc(var(--p, 0) * 1%), #ffffff29 0);
+  background-size: 18px 18px, 18px 18px; background-repeat: no-repeat; background-position: right 10px center;
+}
+#destination-picker .picker-target[data-look="fallback"] { font-style: italic; }
+#destination-picker button:focus-visible, #picker-open:focus-visible { outline: 3px solid #88ddd7; outline-offset: 3px; }
+
+/* The one destination card: name, state, Confirm, then All destinations (and Back). */
+#destination-picker .picker-card {
+  display: flex; flex-direction: column; gap: 6px; overflow: auto; overscroll-behavior: contain;
+  /* Native (non-overlay) scrollbars must not change text width and trigger a measure/wrap/scroll feedback loop. */
+  scrollbar-gutter: stable;
+  padding: 10px 12px; border: 1px solid #a3badb3d; border-radius: 16px; background: #0c1524e6;
+  backdrop-filter: blur(12px); box-shadow: 0 10px 30px #0007;
+}
+#destination-picker .picker-name { margin: 0; font-weight: 650; font-size: .9rem; line-height: 1.35; overflow-wrap: anywhere; }
+#destination-picker .picker-state { margin: 0; color: #ffd38a; font-size: .8rem; }
+#destination-picker .picker-state:empty { display: none; }
+#destination-picker .picker-confirm {
+  min-height: 44px; border: 0; border-radius: 12px; color: #161a23; font: inherit; font-weight: 750; cursor: pointer;
+  /* The 👍 hold fills the button from the left. */
+  background: linear-gradient(90deg, #ffc58f calc(var(--hold, 0) * 1%), var(--action, #f28c57) 0);
+}
+/* Disabled (nothing selected yet): still readable (about 6:1), clearly not the orange action. */
+#destination-picker .picker-confirm:disabled { background: #2b3a52; color: #b0bdd0; cursor: default; }
+#destination-picker .picker-row { display: flex; gap: 6px; flex-wrap: wrap; }
+#destination-picker .picker-all, #destination-picker .picker-back, #destination-picker .picker-details {
+  flex: 1 1 auto; min-height: 44px; padding: 6px 12px; border: 1px solid #a3badb3d; border-radius: 12px;
+  background: #142236cc; color: var(--fg, #ecf1f8); font: inherit; font-size: .82rem; line-height: 1.3; white-space: nowrap; cursor: pointer;
+}
+#destination-picker .picker-card[data-screen="confirm"] .picker-back {
+  background: #101b2ccc; color: #bed0e6; border-color: #a3badb30; font-size: .8rem;
+}
+#destination-picker .picker-back[hidden], #destination-picker .picker-list[hidden] { display: none; }
+#destination-picker .picker-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+#destination-picker .picker-list button {
+  width: 100%; min-height: 44px; padding: 8px 12px; text-align: left; border: 1px solid #a3badb33; border-radius: 12px;
+  background: #14213a; color: var(--fg, #ecf1f8); font: inherit; font-size: .85rem; line-height: 1.35; overflow-wrap: anywhere; cursor: pointer;
+}
+#destination-picker .picker-list button[aria-pressed="true"] { border: 2px solid #8fe0cc; font-weight: 700; }
+#destination-picker .picker-hint { margin: 0; color: #9fb3cd; font-size: .72rem; line-height: 1.4; }
+#destination-picker .picker-card[data-expanded] .picker-hint { display: none; }
+/* Compact (a short band). Guided's card: the name beside Confirm, no hint, so the orbs keep their room. */
+#destination-picker .picker-card[data-compact][data-screen="guided"] { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 8px; }
+#destination-picker .picker-card[data-compact][data-screen="guided"] .picker-top,
+#destination-picker .picker-card[data-compact][data-screen="guided"] .picker-name { grid-column: 1; }
+#destination-picker .picker-card[data-compact][data-screen="guided"] .picker-confirm { grid-column: 2; grid-row: 1; padding: 0 14px; max-width: 46vw; }
+#destination-picker .picker-card[data-compact][data-screen="guided"] .picker-state,
+#destination-picker .picker-card[data-compact][data-screen="guided"] .picker-row,
+#destination-picker .picker-card[data-compact][data-screen="guided"] .picker-list { grid-column: 1 / -1; }
+#destination-picker .picker-card[data-compact] .picker-hint { display: none; }
+/* The flow's screens, compact: the same rows, tighter (no hint, no step number, a slimmer greeting). */
+#destination-picker .picker-card[data-compact]:not([data-screen="guided"]) { gap: 5px; padding: 8px 12px; }
+#destination-picker .picker-card[data-compact]:not([data-screen="guided"]) .picker-step { display: none; }
+#destination-picker .picker-card[data-compact] .picker-led { padding: 4px 10px; line-height: 1.4; }
+#destination-picker .picker-card[data-compact] .picker-route { line-height: 1.35; font-size: .8rem; }
+
+/* Screen 1's way in (the base view and the ground view): the saved line or the journey shortcut, then Choose. */
+#picker-entry {
+  position: fixed; left: 0; top: 0; z-index: 2; display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+  max-width: min(360px, calc(100vw - 24px));
+}
+#picker-open {
+  min-height: 48px; padding: 10px 18px;
+  border: 1px solid #8fe0cc; border-radius: 24px; background: #0e1726f2; color: var(--fg, #ecf1f8);
+  font: inherit; font-weight: 650; box-shadow: 0 8px 28px #0006; cursor: pointer;
+}
+/* The shortcut to screen 3: its own colour, not the launch colour (it never launches). */
+#picker-entry .picker-journey {
+  min-height: 48px; max-width: 100%; padding: 10px 16px; border: 0; border-radius: 16px; background: #2c5f73; color: var(--fg, #ecf1f8);
+  font: inherit; font-weight: 700; text-align: left; overflow-wrap: anywhere; box-shadow: 0 8px 28px #0006; cursor: pointer;
+}
+#picker-entry .picker-saved {
+  display: grid; gap: 2px; margin: 0; padding: 8px 12px; border: 1px solid #a3badb33; border-radius: 12px; background: #0e1726f2;
+  font-size: .85rem; line-height: 1.4; overflow-wrap: anywhere;
+}
+#picker-entry .picker-saved span { color: #ffd38a; font-size: .78rem; }
+#picker-entry button:focus-visible { outline: 3px solid #88ddd7; outline-offset: 3px; }
+#picker-entry :is(.picker-saved, .picker-journey, #picker-open)[hidden] { display: none; }
+
+/* The card's screens. Back always top-left; the step beside it. */
+#destination-picker .picker-top { display: flex; align-items: center; gap: 8px; }
+#destination-picker .picker-top .picker-back { flex: 0 1 auto; text-align: left; }
+#destination-picker .picker-step { margin-left: auto; color: #9fb3cd; font-size: .76rem; white-space: nowrap; }
+#destination-picker .picker-sel-label { margin: 0; color: #9fb3cd; font-size: .76rem; }
+#destination-picker .picker-confirmed {
+  align-self: flex-start; margin: 0; padding: 4px 10px; border: 1px solid #8fe0cc; border-radius: 14px; color: #8fe0cc; font-weight: 650; font-size: .85rem;
+}
+#destination-picker .picker-confirmed:empty { display: none; }
+/* The greeting stays quiet next to the route and confirmation. */
+#destination-picker .picker-led {
+  margin: 0; padding: 5px 10px; border: 1px solid transparent; color: #9fb3cd;
+  font-size: .78rem; font-weight: 400; line-height: 1.4;
+}
+#destination-picker .picker-route {
+  margin: 0; padding: 9px 12px; border: 1px solid #8fe0cc44; border-radius: 12px; background: #13243bd9;
+  color: #f4f8ff; line-height: 1.45; overflow-wrap: anywhere;
+}
+#destination-picker .picker-route-leg { display: block; }
+#destination-picker .picker-route-leg + .picker-route-leg { margin-top: 4px; }
+#destination-picker .picker-route-label { color: #b3c6dd; font-size: .78rem; font-weight: 500; }
+#destination-picker .picker-route-base { font-size: 1.15rem; font-weight: 650; }
+#destination-picker .picker-route-planet { color: #b3c6dd; font-size: .84rem; font-weight: 400; }
+#destination-picker:lang(my) .picker-route-leg { line-height: 1.6; }
+/* A short entrance on a new screen (panels only: the scene and camera are untouched). None under reduced motion. */
+@keyframes picker-enter { from { opacity: 0; translate: 0 10px; } to { opacity: 1; translate: 0 0; } }
+#destination-picker .picker-card[data-enter] { animation: picker-enter 180ms ease-out; }
+#destination-picker .picker-card[data-motion="reduced"][data-enter] { animation: none; }
+@media (prefers-reduced-motion: reduce) { #destination-picker .picker-card[data-enter] { animation: none; } }
+
+/* Screen 2's compact info: the body's surface map (a texture, captioned so), base · body, two facts. Reserved before
+   a choice too (an empty, dashed image place), so choosing never changes the card's height. */
+#destination-picker .picker-info { display: grid; --thumb: 80px; grid-template-columns: var(--thumb) minmax(0, 1fr); gap: 4px 10px; align-items: center; }
+#destination-picker .picker-thumb {
+  position: relative; overflow: hidden; grid-row: span 2; width: var(--thumb); height: var(--thumb); border-radius: 50%;
+  background-size: 200% 100%; background-position: 30% 50%; box-shadow: inset -14px -6px 18px #0009, inset 0 0 0 1px #ffffff26;
+}
+#destination-picker .picker-thumb[data-empty] { border: 2px dashed #a3badb55; box-shadow: none; background: none; }
+#destination-picker .picker-thumb span {
+  position: absolute; left: 0; right: 0; bottom: 0; padding: 1px 2px; background: #000b; color: #e8eef7;
+  font-size: .56rem; line-height: 1.3; text-align: center; overflow-wrap: anywhere;
+}
+#destination-picker .picker-thumb span:empty { display: none; }
+#destination-picker .picker-info-name { margin: 0; font-weight: 700; font-size: .96rem; line-height: 1.35; overflow-wrap: anywhere; }
+#destination-picker .picker-planet-name { color: #9fe3f5; font-weight: 750; }
+#destination-picker .picker-base-name { color: #f4f8ff; font-weight: 700; }
+#destination-picker .picker-facts { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 0; padding: 0; list-style: none; min-height: 23px; }
+#destination-picker .picker-facts li { padding: 2px 8px; border-radius: 10px; background: #1b2a42; color: #c9d5e5; font-size: .76rem; }
+/* Screen 2 keeps one line for its state (holding / release / refused), so a 👍 hold never resizes the card. */
+#destination-picker .picker-card[data-screen="select"] .picker-state:empty { display: block; min-height: 1.35em; }
+/* Details: a modal sheet over the card (it does not resize the card: nothing in the stage moves). */
+#destination-picker .picker-sheet {
+  position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column; gap: 8px; overflow: auto;
+  padding: 12px 14px; border-radius: 16px; background: #0b1422; box-shadow: 0 -6px 24px #0008;
+}
+#destination-picker .picker-sheet-head { display: flex; align-items: center; gap: 8px; }
+#destination-picker .picker-sheet-head h3 { flex: 1; min-width: 0; margin: 0; font-size: .95rem; line-height: 1.35; overflow-wrap: anywhere; }
+#destination-picker .picker-sheet-close {
+  min-height: 44px; min-width: 44px; padding: 6px 12px; border: 1px solid #a3badb40; border-radius: 12px;
+  background: #152235; color: var(--fg, #ecf1f8); font: inherit; font-size: .85rem; cursor: pointer;
+}
+#destination-picker .picker-see { margin: 0; padding: 8px 10px; border-radius: 12px; background: #132036; color: #d5deea; font-size: .84rem; line-height: 1.45; }
+#destination-picker .picker-see b { display: block; color: #9fb3cd; font-size: .74rem; font-weight: 600; }
+#destination-picker .picker-paused { margin: auto 0 0; color: #ffd38a; font-size: .78rem; }
+/* While it is open, the planets' labels are inert and say so. */
+#destination-picker .picker-target[inert] { opacity: .5; }
+
+/* The picker owns the screen: the planet labels (#labels) step aside; they come back with the class. */
+body.picker-active #labels { visibility: hidden; }
+/* SPIKE (?flags=picker3d,studio): the studio's title row; Mission Ready's one label is a name, not a control. */
+#destination-picker .picker-studio-title { position: absolute; left: 0; top: 0; margin: 0; color: var(--fg, #ecf1f8); font-size: 1.02rem; font-weight: 650; line-height: 28px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+#destination-picker .picker-studio-title[hidden] { display: none; }
+#destination-picker[data-studio] .picker-target:disabled { cursor: default; color: var(--fg, #ecf1f8); opacity: 1; }
+/* Details keeps its place before a choice (unseen, unreachable), so choosing never re-wraps the row beside it. */
+#destination-picker[data-studio] .picker-card[data-screen="select"] .picker-details[hidden] { display: block; visibility: hidden; }
+/* Screens 2–3 own the screen: the full header title, the time pill, the clean-view button and the mission HUD step
+   aside (removing the class brings each back exactly as it was; hiding is not pausing: time keeps its own state, and
+   Pause stays in Settings). The camera / hand-control status stays, and so does the footer (Photo, Passport,
+   Settings), as it is: one row, so a compact form would save no height. */
+body.destination-flow :is(header.hud.top h1, #timebar, #clean-view, #mission-hud) { display: none !important; }
+body.photo-mode #destination-picker, body.clean-view #destination-picker, body.photo-mode #picker-entry, body.clean-view #picker-entry { visibility: hidden; }
+
+/* Keep the larger thumbnail and usable Close control on the restored presentation. */
+@media (min-width: 900px) { #destination-picker .picker-info { --thumb: 96px; } }
+#destination-picker .picker-thumb span { display: none; }
+#destination-picker .picker-image-description { grid-column: 1 / -1; color: #a3badb; font-size: .72rem; line-height: 1.35; }
+#destination-picker .picker-sheet-head { position: sticky; top: -12px; z-index: 2; background: #0b1422; padding-block: 6px; }
+
+/* Stable miniature-globe row; keep its slot before selection as well. */
+#destination-picker .picker-info { min-height: 138px; flex-shrink: 0; }
+#destination-picker .picker-card[data-screen="select"] .picker-state { display: block; min-height: 2.8em; line-height: 1.4; flex-shrink: 0; }
+#destination-picker .picker-confirm { flex-shrink: 0; }
+
+#destination-picker .picker-card[data-screen="select"] .picker-state:empty { min-height: 2.8em; }
+/* Screen 3 keeps the release instruction's slot even when empty: a held thumb must not grow/move the card. */
+#destination-picker .picker-card[data-screen="confirm"] .picker-state,
+#destination-picker .picker-card[data-screen="confirm"] .picker-state:empty {
+  display: block; min-height: 2.8em; line-height: 1.4; flex-shrink: 0;
+}
+
+/* Milky Way charge on the existing button only. No geometry, renderer, or layout changes. */
+#destination-picker .picker-confirm {
+  position: relative; isolation: isolate; overflow: hidden;
+  transition: none;
+  --charge-base: #164e8c; --charge-fill: #246ba8; color: #ffffff;
+  background: linear-gradient(90deg, var(--charge-fill) calc(var(--charge, 0) * 100%), var(--charge-base) 0);
+  box-shadow: inset 0 0 0 2px #d6e3ff80;
+}
+#destination-picker .picker-card[data-screen="confirm"] .picker-confirm {
+  min-height: 50px; font-size: 1rem; letter-spacing: .01em;
+  --charge-base: #164e8c; --charge-fill: #246ba8; color: #ffffff;
+  box-shadow: inset 0 0 0 2px #9ce0ff99, 0 6px 18px #0a2b5280;
+}
+#destination-picker .picker-card[data-screen="select"] .picker-confirm {
+  --charge-base: #9fe3f5; --charge-fill: #dff8ff;
+  color: #102a43;
+  box-shadow: inset 0 0 0 2px #bcefff70;
+}
+#destination-picker .picker-confirm::before {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  /* Keep the centre and the text clear: dust is restricted to the two end zones. */
+  background:
+    radial-gradient(circle at 4% 24%, #1e4388 0 1.5px, #fff 1.8px 2.3px, transparent 3.5px),
+    radial-gradient(circle at 9% 72%, #1e4388 0 2px, transparent 3.5px),
+    radial-gradient(circle at 15% 42%, #fff 0 2px, #456daa 2.3px 3px, transparent 4px),
+    radial-gradient(circle at 85% 68%, #fff 0 2px, #456daa 2.3px 3px, transparent 4px),
+    radial-gradient(circle at 92% 26%, #1e4388 0 2px, transparent 3.5px),
+    radial-gradient(circle at 97% 58%, #1e4388 0 1.5px, #fff 1.8px 2.3px, transparent 3.5px);
+  filter: brightness(calc(1 + var(--charge, 0) * .5));
+  animation: picker-starlight 1.8s ease-in-out infinite alternate;
+}
+/* A second star cluster twinkles out of phase; the central text/icon zone stays clear. */
+#destination-picker .picker-confirm::after {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(ellipse at 8% 50%, #759df080, transparent 19%),
+    radial-gradient(ellipse at 93% 50%, #8ee9ff70, transparent 18%),
+    radial-gradient(circle at 7% 40%, #24497f 0 1px, transparent 2.5px),
+    radial-gradient(circle at 12% 16%, #fff 0 1.5px, transparent 3px),
+    radial-gradient(circle at 89% 82%, #24497f 0 1.5px, transparent 3px),
+    radial-gradient(circle at 95% 39%, #fff 0 1.5px, transparent 3px);
+  opacity: calc(.18 + var(--charge, 0) * .6);
+  transform: scaleX(calc(.9 + var(--charge, 0) * .1));
+  animation: picker-starlight-back 2.4s ease-in-out infinite alternate;
+}
+@keyframes picker-starlight { from { opacity: .35; transform: translateY(-1px); } to { opacity: .95; transform: translateY(1px); } }
+@keyframes picker-starlight-back { from { opacity: .2; } to { opacity: .65; } }
+#destination-picker .picker-confirm:disabled { background: #2b3a52; color: #b0bdd0; box-shadow: none; }
+#destination-picker .picker-confirm:disabled::before, #destination-picker .picker-confirm:disabled::after { display: none; }
+#destination-picker[data-page-hidden="true"] .picker-confirm::before, #destination-picker[data-page-hidden="true"] .picker-confirm::after { animation-play-state: paused; }
+#destination-picker .picker-card[data-motion="reduced"] .picker-confirm::before, #destination-picker .picker-card[data-motion="reduced"] .picker-confirm::after { display: none; animation: none; }
+@media (prefers-reduced-motion: reduce) { #destination-picker .picker-confirm::before, #destination-picker .picker-confirm::after { display: none; animation: none; } }
+
+/* Details' copy of the image, caption and facts: only where a short landscape card leaves them out (below). */
+#destination-picker .picker-sheet-info { display: none; --thumb: 72px; grid-template-columns: var(--thumb) minmax(0, 1fr); gap: 4px 10px; align-items: center; }
+#destination-picker .picker-sheet-thumb {
+  grid-row: span 2; width: var(--thumb); height: var(--thumb); border-radius: 50%;
+  background-size: 200% 100%; background-position: 30% 50%; box-shadow: inset -14px -6px 18px #0009, inset 0 0 0 1px #ffffff26;
+}
+#destination-picker .picker-sheet-facts { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 0; padding: 0; list-style: none; }
+#destination-picker .picker-sheet-facts li { padding: 2px 8px; border-radius: 10px; background: #1b2a42; color: #c9d5e5; font-size: .76rem; }
+#destination-picker .picker-sheet-caption { margin: 0; color: #a3badb; font-size: .72rem; line-height: 1.35; overflow-wrap: anywhere; }
+
+/* A phone on its side (short landscape): the card keeps, in view without scrolling, what a visitor must see: Back, the
+   destination (screen 2's name, screen 3's route), the current gesture instruction and Confirm / Launch. The image,
+   the facts and the caption move to Details; the hint, the step number and screen 3's greeting give way. Back shares
+   its line with Details and All destinations; screen 3 keeps its instruction's line, so nothing moves when it shows.
+   Portrait and desktop are untouched. */
+@media (orientation: landscape) and (max-height: 500px) {
+  #destination-picker .picker-card:is([data-screen="select"], [data-screen="confirm"]) {
+    display: grid; grid-template-columns: auto minmax(0, 1fr); align-content: start; gap: 5px 8px; padding: 8px 12px;
+  }
+  #destination-picker .picker-card:is([data-screen="select"], [data-screen="confirm"]) > * { grid-column: 1 / -1; }
+  #destination-picker .picker-card[data-screen="select"] > .picker-top { grid-column: 1; grid-row: 1; }
+  #destination-picker .picker-card[data-screen="select"] > .picker-row { grid-column: 2; grid-row: 1; justify-content: flex-end; }
+  #destination-picker .picker-card:is([data-screen="select"], [data-screen="confirm"]) :is(.picker-hint, .picker-step, .picker-led) { display: none; }
+  #destination-picker .picker-card .picker-info { grid-template-columns: minmax(0, 1fr); min-height: 0; }
+  #destination-picker .picker-card .picker-info :is(.picker-thumb, .picker-facts, .picker-image-description) { display: none; }
+  #destination-picker .picker-card[data-screen="confirm"] .picker-state { display: block; min-height: 2.8em; line-height: 1.4; }
+  #destination-picker .picker-card[data-screen="confirm"] .picker-confirmed { padding: 2px 8px; font-size: .78rem; }
+  #destination-picker .picker-card[data-screen="confirm"] .picker-route { padding: 4px 8px; font-size: .82rem; line-height: 1.32; }
+  #destination-picker .picker-route-base { font-size: 1rem; }
+  #destination-picker .picker-card[data-screen="confirm"] .picker-confirm { min-height: 44px; font-size: .9rem; }
+  /* Details keeps its place on Back's line before a choice (unseen and unreachable until then): choosing moves nothing. */
+  #destination-picker .picker-card[data-screen="select"] .picker-details[hidden] { display: block; visibility: hidden; }
+  #destination-picker .picker-sheet-info { display: grid; }
+}
+@media (max-width: 640px) and (orientation: portrait) {
+  #destination-picker .picker-confirm { min-height: 48px; }
+}
+
+/* Phone boarding pass: the route can scroll within its slot, leaving both actions available. */
+#destination-picker .picker-card[data-phone][data-screen="confirm"] {
+  display: flex;
+  overflow: hidden;
+}
+#destination-picker .picker-card[data-phone][data-screen="confirm"] > :is(.picker-top, .picker-confirmed, .picker-state, .picker-hint) {
+  flex-shrink: 0;
+}
+#destination-picker .picker-card[data-phone][data-screen="confirm"] .picker-route {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  border-left: 3px solid #8fe0cc;
+  padding-block: 2px;
+}
+#destination-picker .picker-card[data-phone][data-screen="confirm"] .picker-route-leg { line-height: 22px; }
+#destination-picker .picker-card[data-phone="landscape"][data-screen="select"] > .picker-row {
+  grid-column: 1 / -1;
+  grid-row: auto;
+  justify-content: start;
+}
+#destination-picker .picker-card[data-phone="landscape"][data-screen="select"] > .picker-top {
+  grid-column: 1 / -1;
+}

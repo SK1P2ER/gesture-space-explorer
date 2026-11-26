@@ -20,16 +20,18 @@ export interface Base {
 
 export const BASES: Base[] = [
   {
+    // Stable save/route key: this Earth port moved from Cape Canaveral to Japan.
     id: 'cape',
     body: 'earth',
-    lat: 28.5,
-    lon: -80.6,
+    // Fictional port near Tanegashima Space Center, rounded from the real site.
+    lat: 30.4,
+    lon: 131.0,
     theme: 'launch',
-    name: { en: 'Cape Launch Center', my: 'Cape ဒုံးပျံလွှတ်စခန်း', ja: 'ケープ打ち上げセンター' },
+    name: { en: 'Tanegashima Spaceport', my: 'Tanegashima အာကာသဆိပ်ကမ်း', ja: '種子島宇宙港' },
     blurb: {
-      en: 'Where every trip starts: a launch pad on Florida’s Atlantic coast, near Cape Canaveral.',
-      my: 'ခရီးတိုင်း ဒီကစပါတယ်။ Florida ရဲ့ အတ္တလန္တိတ်ကမ်းခြေ Cape Canaveral အနီးက လွှတ်တင်ရေးကွင်းပါ။',
-      ja: 'すべての旅はここから。フロリダの大西洋岸、ケープカナベラル近くの発射台です。',
+      en: 'Start your journey at a fictional spaceport on Japan’s Pacific coast, near the real Tanegashima Space Center in Kagoshima.',
+      my: 'ခရီးစဉ်ကို ဂျပန်နိုင်ငံ Tanegashima ကျွန်းရဲ့ ပစိဖိတ်ကမ်းခြေက စိတ်ကူးယဉ် အာကာသဆိပ်ကမ်းမှာ စတင်ပါ။ Kagoshima ရှိ တကယ့် Tanegashima အာကာသစင်တာအနီးမှာပါ။',
+      ja: '日本の太平洋に面した種子島から出発する、架空の宇宙港です。鹿児島県の実在する種子島宇宙センターの近くにあります。',
     },
   },
   {

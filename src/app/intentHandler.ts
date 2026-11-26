@@ -112,7 +112,7 @@ export function createIntentHandler({ state, modes, rig, clock, overlay, gesture
         writeWeight(intent.kg);
         break;
       case 'enterBase': break; // the mission handles it where there's a base
-      case 'toggleHorizon': case 'goldenHour': break; // the mission handles them at a showcase base
+      case 'toggleHorizon': case 'goldenHour': case 'frameLandmark': case 'landmarkOverview': break; // the mission handles them at a showcase base
       case 'toggleBuild': case 'buildPick': case 'buildCursor': case 'buildGrab': case 'buildDrop':
       case 'buildTurn': case 'buildDelete': case 'buildUndo': case 'buildRedo': case 'buildReset':
         break; // Build mode (app/build.ts)

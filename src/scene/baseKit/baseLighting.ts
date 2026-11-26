@@ -32,6 +32,24 @@ export const shadowRadius = (dust: number) => 1.5 + 2.5 * THREE.MathUtils.clamp(
 /** Sky fill light: more of it when dust scatters the sunlight (haze), little at night. */
 export const skyFill = (dust: number, night: number) => (0.45 + 0.6 * (1 - dust)) * (1 - 0.9 * night); // Mars' dusty sky lights the shadows
 
+/**
+ * Golden hour (Jezero presets): 0 with the Sun high, 1 as it touches the horizon, gone again in the dark. The low Sun
+ * turns warm (the rim light on the domes) and the dusty sky's fill grows, so the foreground still reads while the
+ * grazing Sun casts long shadows.
+ */
+export const goldenness = (elevation: number, night: number) => (1 - THREE.MathUtils.smoothstep(elevation, 4, 30)) * (1 - night);
+/** The base Sun's colour: the usual pale dusty white, warming toward amber as it gets low. */
+export const SUN_DAY = new THREE.Color(0xfff1dc);
+export const SUN_LOW = new THREE.Color(0xffb47a);
+/** Night: a cool, faint skyglow fill keeps the domes' silhouette readable (never as bright as the day fill). */
+export const NIGHT_FILL = 0.4;
+const FILL_SKY_DAY = new THREE.Color(0xd8b088), FILL_GROUND_DAY = new THREE.Color(0x6a4a34);
+const FILL_SKY_GOLDEN = new THREE.Color(0xf0b484), FILL_GROUND_GOLDEN = new THREE.Color(0x8a5236);
+const FILL_SKY_NIGHT = new THREE.Color(0x8394c4), FILL_GROUND_NIGHT = new THREE.Color(0x2a2330);
+/** The fill's strength: the dusty sky's own light, raised in the golden hour, never below the night skyglow. */
+export const fillIntensity = (dust: number, night: number, elevation: number) =>
+  Math.max(skyFill(dust, night) * (1 + 2.4 * goldenness(elevation, night)), NIGHT_FILL * night);
+
 export interface ShadowKey {
   /** The Sun's direction in the base's frame. */
   sun: THREE.Vector3;
@@ -132,11 +150,16 @@ export class BaseLighting {
     const g = this.group;
     g.updateWorldMatrix(true, false);
     const up = sun.y > -0.02;
-    this.sun.intensity = up ? sunIntensity(rAU, dust) * THREE.MathUtils.smoothstep(elevation, -1, 3) : 0;
+    const golden = goldenness(elevation, night);
+    this.sun.intensity = up ? sunIntensity(rAU, dust) * THREE.MathUtils.smoothstep(elevation, -1, 3) * (1 + 0.2 * golden) : 0;
+    this.sun.color.lerpColors(SUN_DAY, SUN_LOW, golden);
     // A night-first entry has no cached map yet. Do not bind a shadow sampler
     // until sunlight makes the normal cache-update path initialize that map.
     this.sun.castShadow = this.opts.shadows && this.sun.intensity > 0;
-    this.fill.intensity = skyFill(dust, night);
+    this.fill.intensity = fillIntensity(dust, night, elevation);
+    // Day's dusty fill → warm in the golden hour → cool skyglow at night.
+    this.fill.color.lerpColors(FILL_SKY_DAY, FILL_SKY_GOLDEN, golden).lerp(FILL_SKY_NIGHT, night);
+    this.fill.groundColor.lerpColors(FILL_GROUND_DAY, FILL_GROUND_GOLDEN, golden).lerp(FILL_GROUND_NIGHT, night);
     const scale = g.getWorldScale(this.scaleV).x;
     let redraw = false;
     if (this.opts.shadows && this.sun.intensity > 0) {

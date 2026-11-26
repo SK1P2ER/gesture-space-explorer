@@ -1,0 +1,52 @@
+{
+  "source": "Space_Line_P2_9_no_polish.blend",
+  "source_scene": "Space Line | P2.9 parity candidate (no polish)",
+  "batches": 28,
+  "animated_roots": [
+    "CTRL | Shuttle ascent",
+    "CTRL | Service arm 1",
+    "CTRL | Service arm 2"
+  ],
+  "jets": 10,
+  "tree_count": 8,
+  "shrub_count": 9,
+  "fps": 24,
+  "frames": 480,
+  "file_bytes": 3533756,
+  "source_sha256": "cfce9b29ac983f6fb27c3c8752e3dd2676e0927e1e1e98abfd3b930401c6539f",
+  "source_samples": 68,
+  "nozzle_alignment_error_m": 3.0517578125e-05,
+  "source_checks": "passed",
+  "asset_sha256": "b84d7a54539e16eae8b64215922f85181a7c8c140aa1ea420b89602b0bc2dca7",
+  "authoring_sha256": "c8b7f6d3b834119c5af6950510daa6ab574d6e4fb62e9e165c1fe91970fe54ca",
+  "site_sha256": "d1c1f600dc44f4d600b7fb1f74e79c7d71a8a11a97e9415c3dee747b781172bd",
+  "exporter": "Space Line P2.9 export_p2_9.py + arrival_export.py (export-only rigid skinning) + app_contract.py",
+  "terrain_sampling": {
+    "edge_fallbacks": 267,
+    "method": "ray-cast resample on the original grid"
+  },
+  "arrival": {
+    "sourceFrames": [
+      145.0,
+      385.0
+    ],
+    "appSeconds": [
+      0,
+      19.958333333333332
+    ],
+    "sampleStepFrames": 2,
+    "samples": 241,
+    "rigidJoints": 116,
+    "actors": [
+      "Passenger 01",
+      "Passenger 02",
+      "Space Line | sliding door left",
+      "Space Line | sliding door right",
+      "AERO-01 | Curbside service"
+    ],
+    "channels": 348,
+    "skins": 5,
+    "animation": "Arrival | authored terminal sequence",
+    "maxMatrixReconstructionError": 4.5821070671081543e-07
+  }
+}
