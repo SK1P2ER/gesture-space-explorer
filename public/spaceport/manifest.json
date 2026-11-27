@@ -12,15 +12,15 @@
   "shrub_count": 9,
   "fps": 24,
   "frames": 480,
-  "file_bytes": 3039892,
+  "file_bytes": 3039912,
   "source_sha256": "978c90c1920def7eb493149cc7c6be420e79cc8e438c397446a1f4e4b97abda1",
   "source_samples": 68,
   "nozzle_alignment_error_m": 3.0517578125e-05,
   "source_checks": "passed",
-  "asset_sha256": "43dddceb4c51fad2a3b5c0f4276f945b6f406b444f653c6a646e31bbe0a7460a",
+  "asset_sha256": "90efcf84f56e0e3b57c463b298788f581b70c1c10607e7f2f2e864b15169656f",
   "authoring_sha256": "c8b7f6d3b834119c5af6950510daa6ab574d6e4fb62e9e165c1fe91970fe54ca",
   "site_sha256": "d1c1f600dc44f4d600b7fb1f74e79c7d71a8a11a97e9415c3dee747b781172bd",
-  "exporter": "P2.4 Coastal Release export_p24_budget.py + arrival_export.py + app_contract.py",
+  "exporter": "P2.4 Coastal Release export_p24_junction.py + arrival_export.py + app_contract.py",
   "terrain_sampling": {
     "edge_fallbacks": 267,
     "method": "ray-cast resample on the original grid"
