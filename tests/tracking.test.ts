@@ -6,6 +6,7 @@ import { GestureEngine } from '../src/gestures/engine';
 import { ExtraGestures } from '../src/gestures/extras';
 import { keyToIntent } from '../src/input/keyboard';
 import { createIntentBus } from '../src/intents';
+import { cameraEvents, type CameraEvent } from '../src/performance/cameraEvents';
 import { createHandTracker, type HandTracker } from '../src/tracking/handTracker';
 import type { HandFrame } from '../src/tracking/types';
 import { Recorder } from '../src/ui/recorder';
@@ -18,6 +19,7 @@ const FRAME: HandFrame = { t: 1000, hands: [] };
 let stream: FakeStream;
 let video: FakeVideo;
 let getUserMedia: ReturnType<typeof vi.fn>;
+let page: EventTarget & { hidden: boolean };
 let deps: TrackingDeps;
 
 function detector() {
@@ -48,13 +50,14 @@ beforeEach(() => {
   const windowTarget = Object.assign(new EventTarget(), { isSecureContext: true });
   vi.stubGlobal('window', windowTarget);
   vi.stubGlobal('navigator', { userAgent: 'Node test', maxTouchPoints: 0, mediaDevices: { getUserMedia } });
-  vi.stubGlobal('document', { querySelector: () => video.element });
+  page = Object.assign(new EventTarget(), { hidden: false, querySelector: () => video.element });
+  vi.stubGlobal('document', page);
   vi.spyOn(console, 'error').mockImplementation(() => {});
   deps = {
     state: createState(), bus: createIntentBus(),
     gestures: new GestureEngine(config.gestures, config.smoothing, () => null),
     extras: new ExtraGestures(config.gestures, config.smoothing),
-    overlay: { delegate: '', show: vi.fn(), onFrame: vi.fn(), enabled: false } as unknown as TrackingDeps['overlay'],
+    overlay: { delegate: '', show: vi.fn(), hide: vi.fn(), onFrame: vi.fn(), enabled: false } as unknown as TrackingDeps['overlay'],
     recorder: new Recorder(),
     gestureHud: { flash: vi.fn() } as unknown as TrackingDeps['gestureHud'],
     more: () => [], frameMode: () => 'focus', gestureMessage: () => null,
@@ -406,5 +409,287 @@ describe('tracking session lifecycle and cancellation', () => {
     expect(video.srcObject).toBeNull();
     expect(task.dispose).toHaveBeenCalledTimes(1);
     expect(deps.state.status).toEqual({ kind: 'keyboard', reason: 'err.disconnected' });
+  });
+});
+
+// Fake camera, fake detector, fake page: these prove the session's own bookkeeping. tests/browser/camera-lifecycle.test.mjs
+// repeats the visible behaviour in a really hidden Chromium tab. Neither is an iPhone.
+describe('the camera and a hidden page', () => {
+  const setHidden = (hidden: boolean) => {
+    page.hidden = hidden;
+    page.dispatchEvent(new Event('visibilitychange'));
+  };
+  const nextCamera = () => {
+    const previous = stream;
+    stream = new FakeStream();
+    getUserMedia.mockResolvedValueOnce(stream.media);
+    return previous;
+  };
+
+  it('releases the camera, detector and loop when the page is hidden, and coming back does not reopen them', async () => {
+    const task = detector();
+    create.mockResolvedValueOnce(task);
+    await start().ready;
+    expect(stream.tracks[0].readyState).toBe('live');
+    setHidden(true);
+    expectCameraReleased();
+    expect(task.stop).toHaveBeenCalledTimes(1);
+    expect(task.dispose).toHaveBeenCalledTimes(1);
+    expect(deps.state.status).toEqual({ kind: 'keyboard', reason: 'err.disconnected' });
+    const update = vi.spyOn(deps.gestures, 'update');
+    task.emit(); // a frame the stopped loop still had queued
+    expect(update).not.toHaveBeenCalled();
+    setHidden(false);
+    window.dispatchEvent(new Event('pageshow'));
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(deps.state.status.kind).toBe('keyboard');
+  });
+
+  it('takes the preview and its last hand away with the camera', async () => {
+    create.mockResolvedValueOnce(detector());
+    await start().ready;
+    expect(deps.overlay.hide).not.toHaveBeenCalled();
+    setHidden(true);
+    expect(deps.overlay.hide).toHaveBeenCalledTimes(1);
+  });
+
+  it('a repeated hidden event, or a second time hidden, releases nothing twice', async () => {
+    const task = detector();
+    create.mockResolvedValueOnce(task);
+    await start().ready;
+    setHidden(true);
+    setHidden(true);
+    setHidden(false);
+    setHidden(true);
+    expectCameraReleased();
+    expect(task.dispose).toHaveBeenCalledTimes(1);
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+  });
+
+  it('an event while the page is visible changes nothing: only the real state counts', async () => {
+    const task = detector();
+    create.mockResolvedValueOnce(task);
+    await start().ready;
+    setHidden(false);
+    expect(stream.tracks[0].readyState).toBe('live');
+    expect(task.dispose).not.toHaveBeenCalled();
+    expect(deps.state.status.kind).toBe('tracking');
+  });
+
+  it('a camera that answers after the page was hidden is released at once, and cannot revive the session', async () => {
+    const permission = deferred<MediaStream>();
+    getUserMedia.mockReturnValueOnce(permission.promise);
+    create.mockResolvedValueOnce(detector());
+    const session = start();
+    await vi.waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(1));
+    setHidden(true);
+    expect(deps.state.status).toEqual({ kind: 'keyboard', reason: 'err.disconnected' });
+    permission.resolve(stream.media);
+    await session.ready;
+    expect(stream.tracks[0].readyState).toBe('ended');
+    expect(video.srcObject).toBeNull();
+    expect(deps.state.status).toEqual({ kind: 'keyboard', reason: 'err.disconnected' });
+  });
+
+  it('hidden while the camera is still answering, back, then answered: still off', async () => {
+    const permission = deferred<MediaStream>();
+    getUserMedia.mockReturnValueOnce(permission.promise);
+    create.mockResolvedValueOnce(detector());
+    const session = start();
+    await vi.waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(1));
+    setHidden(true);
+    setHidden(false);
+    permission.resolve(stream.media);
+    await session.ready;
+    expect(stream.tracks[0].readyState).toBe('ended');
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+    expect(deps.state.status.kind).toBe('keyboard');
+  });
+
+  it('a detector that finishes loading after the page was hidden is closed', async () => {
+    const { pending, session } = await pendingStartup();
+    setHidden(true);
+    expectCameraReleased();
+    const task = detector();
+    pending.resolve(task);
+    await session.ready;
+    await vi.waitFor(() => expect(task.dispose).toHaveBeenCalledTimes(1));
+    expect(task.run).not.toHaveBeenCalled();
+  });
+
+  it('a session started on a hidden page never asks for the camera or the detector', async () => {
+    page.hidden = true;
+    await start().ready;
+    await vi.dynamicImportSettled();
+    expect(getUserMedia).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+    expect(deps.state.status).toEqual({ kind: 'keyboard', reason: 'err.disconnected' });
+  });
+
+  it('turning it back on takes a new session, and only one camera stays live', async () => {
+    create.mockResolvedValueOnce(detector());
+    await start().ready;
+    setHidden(true);
+    setHidden(false);
+    const previous = nextCamera();
+    create.mockResolvedValueOnce(detector());
+    await start().ready;
+    expect(getUserMedia).toHaveBeenCalledTimes(2);
+    expect(previous.tracks[0].readyState).toBe('ended');
+    expect(stream.tracks[0].readyState).toBe('live');
+    expect(video.srcObject).toBe(stream.media);
+    expect(deps.state.status).toEqual({ kind: 'tracking', delegate: 'GPU' });
+    setHidden(true);
+    expect(stream.tracks[0].readyState).toBe('ended');
+  });
+
+  it('an old session whose camera answers late cannot hide the new preview, stop the new camera or change its status', async () => {
+    const permission = deferred<MediaStream>();
+    getUserMedia.mockReturnValueOnce(permission.promise);
+    const oldTask = detector();
+    create.mockResolvedValueOnce(oldTask);
+    const old = start();
+    await vi.waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(1)); // the lazy detector module has loaded: the next session's import can't overlap it
+    setHidden(true); // stops the old session while its camera is still answering
+    await vi.waitFor(() => expect(oldTask.dispose).toHaveBeenCalledTimes(1));
+    setHidden(false);
+    const oldStream = nextCamera();
+    const task = detector();
+    create.mockResolvedValueOnce(task);
+    const current = start();
+    await current.ready;
+    const hidesBefore = vi.mocked(deps.overlay.hide).mock.calls.length;
+    permission.resolve(oldStream.media);
+    await old.ready;
+    old.dispose();
+    expect(old.cancelled).toBe(true);
+    expect(oldStream.tracks[0].readyState).toBe('ended');
+    expect(deps.overlay.hide).toHaveBeenCalledTimes(hidesBefore);
+    expect(stream.tracks[0].readyState).toBe('live');
+    expect(stream.tracks[0].stop).not.toHaveBeenCalled();
+    expect(video.srcObject).toBe(stream.media);
+    expect(task.dispose).not.toHaveBeenCalled();
+    expect(deps.state.status).toEqual({ kind: 'tracking', delegate: 'GPU' });
+  });
+
+  it('tells the app once per stop, so a half-held gesture cannot carry into the next session', async () => {
+    deps.stopped = vi.fn();
+    create.mockResolvedValueOnce(detector());
+    const first = start();
+    await first.ready;
+    expect(deps.stopped).not.toHaveBeenCalled();
+    setHidden(true);
+    setHidden(true);
+    first.dispose();
+    expect(deps.stopped).toHaveBeenCalledTimes(1);
+    setHidden(false);
+    nextCamera();
+    create.mockResolvedValueOnce(detector());
+    await start().ready;
+    expect(deps.stopped).toHaveBeenCalledTimes(1); // starting again is not a stop
+  });
+
+  it('five hide, show and restart rounds leave one listener of each kind, one live camera and nothing else open', async () => {
+    const counts = { visibilitychange: 0, pagehide: 0 };
+    const count = (target: EventTarget, type: keyof typeof counts) => {
+      const add = target.addEventListener.bind(target);
+      const remove = target.removeEventListener.bind(target);
+      target.addEventListener = (t: string, listener: EventListener) => { if (t === type) counts[type]++; add(t, listener); };
+      target.removeEventListener = (t: string, listener: EventListener) => { if (t === type) counts[type]--; remove(t, listener); };
+    };
+    count(page, 'visibilitychange');
+    count(window, 'pagehide');
+    const streams: FakeStream[] = [];
+    const tasks: ReturnType<typeof detector>[] = [];
+    for (let round = 0; round < 6; round++) {
+      if (round) { setHidden(true); setHidden(false); nextCamera(); }
+      streams.push(stream);
+      tasks.push(detector());
+      create.mockResolvedValueOnce(tasks[round]);
+      await start().ready;
+      expect(counts).toEqual({ visibilitychange: 1, pagehide: 1 });
+    }
+    expect(getUserMedia).toHaveBeenCalledTimes(6);
+    expect(streams.map((s) => s.tracks[0].readyState)).toEqual(['ended', 'ended', 'ended', 'ended', 'ended', 'live']);
+    for (const s of streams.slice(0, 5)) expect(s.tracks[0].stop).toHaveBeenCalledTimes(1);
+    expect(tasks.map((t) => [t.stop.mock.calls.length, t.dispose.mock.calls.length])).toEqual([[1, 1], [1, 1], [1, 1], [1, 1], [1, 1], [0, 0]]);
+    setHidden(true);
+    expect(counts).toEqual({ visibilitychange: 0, pagehide: 0 });
+    expect(streams[5].tracks[0].readyState).toBe('ended');
+  });
+});
+
+// What the debug diagnostics see: camera.ts and tracking.ts report their lifecycle to an optional sink.
+// Fake camera and fake page: the order and the correlation of events, not a phone.
+describe('camera lifecycle events for diagnostics', () => {
+  let events: CameraEvent[];
+  const sink = (e: CameraEvent) => { events.push(e); };
+  const types = () => events.map((e) => e.type);
+  const setHidden = (hidden: boolean) => { page.hidden = hidden; page.dispatchEvent(new Event('visibilitychange')); };
+  beforeEach(() => { events = []; cameraEvents.attach(sink); });
+  afterEach(() => { cameraEvents.detach(sink); cameraEvents.reset(); });
+
+  it('a session reports its request, the tracks it got, that tracking started, and on hiding the stop and its confirmed state', async () => {
+    create.mockResolvedValueOnce(detector());
+    const session = start();
+    await session.ready;
+    expect(types()).toEqual(['session-created', 'gum-requested', 'gum-resolved', 'tracking-started']);
+    const [created, requested, resolved] = events as [Extract<CameraEvent, { type: 'session-created' }>, Extract<CameraEvent, { type: 'gum-requested' }>, Extract<CameraEvent, { type: 'gum-resolved' }>];
+    expect(requested.sessionId).toBe(created.sessionId);
+    expect(resolved.requestId).toBe(requested.requestId);
+    expect(resolved.tracks).toEqual([{ trackId: `${requested.requestId}.1`, kind: 'video', readyState: 'live' }]);
+    events = [];
+    setHidden(true);
+    expect(types()).toEqual(['hidden-handled', 'track-stop-requested', 'session-disposed']);
+    expect(events[1]).toEqual({ type: 'track-stop-requested', trackId: `${requested.requestId}.1`, readyStateAfter: 'ended' });
+    expect(events[2]).toMatchObject({ sessionId: created.sessionId, reason: 'err.disconnected', current: true });
+  });
+
+  it('hidden while the camera is still answering: the late answer is reported and released at once', async () => {
+    const permission = deferred<MediaStream>();
+    getUserMedia.mockReturnValueOnce(permission.promise);
+    create.mockResolvedValueOnce(detector());
+    const session = start();
+    await vi.waitFor(() => expect(types()).toContain('gum-requested'));
+    setHidden(true);
+    permission.resolve(stream.media);
+    await session.ready;
+    expect(types()).toEqual(['session-created', 'gum-requested', 'hidden-handled', 'session-disposed', 'gum-resolved', 'track-stop-requested']);
+    expect(events.at(-1)).toMatchObject({ readyStateAfter: 'ended' });
+    expect(cameraEvents.pendingRequests()).toEqual([]);
+  });
+
+  it('a refused camera is reported with its code, and nothing stays pending', async () => {
+    getUserMedia.mockRejectedValueOnce(new DOMException('Denied', 'NotAllowedError'));
+    create.mockResolvedValueOnce(detector());
+    await start().ready;
+    expect(events.find((e) => e.type === 'gum-rejected')).toMatchObject({ code: 'denied' });
+    expect(cameraEvents.pendingRequests()).toEqual([]);
+  });
+
+  it('a session started on a hidden page asks for nothing: no request event at all', async () => {
+    page.hidden = true;
+    await start().ready;
+    expect(types()).not.toContain('gum-requested');
+    expect(types()).toContain('hidden-handled');
+  });
+
+  it('a snapshot names the live session and its tracks, for diagnostics started later', async () => {
+    create.mockResolvedValueOnce(detector());
+    const session = start();
+    await session.ready;
+    const snap = cameraEvents.snapshot()!;
+    expect(snap).toMatchObject({ sessionId: session.id, stopped: false, status: 'tracking', pendingRequestIds: [] });
+    expect(snap.tracks).toEqual([stream.tracks[0]]);
+  });
+
+  it('with no sink attached nothing is reported, and the camera works as before', async () => {
+    cameraEvents.detach(sink);
+    create.mockResolvedValueOnce(detector());
+    await start().ready;
+    expect(events).toEqual([]);
+    expect(deps.state.status).toEqual({ kind: 'tracking', delegate: 'GPU' });
   });
 });

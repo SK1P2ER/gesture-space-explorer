@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { BASES, surfacePoint, type Base, type BaseTheme } from '../data/bases';
 import type { BodyNode } from '../planets/planet';
+import { createJapanSpaceport } from './japanSpaceport';
 
 /** A base's footprint in scene units: the pad is 0.35 of it. Smaller on small moons. */
 export const baseSize = (bodyRadius: number) => Math.min(0.28, bodyRadius * 0.22);
@@ -36,14 +37,11 @@ function cylinder(r: number, h: number, m = metal, segments = 8) {
 }
 
 /** The buildings for each kind of base: a few primitives, flat-shaded and cheap. */
-function buildings(theme: BaseTheme): THREE.Object3D[] {
+function buildings(theme: BaseTheme, curvatureRadius: number): THREE.Object3D[] {
   const at = (o: THREE.Object3D, x: number, z: number) => (o.position.set(x, o.position.y, z), o);
   switch (theme) {
     case 'launch': {
-      const tower = at(box(0.06, 0.42, 0.06), 0.28, -0.05);
-      const arm = at(box(0.14, 0.02, 0.02), 0.22, -0.05);
-      arm.position.y = 0.34;
-      return [tower, arm, at(box(0.22, 0.08, 0.14, dark), -0.25, 0.25), at(cylinder(0.05, 0.12), -0.3, -0.25)];
+      return [createJapanSpaceport(curvatureRadius)];
     }
     case 'crater':
       return [at(cylinder(0.07, 0.07), -0.28, 0.22), at(cylinder(0.07, 0.07), -0.12, 0.3), at(box(0.12, 0.05, 0.05, dark), -0.2, 0.26)];
@@ -71,8 +69,10 @@ export function createBases(nodes: BodyNode[]): BaseNode[] {
     const body = nodes.find((n) => n.body.id === base.body)!;
     const group = new THREE.Group();
     group.name = `base:${base.id}`;
-    const pad = cylinder(PAD_RADIUS, 0.015, padMat, 20);
-    const ring = new THREE.Mesh(new THREE.RingGeometry(PAD_RADIUS * 0.8, PAD_RADIUS * 0.9, 24), new THREE.MeshBasicMaterial({ color: 0xffc845, side: THREE.DoubleSide }));
+    const japan=base.id==='cape';
+    const pad = cylinder(PAD_RADIUS, 0.015, japan?new THREE.MeshStandardMaterial({color:0x697176,roughness:.96,metalness:0,emissive:0x080a0c}):padMat, japan?32:20);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(PAD_RADIUS * (japan?.87:.8), PAD_RADIUS * (japan?.92:.9), japan?48:24), japan?new THREE.MeshStandardMaterial({color:0xc8bf9c,roughness:.98,metalness:0,emissive:0x080703,side:THREE.DoubleSide}):new THREE.MeshBasicMaterial({ color: 0xffc845, side: THREE.DoubleSide }));
+    if(japan){pad.material.name='Japan | Pad concrete';ring.material.name='Japan | Pad paint';}
     ring.rotation.x = -Math.PI / 2;
     ring.position.y = 0.017;
     const lights: THREE.MeshBasicMaterial[] = [];
@@ -84,13 +84,20 @@ export function createBases(nodes: BodyNode[]): BaseNode[] {
       lights.push(m);
       group.add(light);
     }
-    const built = buildings(base.theme);
+    const built = buildings(base.theme, body.body.radius / baseSize(body.body.radius));
     group.add(pad, ring, ...built);
 
     // On the unit sphere in the mesh's frame (the mesh is scaled by the radius), up = the surface normal.
     const p = new THREE.Vector3(...surfacePoint(base.lat, base.lon));
     group.position.copy(p);
     group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), p);
+    if (base.theme === 'launch') {
+      // Face the Japanese facade and approach chevrons toward the Pacific.
+      // Only the scenery turns; the pad's origin and normal remain unchanged.
+      const east = new THREE.Vector3(...surfacePoint(base.lat, base.lon + 0.001)).sub(p);
+      east.addScaledVector(p, -east.dot(p)).normalize().applyQuaternion(group.quaternion.clone().invert());
+      built[0].rotation.y = Math.atan2(east.x, east.z);
+    }
     group.scale.setScalar(baseSize(body.body.radius) / body.body.radius);
     group.visible = false;
     body.mesh.add(group);

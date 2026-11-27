@@ -1,0 +1,10 @@
+{
+  "landmarks": [
+    {"id":"assembly","objects":["Hero terminal | main swept roof","Concourse | warm glazing bays and luminous ceilings"],"eye":[-213,23,-56],"target":[-149,16,-112]},
+    {"id":"control","objects":["Control | tapered ceramic shaft","Control | wraparound observation glass"],"eye":[30,100,-300],"target":[124,40,-119]},
+    {"id":"pad","bounds":{"min":[-45,6,-45],"max":[45,70,45]},"eye":[-112,44,-150],"target":[0,32,0]},
+    {"id":"landing","bounds":{"min":[-209,6,51],"max":[-141,10,119]},"eye":[-285,85,210],"target":[-175,9,85]}
+  ],
+  "collision_objects":["Hero terminal | main swept roof","Concourse | warm glazing bays and luminous ceilings","Control | tapered ceramic shaft","Control | upper collar","Research | glazed dome envelope"],
+  "landing":{"center":[-175,7.025,85],"radius":32,"approach_seconds":8}
+}

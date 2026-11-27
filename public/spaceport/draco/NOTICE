@@ -1,0 +1,7 @@
+Draco 3D Data Compression
+Copyright The Draco Authors
+https://github.com/google/draco
+
+The decoder files are unmodified redistributions from Three.js's bundled
+Draco glTF decoder. Licensed under the Apache License, Version 2.0.
+See LICENSE in this directory.

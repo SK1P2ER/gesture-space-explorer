@@ -38,11 +38,15 @@ export class MissionHud {
   private readonly root = $('#mission-hud');
   private readonly canvas = $<HTMLCanvasElement>('#mission-hud canvas');
   private last = '';
+  private lastMapAt = -Infinity;
+  private lastMapState = '';
 
-  render(r: MissionReadout | null, map: MapView | null, lang: Lang) {
+  render(r: MissionReadout | null, map: MapView | null, lang: Lang, now = performance.now()) {
     this.root.hidden = r === null;
-    if (!r) return;
-    // The readout changes a few times a second at most; the map is redrawn every frame (cheap: ~15 dots).
+    if (!r) { this.lastMapAt = -Infinity; return; }
+    // Numeric readouts remain live. The tiny decorative map needs only 15 Hz;
+    // clearing its canvas and reading clientWidth at display rate wastes work
+    // and can force layout after the other panels have updated.
     const fmt = numberFormat(lang, { maximumFractionDigits: 0 });
     const key = JSON.stringify([r.base, Math.round(r.fuel * 100), r.km === null ? null : distanceLabel(r.km, lang), r.eta === null ? null : Math.ceil(r.eta), lang]);
     if (key !== this.last) {
@@ -65,7 +69,14 @@ export class MissionHud {
       bar.classList.toggle('low', r.fuel < 0.25);
       this.canvas.setAttribute('aria-label', t('miniMap', lang));
     }
-    if (map) this.draw(map);
+    if (map) {
+      const mapState = `${r.base}|${map.rocket !== null}|${map.route !== null}`;
+      if (mapState !== this.lastMapState || now - this.lastMapAt >= 1000 / 15 - 0.5) {
+        this.lastMapAt = now;
+        this.lastMapState = mapState;
+        this.draw(map);
+      }
+    }
   }
 
   private draw(m: MapView) {

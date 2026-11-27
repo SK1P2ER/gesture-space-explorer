@@ -60,7 +60,13 @@ export class Hud {
   private last = '';
 
   constructor(private readonly emit: (intent: Intent) => void) {
-    this.handControl.addEventListener('click', () => {
+    // A press that began before the control could be seen (it woke the page, however long it was held) must not turn the camera on when it lifts.
+    let unseenPress = false;
+    addEventListener('pointerdown', () => {
+      unseenPress = Boolean(this.handControl.hidden) || getComputedStyle(this.handControl).visibility !== 'visible';
+    }, { capture: true, passive: true });
+    this.handControl.addEventListener('click', (e) => {
+      if (unseenPress && e.detail > 0) return; // detail 0: the keyboard, which is always deliberate
       this.emit({ type: 'restartTracking' });
       this.handControl.blur(); // keep Space / Enter for the scene
     });
@@ -92,8 +98,9 @@ export class Hud {
         ? `${t('loading', s.lang)} ${Math.round(s.status.progress * 100)}%`
         : s.status.kind === 'tracking'
           ? `✋ ${t('tracking', s.lang)} (${s.status.delegate})`
-          : `⌨️ ${t('keyboardOnly', s.lang)} — ${t(s.status.reason, s.lang)}`;
-    // After any stop (a failure, a disconnect, back/forward navigation): start again without a reload.
+          : `⌨ ${t('keyboardOnly', s.lang)}${s.status.reason === 'err.denied' ? '' : ` — ${t(s.status.reason, s.lang)}`}`;
+    this.status.title = s.status.kind === 'keyboard' ? t(s.status.reason, s.lang) : '';
+    // After any stop (a failure, a disconnect, a hidden page, back/forward navigation): start again without a reload.
     this.handControl.hidden = !canRestartTracking(s.status);
     this.handControl.textContent = `🖐 ${t('handControlStart', s.lang)}`;
 

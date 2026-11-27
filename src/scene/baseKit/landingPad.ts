@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { LANDING_ANCHORS, landingPadParts, type LandingQuality, type LandingSlot } from './landingPadParts';
 import { STATUS, type OperationalState } from './operations';
+import { SAFETY_NIGHT_GLOW } from './showcase';
 
 /** Entry-owned additive art; never owns BaseNode.pad, its shared material or Mission's rocket. */
 export class LandingPad {
@@ -60,6 +61,8 @@ export class LandingPad {
       }
     }
     this.materials.guidance.color.setHex(STATUS[this.operationalState].guidance);
+    // The pad's safety-orange markings glow faintly at night (a subtle landing-area marker; no light added).
+    this.materials.safety.emissive.copy(SAFETY_NIGHT_GLOW).multiplyScalar(night);
   }
 
   stats() {

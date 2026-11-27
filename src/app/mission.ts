@@ -4,6 +4,7 @@ import { BODIES, type Body } from '../data/bodies';
 import type { Intent } from '../intents';
 import { nextInSystem } from '../navigation';
 import type { CameraRig } from '../scene/cameraRig';
+import type { BodyNode } from '../planets/planet';
 import { LAYOUTS } from '../scene/baseKit/showcases';
 import { setBaseLayer } from '../scene/baseKit/baseLighting';
 import { padFrame, type BaseNode } from '../scene/bases';
@@ -22,6 +23,8 @@ import { arcBetween, bezier, bezierTangent, flightProgress, SKIP_TO, travelSecon
 import { t, tf } from '../ui/i18n';
 import type { ModeMachine } from './modes';
 import type { AppState } from './state';
+import type {MissionCheckpoint} from './checkpoint';
+import { clearDistance, distanceRange, FULL_VIEW, isLandmarkId, landmarkPose, lookTurn, type ClearView, type LandmarkId } from './jezeroLandmarks';
 
 export interface MissionDeps {
   state: AppState;
@@ -29,23 +32,33 @@ export interface MissionDeps {
   rig: CameraRig;
   clock: SimClock;
   bases: BaseNode[];
+  /** Solid bodies to avoid during transfers, including planets without a base. */
+  bodies?: BodyNode[];
   scene: THREE.Scene;
   /** Focus a body (flies the camera there; SolarView or Focus mode). */
   setFocus: (index: number) => void;
   /** A short on-screen message. */
   flash: (text: string) => void;
+  /** Passport stamp notification (optional: lets the host defer it while a full-screen picker is open). */
+  flashStamp?: (text: string) => void;
   reducedMotion: () => boolean;
   /** The next golden hour at a base: when (ms) and where the Sun will be (base frame); null if the Sun won't set soon. */
   goldenHour: (base: BaseNode) => { ms: number; sun: THREE.Vector3 } | null;
   /** How to build the rocket: texture size and detail from the quality setting. */
   rocketOptions: () => RocketOptions;
+  /** Optional Earth departure presentation. The returned function releases its view without completing it. */
+  presentLaunch?: (destination: BaseNode, complete: () => void, cancel: () => void) => () => void;
   /** Something that should never happen and was recovered from: for the console and the ?debug report. */
   report?: (message: string) => void;
-  /** A rocket lifted off from one base for another (AstroLife counts a booked journey from here). */
-  liftedOff?: (fromBaseId: string, toBaseId: string) => void;
-  /** A rocket touched down on a base's pad. */
-  landed?: (baseId: string) => void;
+  /**
+   * The part of the view the Explore card leaves clear, measured now (a framed landmark is centred in it). Read only
+   * when a landmark is framed and when the viewport changes shape, never per frame. Default: all of it.
+   */
+  exploreClear?: () => ClearView;
 }
+
+/** An Explore (horizon view) pose: the eye orbits `centre` (base frame; the base origin unless a landmark is framed). */
+export interface HorizonState { yaw: number; pitch: number; distance: number; centre: THREE.Vector3; /** The eye above the ground (standing: 0.055). */ height: number }
 
 /** How the camera is driven this frame: the rig, aimed at a point; or by the mission itself (the chase view). */
 export type CameraControl = { target: THREE.Vector3 } | 'chase' | null;
@@ -83,6 +96,21 @@ export function keepAbove(point: THREE.Vector3, center: THREE.Vector3, radius: n
   return point;
 }
 const UP = new THREE.Vector3(0, 1, 0);
+
+/** Japan's arrival view looks inland from the Pacific; other pads keep north behind the camera. */
+export function landingViewDirection(base: BaseNode, normal: THREE.Vector3): THREE.Vector3 {
+  let toward: THREE.Vector3;
+  if (base.base.id === 'cape' && base.base.body === 'earth') {
+    const longitude = THREE.MathUtils.degToRad(base.base.lon);
+    toward = new THREE.Vector3(-Math.sin(longitude), 0, -Math.cos(longitude))
+      .transformDirection(base.body.mesh.matrixWorld);
+    toward.addScaledVector(normal, -toward.dot(normal));
+  } else {
+    toward = UP.clone().addScaledVector(normal, -UP.dot(normal));
+  }
+  if (toward.lengthSq() < 1e-6) toward.set(1, 0, 0).addScaledVector(normal, -normal.x);
+  return toward.normalize();
+}
 const v3 = (v: THREE.Vector3): V3 => [v.x, v.y, v.z];
 const vec = (a: V3) => new THREE.Vector3(...a);
 
@@ -106,6 +134,8 @@ interface Trip {
   lander: boolean;
   /** Seconds into the look-back at the separating booster (null: none, or over). */
   lookBack: number | null;
+  /** Stable bypass side, so a changing pad normal cannot flip the route mid-trip. */
+  side?: V3;
   /** The camera when the rocket lifted off, to ease from it into the chase view. */
   camStart: { position: THREE.Vector3; quaternion: THREE.Quaternion };
 }
@@ -130,14 +160,52 @@ export class Mission {
   private kit: { rocket: Rocket; key: string; dust: PadDust; layers?: string } | null = null;
   /** A full stack (booster attached), or the lander alone after a separation. Kept here: the rocket itself may be freed and rebuilt. */
   private stacked = true;
+  get vehicleStacked(){return this.stacked;}
   private night = 0;
   /** The pad the dust is on (it settles there after the engines stop). */
   private dustPad: BaseNode | null = null;
   readonly warp = new WarpStreaks();
   /** The clock's speed before you came down to a base: bases run in real time, so they don't spin away. */
   private savedRate: number | null = null;
+  private launchPresentation: { from: BaseNode; to: BaseNode; close: () => void } | null = null;
+  get presentingLaunch() { return this.launchPresentation !== null; }
+  private japanYaw=0;
+  private japanElevation=.85;
+  private japanDistance=8;
+  resetJapanView(){if(this.base?.base.id==='cape'&&this.d.modes.mode==='baseView'){this.japanYaw=0;this.japanElevation=.85;this.japanDistance=8;}}
+  japanMapCamera(camera:THREE.PerspectiveCamera){
+    if(this.base?.base.id!=='cape')return;
+    const pad=padFrame(this.base),toward=landingViewDirection(this.base,pad.normal).applyAxisAngle(pad.normal,this.japanYaw);
+    const direction=pad.normal.clone().multiplyScalar(Math.sin(this.japanElevation)).addScaledVector(toward,Math.cos(this.japanElevation));
+    camera.position.copy(pad.center).addScaledVector(direction,pad.size*this.japanDistance);camera.up.copy(pad.normal);camera.lookAt(pad.center);camera.updateMatrixWorld();
+    this.d.rig.adopt(camera.position,pad.center);
+  }
   /** The horizon view (showcase bases): standing on the ground, looking along it. Yaw turns round the base. */
-  horizon: { yaw: number; pitch: number; distance: number } | null = null;
+  horizon: HorizonState | null = null;
+  /** Explore's framed Jezero landmark (null: none), and the Explore pose saved at the first one of the session. */
+  private landmarkId: LandmarkId | null = null;
+  private landmarkReturn: HorizonState | null = null;
+  /**
+   * The framed landmark's clear band, measured once when it was framed and again only when the viewport changes shape
+   * (aspect): the card's own changes (a preset's Restore, the hint going, the list folding) never swing the view.
+   * `fit` is the distance that framed it for this band (a resize scales the user's distance by the new fit).
+   */
+  private landmarkFrame: { view: ClearView; aspect: number; fit: number } | null = null;
+  /** The stored clear band a framed landmark is centred in (for tests), or null. */
+  get landmarkBand(): ClearView | null { return this.landmarkFrame ? { ...this.landmarkFrame.view } : null; }
+  /** The landmark framed in Explore, if any (camera only: the clock is never touched). */
+  get landmark(): LandmarkId | null { return this.landmarkId; }
+  /** Back to overview has a pose to return to (saved at the session's first landmark). */
+  get landmarkCanReturn() { return this.landmarkReturn !== null; }
+  /** The pose Back to overview returns to (a copy), or null. */
+  get landmarkReturnPose(): { yaw: number; pitch: number; distance: number; centre: [number, number, number]; height: number } | null {
+    const r = this.landmarkReturn;
+    return r ? { yaw: r.yaw, pitch: r.pitch, distance: r.distance, centre: [r.centre.x, r.centre.y, r.centre.z], height: r.height } : null;
+  }
+  /** Where Explore's look point is heading this frame (base frame), as horizonEye is for the eye. */
+  private readonly horizonLook = new THREE.Vector3();
+  /** Looks taken in the horizon view (drag, wheel, keys, the open hand): the explore hint goes after the first. */
+  horizonLooks = 0;
   /** Where the horizon view's eye stands, in the base's frame (for the sky dome). */
   readonly horizonEye = new THREE.Vector3();
   private savedClip: { near: number; far: number } | null = null;
@@ -238,6 +306,7 @@ export class Mission {
     const index = bodyIndex(b.base.body);
     if (modes.mode === 'solarView' || state.focus !== index) this.d.setFocus(index);
     if (!modes.go('baseView')) return;
+    this.dismissLaunchPresentation();
     this.base = b;
     if (this.destination === b) this.destination = null;
     this.stampPassport(b);
@@ -253,7 +322,47 @@ export class Mission {
 
   private frameBase(b: BaseNode) {
     const size = padFrame(b).size;
-    this.d.rig.focus(size * 0.2, size * (LAYOUTS[b.base.id]?.frame ?? 0.55), false); // a showcase base is bigger
+    this.d.rig.focus(size * 0.2, size * (b.base.id==='cape'?1.1:LAYOUTS[b.base.id]?.frame ?? 0.55), false);
+  }
+
+  checkpoint():MissionCheckpoint|null {
+    const {modes,state,clock}=this.d;
+    if(!this.base||!['baseView','launch','build','travel','docking'].includes(modes.mode))return null;
+    const snapshot:MissionCheckpoint={version:1,savedAt:Date.now(),time:clock.time,lang:state.lang,baseId:this.base.base.id,destinationId:this.destination?.base.id??null,stacked:this.stacked,fuel:this.lastTripFuel,phase:'base'};
+    if(modes.mode==='travel'&&this.trip) {
+      const t=this.trip;snapshot.phase='travel';
+      snapshot.trip={fromId:t.from.base.id,toId:t.to.base.id,elapsed:t.elapsed,seconds:t.seconds,km:t.km,fuel:t.fuel,lander:t.lander};
+    }else if(modes.mode==='docking'&&this.dock) {
+      const d=this.dock;snapshot.phase='docking';snapshot.dock={state:{...d.state},auto:d.auto,misses:d.misses,settle:d.settle,legT:d.legT};
+    }
+    return snapshot;
+  }
+
+  /** Restore validated state without replaying launch, approach, or awarding a stamp early. */
+  resume(snapshot:MissionCheckpoint) {
+    const {modes,state,clock,rig}=this.d;
+    this.release();
+    if(modes.mode==='travel')modes.go('docking');
+    if(['docking','launch','build'].includes(modes.mode))modes.go('baseView');
+    if(modes.mode!=='solarView'&&modes.mode!=='focus')modes.go('focus');
+    this.d.setFocus(bodyIndex(this.node(snapshot.baseId).base.body));
+    if(!modes.go('baseView'))return;
+    this.base=this.node(snapshot.baseId);this.destination=snapshot.destinationId?this.node(snapshot.destinationId):null;
+    state.lang=snapshot.lang;state.selected=null;clock.jumpTo(snapshot.time);
+    if(!clock.paused){this.savedRate=clock.rate;clock.setRate(1);}
+    this.stacked=snapshot.stacked;this.checkRocket();if(!this.kit)this.buildRocket();
+    this.lastTripFuel=snapshot.fuel;
+    if(this.stacked)this.kit!.rocket.restack();else{this.kit!.rocket.separate(true);this.kit!.rocket.setLander(true);}
+    this.frameBase(this.base);
+    if(snapshot.phase!=='base') {modes.go('launch');modes.go('travel');}
+    if(snapshot.phase==='travel'&&snapshot.trip) {
+      const t=snapshot.trip;
+      this.trip={from:this.node(t.fromId),to:this.node(t.toId),elapsed:t.elapsed,seconds:t.seconds,km:t.km,fuel:t.fuel,lander:t.lander,lookBack:null,camStart:{position:rig.camera.position.clone(),quaternion:rig.camera.quaternion.clone()}};
+    }else if(snapshot.phase==='docking'&&snapshot.dock) {
+      modes.go('docking');this.startDock(snapshot.dock.misses);
+      const saved=snapshot.dock,dock=this.dock!;
+      dock.state={...saved.state};dock.auto=saved.auto;dock.misses=saved.misses;dock.settle=saved.settle;dock.legT=saved.legT;
+    }
   }
 
   /** Back up to orbit around the base's body. */
@@ -268,7 +377,8 @@ export class Mission {
   toggleHorizon() {
     if (this.horizon) return this.exitHorizon();
     if (!this.base || !LAYOUTS[this.base.base.id] || this.d.modes.mode !== 'baseView') return;
-    this.horizon = { yaw: Math.PI / 2 - 0.25, pitch: 0.04, distance: 2.1 }; // south of the base, clear of the panels
+    this.horizon = { yaw: Math.PI / 2 - 0.25, pitch: 0.04, distance: 2.1, centre: new THREE.Vector3(), height: 0.055 }; // south of the base, clear of the panels
+    this.landmarkId = this.landmarkReturn = this.landmarkFrame = null; // every Explore session starts without a landmark
     // Start from where the camera is now, in the base's frame, and glide down from there.
     const g = this.base.group;
     g.updateWorldMatrix(true, false);
@@ -293,6 +403,7 @@ export class Mission {
     if (!golden) return this.d.flash(t('noSunset', this.d.state.lang));
     this.d.clock.jumpTo(golden.ms);
     if (!this.horizon) this.toggleHorizon();
+    this.landmarkOverview(); // a framed landmark gives way: the golden view looks across the whole base
     if (this.horizon) {
       // Stand to the side of the Sun's line, looking in across the base: the light rakes from the side.
       this.horizon.yaw = Math.atan2(golden.sun.z, golden.sun.x) + Math.PI / 2;
@@ -300,8 +411,58 @@ export class Mission {
     }
   }
 
+  /**
+   * Explore's Landmarks (Jezero): frame one. The first of a session saves the Explore pose for Back to overview;
+   * switching landmarks keeps it. The camera eases there (a cut with reduced motion); the look controls keep working,
+   * orbiting the landmark. Camera only: the clock, presets and Restore are untouched.
+   */
+  frameLandmark(id: LandmarkId) {
+    const h = this.horizon;
+    if (!h || !isLandmarkId(id) || this.base?.base.id !== 'jezero' || this.d.modes.mode !== 'baseView') return;
+    this.landmarkReturn ??= { yaw: h.yaw, pitch: h.pitch, distance: h.distance, centre: h.centre.clone(), height: h.height };
+    const cam = this.d.rig.camera;
+    // The band is measured at the session's first landmark (or after a viewport change), then kept: switching or
+    // re-selecting frames the same way whatever the card shows now (Back to overview, Restore, the hint).
+    const kept = this.landmarkFrame && Math.abs(this.landmarkFrame.aspect - cam.aspect) < 1e-3 ? this.landmarkFrame.view : null;
+    const view = kept ?? this.d.exploreClear?.() ?? FULL_VIEW;
+    const pose = landmarkPose(id, THREE.MathUtils.degToRad(cam.fov), cam.aspect, view);
+    this.landmarkFrame = { view, aspect: cam.aspect, fit: pose.distance };
+    this.landmarkId = id;
+    h.yaw = pose.yaw;
+    h.pitch = pose.pitch;
+    h.distance = pose.distance;
+    h.centre.set(...pose.centre);
+    h.height = pose.height;
+  }
+
+  /** Back to overview: exactly the Explore pose saved before the first landmark; the selection and the saved pose go. */
+  landmarkOverview() {
+    const h = this.horizon, back = this.landmarkReturn;
+    this.landmarkId = this.landmarkReturn = this.landmarkFrame = null;
+    if (!h || !back) return;
+    h.yaw = back.yaw;
+    h.pitch = back.pitch;
+    h.distance = back.distance;
+    h.centre.copy(back.centre);
+    h.height = back.height;
+  }
+
+  /**
+   * Explore's camera in the base's frame (for tests and ?debug): the eye and look point now (eased) and where they are
+   * heading, the orbit centre, and the camera's world position and look point. Null outside Explore.
+   */
+  horizonView(): { eye: THREE.Vector3; look: THREE.Vector3; goalEye: THREE.Vector3; goalLook: THREE.Vector3; centre: THREE.Vector3; world: { eye: THREE.Vector3; look: THREE.Vector3 } } | null {
+    const h = this.horizon, cam = this.horizonCam;
+    if (!h || !cam || !this.base) return null;
+    const g = this.base.group;
+    g.updateWorldMatrix(true, false);
+    return { eye: cam.eye.clone(), look: cam.look.clone(), goalEye: this.horizonEye.clone(), goalLook: this.horizonLook.clone(), centre: h.centre.clone(),
+      world: { eye: g.localToWorld(cam.eye.clone()), look: g.localToWorld(cam.look.clone()) } };
+  }
+
   /** Back up to the usual view over the base. */
   exitHorizon() {
+    this.landmarkId = this.landmarkReturn = this.landmarkFrame = null; // leaving Explore by any path: no landmark, no saved pose
     if (!this.horizon) return;
     this.horizon = null;
     this.horizonCam = null;
@@ -318,7 +479,9 @@ export class Mission {
 
   /** Done with bases: forget them and give the clock its speed back. */
   private release() {
+    this.dismissLaunchPresentation();
     this.exitHorizon();
+    this.d.rig.camera.up.set(0,1,0);
     this.base = this.destination = null;
     this.countdown = null;
     if (this.savedRate !== null) this.d.clock.setRate(this.savedRate);
@@ -345,13 +508,44 @@ export class Mission {
   }
 
   private abort() {
+    this.dismissLaunchPresentation();
     this.countdown = null;
     this.d.modes.go('baseView');
     this.d.flash(t('launchAborted', this.d.state.lang));
   }
 
-  private liftoff() {
+  private dismissLaunchPresentation() {
+    const presentation = this.launchPresentation;
+    this.launchPresentation = null;
+    presentation?.close();
+  }
+
+  private liftoff(presented = false) {
     const { modes, rig } = this.d;
+    if (!this.base || !this.destination || modes.mode !== 'launch' || this.launchPresentation) return;
+    // Only a full Earth stack matches the authored M03 animation. Other bases,
+    // returning landers and reduced-motion departures retain the direct flight.
+    if (!presented && this.stacked && this.base.base.id === 'cape' && this.d.presentLaunch && !this.d.reducedMotion()) {
+      this.countdown = null;
+      const presentation = { from: this.base, to: this.destination, close: () => {} };
+      this.launchPresentation = presentation;
+      const finish = (continueFlight: boolean) => {
+        if (this.launchPresentation !== presentation) return;
+        this.dismissLaunchPresentation();
+        if (modes.mode !== 'launch' || this.base !== presentation.from || this.destination !== presentation.to) return;
+        if (continueFlight) this.liftoff(true);
+        else this.abort();
+      };
+      try {
+        const close = this.d.presentLaunch(this.destination, () => finish(true), () => finish(false));
+        if (this.launchPresentation === presentation) presentation.close = close;
+        else close(); // A synchronous fallback may have already completed the flight boundary.
+      } catch {
+        this.d.report?.('Launch presentation unavailable; continuing the mission.');
+        finish(true);
+      }
+      return;
+    }
     if (!this.base || !this.destination || !modes.go('travel')) return;
     this.countdown = null;
     const from = padFrame(this.base).center.clone();
@@ -359,7 +553,9 @@ export class Mission {
     this.trip = {
       from: this.base,
       to: this.destination,
-      elapsed: 0,
+      // The authored ground sequence has already shown the pad departure; enter
+      // the established chase view without replaying its first 1.2-second ease.
+      elapsed: presented ? 1.2 : 0,
       seconds: travelSeconds(from.distanceTo(to)),
       km: routeKm(this.base.base.body, this.destination.base.body, this.d.clock.time),
       fuel: tripFuel(routeKm(this.base.base.body, this.destination.base.body, this.d.clock.time)),
@@ -368,7 +564,6 @@ export class Mission {
       lookBack: null,
     };
     this.d.flash(t('liftoff', this.d.state.lang));
-    this.d.liftedOff?.(this.trip.from.base.id, this.trip.to.base.id);
   }
 
   /** The arc as it is now (the planets move): from above the start pad to the approach point above the far one. */
@@ -378,13 +573,23 @@ export class Mission {
     const start = a.center.clone().addScaledVector(startN, a.size * 0.6);
     const b = padFrame(trip.to);
     const end = b.center.clone().addScaledVector(b.normal, b.size * APPROACH_HEIGHT);
-    return arcBetween(v3(start), v3(startN), v3(end), v3(b.normal));
+    // Use world radii: size boost changes the bodies as well as their pads.
+    // Padding covers the rocket's extent, rather than clearing its origin only.
+    const padding = a.size * 0.5;
+    const nodes = this.d.bodies ?? [...new Set(this.d.bases.map(base => base.body))];
+    const bodies = nodes.map(node => ({
+      center: v3(node.mesh.getWorldPosition(new THREE.Vector3())),
+      radius: node.mesh.getWorldScale(new THREE.Vector3()).x + padding,
+    }));
+    const arc = arcBetween(v3(start), v3(startN), v3(end), v3(b.normal), bodies, trip.side);
+    if (!trip.side && arc.lift && Math.hypot(...arc.lift) > 0) trip.side = v3(vec(arc.lift).normalize());
+    return arc;
   }
 
-  /** The rocket has reached the approach point above the destination. */
   private arrive() {
     const { modes, state, rig } = this.d;
-    const trip = this.trip!;
+    const trip = this.trip;
+    if (!trip || modes.mode !== 'travel') return;
     this.trip = null;
     this.lastTripFuel = trip.fuel;
     this.base = trip.to;
@@ -392,7 +597,7 @@ export class Mission {
     state.focus = bodyIndex(trip.to.base.body);
     rig.adopt(rig.camera.position, padFrame(trip.to).center);
     if (!modes.go('docking')) return;
-    this.startDock(0); // docking() drives the camera from here, easing in from the chase view
+    this.startDock(0);
   }
 
   /** A docking attempt from the approach height (pad radii). */
@@ -413,7 +618,6 @@ export class Mission {
     this.frameBase(this.base);
     this.d.flash(tf('landedOn', this.d.state.lang, { name: this.base.base.name[this.d.state.lang] }));
     this.stampPassport(this.base);
-    this.d.landed?.(this.base.base.id);
   }
 
   /** A stamp for a base you've reached (the first time only), kept on the device. */
@@ -424,7 +628,7 @@ export class Mission {
     state.passport = passport;
     writePassport(passport);
     // After the arrival message (the HUD shows one at a time).
-    setTimeout(() => this.d.flash(tf('newStamp', state.lang, { name: b.base.name[state.lang] })), 1600);
+    setTimeout(() => (this.d.flashStamp ?? this.d.flash)(tf('newStamp', state.lang, { name: b.base.name[state.lang] })), 1600);
   }
 
   /** The mission HUD's numbers: fuel, distance and time left, and the base. Null outside bases and trips. */
@@ -509,15 +713,32 @@ export class Mission {
           this.goToGoldenHour();
           return true;
         }
+        if (intent.type === 'frameLandmark') {
+          this.frameLandmark(intent.id);
+          return true;
+        }
+        if (intent.type === 'landmarkOverview') {
+          this.landmarkOverview();
+          return true;
+        }
         if (this.horizon) {
           // On the ground: drag (or the open hand) looks around, zoom steps closer or back, Esc stands up.
+          // With a landmark framed both orbit it, in its own zoom range (near it, the eye on the ground patch).
+          const lm = this.landmarkId;
           if (intent.type === 'rotate') {
+            this.horizonLooks++;
             this.horizon.yaw += intent.dx;
             this.horizon.pitch = THREE.MathUtils.clamp(this.horizon.pitch - intent.dy * 0.5, -0.15, 0.6);
+            if (lm) {
+              const r = distanceRange(lm, this.horizon.yaw);
+              this.horizon.distance = THREE.MathUtils.clamp(this.horizon.distance, r.min, r.max);
+            }
             return true;
           }
           if (intent.type === 'zoom') {
-            this.horizon.distance = THREE.MathUtils.clamp(this.horizon.distance * intent.factor, 0.7, 2.3);
+            this.horizonLooks++;
+            const r = lm ? distanceRange(lm, this.horizon.yaw) : { min: 0.7, max: 2.3 };
+            this.horizon.distance = THREE.MathUtils.clamp(this.horizon.distance * intent.factor, r.min, r.max);
             return true;
           }
           if (intent.type === 'dismiss' && !state.weightOpen) {
@@ -525,6 +746,10 @@ export class Mission {
             return true;
           }
         }
+        if(this.base?.base.id==='cape'&&intent.type==='rotate') {
+          this.japanYaw+=intent.dx;this.japanElevation=THREE.MathUtils.clamp(this.japanElevation+intent.dy,.3,1.35);return true;
+        }
+        if(this.base?.base.id==='cape'&&intent.type==='zoom'){this.japanDistance=THREE.MathUtils.clamp(this.japanDistance*intent.factor,1.25,8);return true;}
         switch (intent.type) {
           case 'next': this.cycleDestination(1); return true;
           case 'prev': this.cycleDestination(-1); return true;
@@ -665,7 +890,7 @@ export class Mission {
     const side = new THREE.Vector3().crossVectors(UP, pad.normal);
     if (side.lengthSq() < 1e-6) side.set(1, 0, 0);
     // Keep framing the base as the planet's overview boost fades on the way in (the size changes).
-    this.d.rig.reframe(pad.size * 0.2, pad.size * (LAYOUTS[this.base.base.id]?.frame ?? 0.55));
+    this.d.rig.reframe(pad.size * 0.2, pad.size * (this.base.base.id==='cape'?1.1:LAYOUTS[this.base.base.id]?.frame ?? 0.55));
     if (mode === 'baseView' && this.d.modes.mode === 'baseView' && this.baseCamera?.(dt, camera)) return 'chase';
     if (this.horizon && mode === 'baseView') return this.horizonCamera(dt, camera);
     if (mode === 'build') {
@@ -678,8 +903,21 @@ export class Mission {
       this.d.rig.setViewDirection(pad.normal.clone().multiplyScalar(0.94).addScaledVector(south, 0.34));
       return { target: g.localToWorld(new THREE.Vector3(this.buildPan.x, 0, this.buildPan.y)) };
     }
-    this.d.rig.setViewDirection(pad.normal.clone().multiplyScalar(0.8).addScaledVector(side.normalize(), 0.6));
+    if(this.base.base.id==='cape') {
+      this.japanMapCamera(camera);return 'chase';
+    }else this.d.rig.setViewDirection(pad.normal.clone().multiplyScalar(0.8).addScaledVector(side.normalize(), 0.6));
     return { target: pad.center };
+  }
+
+  /** A framed landmark after the viewport changed shape (resize, rotation): measure the band again, re-fit the distance. */
+  private refitLandmark(id: LandmarkId, h: HorizonState, camera: THREE.PerspectiveCamera) {
+    const f = this.landmarkFrame;
+    if (f && Math.abs(camera.aspect - f.aspect) < 1e-3) return;
+    const view = this.d.exploreClear?.() ?? FULL_VIEW;
+    const fit = landmarkPose(id, THREE.MathUtils.degToRad(camera.fov), camera.aspect, view).distance;
+    const r = distanceRange(id, h.yaw);
+    if (f) h.distance = THREE.MathUtils.clamp(h.distance * (fit / f.fit), r.min, r.max);
+    this.landmarkFrame = { view, aspect: camera.aspect, fit };
   }
 
   /** Standing on the plain outside the base, eye height, looking in across it with the sky behind. */
@@ -687,8 +925,17 @@ export class Mission {
     const h = this.horizon!;
     const g = this.base!.group;
     g.updateWorldMatrix(true, false);
-    const eye = this.horizonEye.set(Math.cos(h.yaw) * h.distance, 0.055, Math.sin(h.yaw) * h.distance);
-    const look = new THREE.Vector3(-Math.cos(h.yaw), Math.tan(h.pitch), -Math.sin(h.yaw)).add(eye);
+    // The eye orbits the centre: the base origin, or a framed landmark's (the eye kept clear of the modules).
+    const lm = this.landmarkId;
+    if (lm) this.refitLandmark(lm, h, camera);
+    const distance = lm ? clearDistance(lm, h.yaw, h.distance) : h.distance;
+    const eye = this.horizonEye.set(h.centre.x + Math.cos(h.yaw) * distance, h.height, h.centre.z + Math.sin(h.yaw) * distance);
+    // A framed landmark sits in the middle of what the Explore card leaves clear: the view turns that much aside.
+    const turn = lm ? lookTurn(this.landmarkFrame?.view ?? FULL_VIEW, THREE.MathUtils.degToRad(camera.fov), camera.aspect) : null;
+    const heading = new THREE.Vector3(-Math.cos(h.yaw), 0, -Math.sin(h.yaw));
+    if (turn) heading.applyAxisAngle(UP, turn.yaw);
+    heading.y = Math.tan(h.pitch + (turn?.pitch ?? 0));
+    const look = this.horizonLook.copy(heading).add(eye);
     // Eased in the base's frame, then placed: if the planet jumps (a time jump), the view jumps with it.
     const cam = (this.horizonCam ??= { eye: eye.clone(), look: look.clone() });
     const k = this.d.reducedMotion() ? 1 : 1 - Math.exp(-dt * 4);
@@ -710,9 +957,7 @@ export class Mission {
     // A fixed frame on the pad: 'toward' (where the camera sits, behind the rocket) and 'right'.
     // The camera's up is the pad's normal, so the rocket always stands upright on screen,
     // and steering right / down moves it right / down on screen.
-    const toward = UP.clone().addScaledVector(n, -UP.dot(n));
-    if (toward.lengthSq() < 1e-6) toward.set(1, 0, 0).addScaledVector(n, -n.x);
-    toward.normalize();
+    const toward = landingViewDirection(this.base!, n);
     const right = new THREE.Vector3().crossVectors(n, toward).normalize();
     if (d.settle > 0) {
       d.settle -= dt; // a moment on the ground (or off the pad) before the outcome
@@ -722,7 +967,10 @@ export class Mission {
           this.startDock(d.misses + 1);
           this.d.flash(t('missedPad', this.d.state.lang));
         }
-        if (!this.dock) return { target: pad.center };
+        if (!this.dock) {
+          if(this.base?.base.id==='cape'){camera.up.copy(n);camera.updateMatrixWorld();return 'chase';}
+          return { target: pad.center };
+        }
       }
     } else {
       const auto = d.auto || this.d.state.autoLand;
@@ -809,7 +1057,7 @@ export class Mission {
     const arc = this.arc(trip);
     const u = flightProgress(fraction);
     const pos = vec(bezier(arc, u));
-    const dir = vec(bezierTangent(arc, Math.min(0.999, Math.max(0.001, u)))).normalize();
+    const dir = vec(bezierTangent(arc, u)).normalize();
     const size = padFrame(trip.from).size;
     this.rocket.position.copy(pos);
     this.rocket.quaternion.setFromUnitVectors(UP, dir);
@@ -851,6 +1099,8 @@ export class Mission {
     const k = blend * blend * (3 - 2 * blend);
     camera.position.lerpVectors(trip.camStart.position, chasePos, k);
     camera.quaternion.slerpQuaternions(trip.camStart.quaternion, chaseQ, k);
+    // Blending two safe camera positions can still cut a chord through a planet.
+    for (const node of [trip.from, trip.to]) keepAbove(camera.position, node.body.mesh.getWorldPosition(new THREE.Vector3()), node.body.mesh.getWorldScale(new THREE.Vector3()).x * 1.06);
     camera.updateMatrixWorld();
     this.warp.update(camera, dir, this.d.reducedMotion() ? 0 : warpLevel(fraction), dt);
 

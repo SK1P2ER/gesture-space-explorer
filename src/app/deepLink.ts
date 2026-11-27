@@ -6,6 +6,7 @@ import type { Lang } from '../data/bodies';
 //
 //   ?body=saturn                    a body (the Sun, the overview, is the default)
 //   ?base=jezero                    a base, and so its body
+//   ?base=tanegashima              the Earth port (legacy ?base=cape also works)
 //   ?base=jezero&view=horizon       standing at a showcase base
 //   &date=2061-07-28                a day (UTC midnight), or a full ISO time: 2024-04-08T18:18Z;
 //                                   the app opens paused there
@@ -47,7 +48,10 @@ const LINK_KEYS = ['body', 'base', 'view', 'lang'];
 export function parseDeepLink(search: string, catalog: LinkCatalog): DeepLink {
   const q = new URLSearchParams(search);
   const link: DeepLink = {};
-  const base = catalog.bases.find((b) => b.id === q.get('base')?.toLowerCase());
+  const requestedBase = q.get('base')?.toLowerCase();
+  // Keep saved passports and route keys stable while sharing the port's new name.
+  const base = catalog.bases.find((b) => b.id === requestedBase)
+    ?? (requestedBase === 'tanegashima' ? catalog.bases.find((b) => b.id === 'cape' && b.body === 'earth') : undefined);
   if (base) {
     link.base = base.id;
     link.body = base.body; // a base names its body; a different ?body= alongside it is ignored
@@ -79,7 +83,7 @@ export function linkSearch(search: string, view: LinkView, keepDate: boolean): s
   });
   const link = new URLSearchParams();
   if (view.base) {
-    link.set('base', view.base);
+    link.set('base', view.base === 'cape' ? 'tanegashima' : view.base);
     if (view.horizon) link.set('view', 'horizon');
   } else if (view.body !== 'sun') {
     link.set('body', view.body);

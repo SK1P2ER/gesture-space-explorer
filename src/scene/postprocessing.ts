@@ -87,6 +87,8 @@ export class ScenePipeline {
   get bloomEnabled() {
     return this.bloomOn;
   }
+  /** Local inspection can temper glare without changing the user's global setting. */
+  exposureScale=1;
 
   /** MSAA samples for the bloom path (High 4, Ultra 8), clamped to the GPU's maximum. */
   setSamples(samples: number) {
@@ -122,7 +124,7 @@ export class ScenePipeline {
   }
 
   render() {
-    this.renderer.toneMappingExposure = this.cfg.exposure; // live-tunable in debug mode
+    this.renderer.toneMappingExposure = this.cfg.exposure*this.exposureScale;
     this.basePass.enabled = this.baseOn;
     if (!this.bloomOn) {
       this.renderer.render(this.scene, this.camera);

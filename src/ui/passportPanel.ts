@@ -3,6 +3,7 @@ import { BODIES, type Lang } from '../data/bodies';
 import type { Intent } from '../intents';
 import type { Passport } from '../sim/passport';
 import { t, tf } from './i18n';
+import { dateLabel } from './timeFormat';
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 
@@ -27,19 +28,33 @@ export class PassportPanel {
     this.root.hidden = !open;
     if (!open) return;
     $('#passport-title').textContent = `🛂 ${t('passport', lang)}`;
-    const date = new Intl.DateTimeFormat(lang === 'my' ? 'my-MM' : lang, { dateStyle: 'medium' });
-    $('#passport-panel .stamps').replaceChildren(...BASES.map((b) => {
+    // Earned stamps first, newest first (the one just earned leads, marked Latest); then the bases still to visit, in
+    // their usual order. Each stamp reads "Base · World" on one line, so "Jezero Dome · Mars" is found at a glance.
+    const earned = BASES.filter((b) => passport[b.id] !== undefined).sort((a, b) => passport[b.id]! - passport[a.id]!);
+    const latest = earned[0]?.id ?? null;
+    const ordered = [...earned, ...BASES.filter((b) => passport[b.id] === undefined)];
+    $('#passport-panel .stamps').replaceChildren(...ordered.map((b) => {
       const li = document.createElement('li');
       const ms = passport[b.id];
       li.className = ms === undefined ? 'stamp empty' : 'stamp';
+      li.dataset.base = b.id;
       const name = document.createElement('strong');
-      name.textContent = b.name[lang];
-      const body = document.createElement('span');
-      body.textContent = BODIES.find((x) => x.id === b.body)!.name[lang];
+      name.className = 'stamp-name';
+      const world = document.createElement('span');
+      world.className = 'stamp-world';
+      world.textContent = ` · ${BODIES.find((x) => x.id === b.body)!.name[lang]}`;
+      name.append(b.name[lang], world);
       const when = document.createElement('span');
       when.className = 'when';
-      when.textContent = ms === undefined ? t('notYet', lang) : `✅ ${date.format(ms)}${levels[b.id] ? ` · 🏅 ${tf('baseLevel', lang, { n: String(levels[b.id]) })}` : ''}`;
-      li.append(name, body, when);
+      when.textContent = ms === undefined ? t('notYet', lang) : `✅ ${dateLabel(ms, Infinity, lang)}${levels[b.id] ? ` · 🏅 ${tf('baseLevel', lang, { n: String(levels[b.id]) })}` : ''}`;
+      li.append(name, when);
+      if (b.id === latest) {
+        li.classList.add('latest');
+        const badge = document.createElement('span');
+        badge.className = 'stamp-latest';
+        badge.textContent = t('latestStamp', lang);
+        li.prepend(badge);
+      }
       return li;
     }));
     $('#passport-panel .hint').textContent = tf('passportCount', lang, { n: String(count), total: String(BASES.length) });

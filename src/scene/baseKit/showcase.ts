@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { mergeOwned } from './utilityGeometry';
 import { STATUS, type MarsBaseOperationsController, type OperationalState } from './operations';
-import { normalsFrom } from '../rocketKit';
+import { normalMapAsync } from '../../native/normalMapAsync';
 import { garageParts, roverParts } from './roverGarageParts';
 import { communicationsParts } from './communicationsParts';
 import { solarArrayParts, solarPanelGeometry, solarSupportGeometry } from './solarArrayParts';
@@ -64,6 +64,8 @@ const WINDOW_DAY = 0x6f6a5e;
 const WINDOW_NIGHT = 0xffd08a;
 const GREEN_DAY = 0x4fd96a;
 const GREEN_NIGHT = 0x7dff9a;
+/** At night the safety-orange trim (path edges, hatches, pad markings) glows faintly: markers, not lights. */
+export const SAFETY_NIGHT_GLOW = new THREE.Color(0xe87536).multiplyScalar(0.28);
 /** Materials lit by the Sun (the rest glow by themselves): they take the sky's reflections. */
 const LIT = ['hull', 'hullFlat', 'dark', 'glass', 'red', 'safety', 'solar', 'visor'] as const;
 
@@ -133,7 +135,21 @@ function kitTexture(kind: 'fabric' | 'ribbed' | 'cells', size: number): { map: T
     tx.needsUpdate = true;
     return tx;
   };
-  return { map: tex(col, true), normalMap: tex(normalsFrom(h, size, kind === 'cells' ? 3 : 1.5), false) };
+  const flat = new Uint8Array(n * 4);
+  for (let i = 0; i < flat.length; i += 4) flat.set([128, 128, 255, 255], i);
+  const normalMap = tex(flat, false);
+  const controller = new AbortController();
+  let disposed = false;
+  const onDispose = () => { disposed = true; controller.abort(); };
+  normalMap.addEventListener('dispose', onDispose);
+  void normalMapAsync(h, size, kind === 'cells' ? 3 : 1.5, controller.signal).then(({ pixels }) => {
+    if (disposed) return;
+    normalMap.image.data = pixels;
+    normalMap.needsUpdate = true;
+  }).catch((error: unknown) => {
+    if (!disposed) console.warn('[base] Normal-map generation failed', error);
+  }).finally(() => normalMap.removeEventListener('dispose', onDispose));
+  return { map: tex(col, true), normalMap };
 }
 /** Solar trackers turn at most this far from flat toward the Sun, radians. */
 export const TRACKER_LIMIT = 1.0;
@@ -510,6 +526,7 @@ export class Showcase {
     this.mats.green.color.lerpColors(new THREE.Color(GREEN_DAY), new THREE.Color(GREEN_NIGHT), night);
     this.mats.window.color.multiplyScalar(STATUS[this.operationalState].brightness);
     this.mats.green.color.multiplyScalar(STATUS[this.operationalState].brightness);
+    this.mats.safety.emissive.copy(SAFETY_NIGHT_GLOW).multiplyScalar(night);
     if (this.dust) (this.dust.material as THREE.MeshBasicMaterial).opacity = 0.55 * (1 - night); // dust shows only in sunlight
     const target = night >= 1 || sun.y <= 0 ? 0 : THREE.MathUtils.clamp(Math.atan2(sun.x, sun.y), -TRACKER_LIMIT, TRACKER_LIMIT);
     if (ease > 0) this.setPanelTilt(this.tilt + (target - this.tilt) * ease);

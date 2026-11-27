@@ -27,7 +27,7 @@ export const INTENT_TYPES = [
   'togglePause', 'timeScale', 'timeDial', 'setTimeSpeed', 'reverseTime', 'timeNow', 'timeJump',
   'toggleDebug', 'toggleLanguage', 'photo', 'toggleWatermark', 'toggleTrueScale', 'sharePhoto', 'savePhoto',
   'toggleWeightPanel', 'setWeight', 'enterBase', 'chooseDestination', 'launch', 'countdown', 'steer', 'toggleAutoLand', 'togglePassport', 'cycleSteerSensitivity',
-  'toggleHelp', 'togglePreview', 'restartTracking', 'toggleMenu', 'toggleTimeBar', 'toggleHorizon', 'goldenHour',
+  'toggleHelp', 'togglePreview', 'restartTracking', 'toggleMenu', 'toggleTimeBar', 'toggleHorizon', 'goldenHour', 'frameLandmark', 'landmarkOverview',
   'toggleBuild', 'buildPick', 'buildCursor', 'buildGrab', 'buildDrop', 'buildTurn', 'buildDelete', 'buildUndo', 'buildRedo', 'buildReset', 'dismissBuildHint',
 ] as const satisfies readonly Intent['type'][];
 
@@ -51,7 +51,7 @@ export const ACCEPTS: Record<Mode, ReadonlySet<IntentType>> = {
   solarView: new Set(INTENT_TYPES),
   focus: new Set(INTENT_TYPES),
   // ← → pick the destination, Enter (select) launches, pointing at a body flies to its base.
-  baseView: new Set([...ANYWHERE, 'rotate', 'zoom', 'next', 'prev', 'nextMoon', 'select', 'enterBase', 'chooseDestination', 'launch', 'countdown', 'toggleHorizon', 'goldenHour', 'toggleBuild']),
+  baseView: new Set([...ANYWHERE, 'rotate', 'zoom', 'next', 'prev', 'nextMoon', 'select', 'enterBase', 'chooseDestination', 'launch', 'countdown', 'toggleHorizon', 'goldenHour', 'frameLandmark', 'landmarkOverview', 'toggleBuild']),
   launch: new Set([...ANYWHERE, 'rotate', 'zoom', 'countdown']),
   // Enter (select) skips ahead to the approach.
   travel: new Set([...ANYWHERE, 'select']),
