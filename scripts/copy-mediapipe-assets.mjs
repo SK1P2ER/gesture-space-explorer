@@ -1,8 +1,13 @@
 // Copies MediaPipe WASM + the hand model into public/ under versioned paths,
 // so they can be served with `immutable` cache headers and work offline.
 // Runs on postinstall and prebuild. Fails loudly: never deploy without WASM.
+//
+// Only the promise-based fs APIs are used: on Windows the sync recursive
+// helpers (cpSync/rmSync) crash the process (0xC0000409) or silently no-op
+// when the path contains non-ASCII characters.
 import { createHash } from 'node:crypto';
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
+import { cp, copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -23,14 +28,14 @@ const sha256 = (buf) => createHash('sha256').update(buf).digest('hex');
 // --- WASM ---------------------------------------------------------------
 const pkgDir = join(root, 'node_modules', '@mediapipe', 'tasks-vision');
 if (!existsSync(pkgDir)) fail('@mediapipe/tasks-vision is not installed. Run `npm ci`.');
-const { version } = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8'));
+const { version } = JSON.parse(await readFile(join(pkgDir, 'package.json'), 'utf8'));
 
 const wasmSrc = join(pkgDir, 'wasm');
 const wasmDest = join(root, 'public', 'mediapipe', version, 'wasm');
 if (!existsSync(join(wasmSrc, 'vision_wasm_internal.wasm'))) fail(`WASM not found in ${wasmSrc}`);
-rmSync(join(root, 'public', 'mediapipe'), { recursive: true, force: true });
-mkdirSync(wasmDest, { recursive: true });
-cpSync(wasmSrc, wasmDest, { recursive: true });
+await rm(join(root, 'public', 'mediapipe'), { recursive: true, force: true });
+await mkdir(wasmDest, { recursive: true });
+await cp(wasmSrc, wasmDest, { recursive: true });
 
 // --- Model --------------------------------------------------------------
 // The model is not in the npm package. It is committed under assets/models/
@@ -42,14 +47,14 @@ if (!existsSync(modelSrc)) {
   if (!res.ok) fail(`model download failed: HTTP ${res.status}`);
   const buf = Buffer.from(await res.arrayBuffer());
   if (sha256(buf) !== MODEL_SHA256) fail('downloaded model checksum mismatch');
-  mkdirSync(dirname(modelSrc), { recursive: true });
-  writeFileSync(modelSrc, buf);
+  await mkdir(dirname(modelSrc), { recursive: true });
+  await writeFile(modelSrc, buf);
 }
-if (sha256(readFileSync(modelSrc)) !== MODEL_SHA256) fail(`${modelSrc} checksum mismatch`);
+if (sha256(await readFile(modelSrc)) !== MODEL_SHA256) fail(`${modelSrc} checksum mismatch`);
 
 const modelDest = join(root, 'public', 'models');
-rmSync(modelDest, { recursive: true, force: true });
-mkdirSync(modelDest, { recursive: true });
-cpSync(modelSrc, join(modelDest, MODEL_FILE));
+await rm(modelDest, { recursive: true, force: true });
+await mkdir(modelDest, { recursive: true });
+await copyFile(modelSrc, join(modelDest, MODEL_FILE));
 
 console.log(`[copy-mediapipe-assets] ok: mediapipe ${version}, ${MODEL_FILE}`);
