@@ -42,12 +42,16 @@ export class TrackingSession {
   private tracker: HandTracker | null = null;
   private stopLoop: (() => void) | null = null;
   private readonly onPageHide = () => this.dispose();
+  private readonly onVisibilityChange = () => {
+    if (document.visibilityState === 'hidden') this.dispose();
+  };
 
   constructor(private readonly video: HTMLVideoElement, private readonly deps: TrackingDeps) {
     sessions.get(video)?.dispose();
     sessions.set(video, this);
     deps.state.status = { kind: 'loading', progress: 0 };
     window.addEventListener('pagehide', this.onPageHide);
+    window.addEventListener('visibilitychange', this.onVisibilityChange);
     this.ready = this.initialize();
   }
 
@@ -63,6 +67,7 @@ export class TrackingSession {
     if (this.stopped) return;
     this.stopped = true; // invalidate callbacks before releasing anything
     window.removeEventListener('pagehide', this.onPageHide);
+    window.removeEventListener('visibilitychange', this.onVisibilityChange);
     for (const release of [
       () => this.stopLoop?.(),
       () => this.controller.abort(),
