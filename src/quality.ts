@@ -404,3 +404,13 @@ export function safeLocalStorage(): Storage | null {
     return null;
   }
 }
+
+export interface BatteryStatus {
+  charging: boolean;
+  level: number;
+}
+
+/** Low-battery conservation: only applies below 15% while unplugged. */
+export function shouldUseLowBatteryProfile(status: BatteryStatus): boolean {
+  return !status.charging && Number.isFinite(status.level) && status.level >= 0 && status.level <= 0.15;
+}

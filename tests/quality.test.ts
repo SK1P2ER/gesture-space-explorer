@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   AutoTier, autoStartTier, initialQualitySetting, isMobile, nextQualitySetting, PROFILES, readAutoMemory, renderPixelRatio,
-  ResolutionGovernor, saveQuality, UltraGuard, writeAutoMemory, type AutoMemory, type AutoTierChoice,
+  ResolutionGovernor, saveQuality, shouldUseLowBatteryProfile, UltraGuard, writeAutoMemory, type AutoMemory, type AutoTierChoice,
 } from '../src/quality';
 
 const desktop = { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0 Safari/537.36', maxTouchPoints: 0 };
@@ -296,5 +296,17 @@ describe('auto-quality: Auto picks the tier (capable phones get High, weak devic
     const seen = new Set([...run(tier, 30), ...run(tier, 30, { lateEvery: 5 }), ...run(tier, 30)]);
     for (const t of seen) expect(['low', 'high']).toContain(t);
     expect(['low', 'high']).toContain(tier.tier);
+  });
+});
+
+describe('mobile battery profile', () => {
+  it('uses Low only when unplugged below 15%', () => {
+    expect(shouldUseLowBatteryProfile({ charging: false, level: 0.14 })).toBe(true);
+    expect(shouldUseLowBatteryProfile({ charging: true, level: 0.10 })).toBe(false);
+    expect(shouldUseLowBatteryProfile({ charging: false, level: 0.30 })).toBe(false);
+  });
+  it('ignores invalid battery levels', () => {
+    expect(shouldUseLowBatteryProfile({ charging: false, level: Number.NaN })).toBe(false);
+    expect(shouldUseLowBatteryProfile({ charging: false, level: -1 })).toBe(false);
   });
 });
