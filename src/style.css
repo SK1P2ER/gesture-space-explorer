@@ -854,3 +854,8 @@ body.immersive #sky-labels { opacity: 0; transition: opacity 0.8s ease-in; }
   #mission-overlay:not(.horizon) .count { font-size: 5rem; }
   #mission-overlay:not(.horizon) .hint { font-size: 0.85rem; }
 }
+
+html.mobile-app {
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}

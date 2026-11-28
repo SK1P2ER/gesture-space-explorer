@@ -770,3 +770,10 @@ const phases: FramePhases = {
 };
 
 renderer.setAnimationLoop((now) => runFrame(phases, now));
+
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  void navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+
+const standalone = matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches;
+document.documentElement.classList.toggle('mobile-app', standalone);
