@@ -407,4 +407,18 @@ describe('tracking session lifecycle and cancellation', () => {
     expect(task.dispose).toHaveBeenCalledTimes(1);
     expect(deps.state.status).toEqual({ kind: 'keyboard', reason: 'err.disconnected' });
   });
+
+  it('ends camera tracks when the document becomes hidden and does not reacquire on visible', async () => {
+    const task = detector(); create.mockResolvedValueOnce(task);
+    const session = start(); await session.ready;
+    vi.stubGlobal('document', { querySelector: () => video.element, visibilityState: 'hidden' });
+    window.dispatchEvent(new Event('visibilitychange'));
+    expect(session.cancelled).toBe(true);
+    expectCameraReleased();
+    expect(task.stop).toHaveBeenCalledTimes(1);
+    expect(task.dispose).toHaveBeenCalledTimes(1);
+    vi.stubGlobal('document', { querySelector: () => video.element, visibilityState: 'visible' });
+    window.dispatchEvent(new Event('visibilitychange'));
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+  });
 });
